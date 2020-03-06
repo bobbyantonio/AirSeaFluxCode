@@ -8,7 +8,7 @@ from flux_subs import (kappa, CtoK, get_heights, cdn_calc, cd_calc, get_skin,
                        charnock_C35)
 
 
-def flux_calc_v3_1(spd, T, SST, lat, RH, P, hin, hout, wcp, sigH, zi=600,
+def flux_calc_v3(spd, T, SST, lat, RH, P, hin, hout, wcp, sigH, zi=600,
                  Rl=None, Rs=None, jcool=1, meth="S88", n=10):
     """ Calculates momentum and heat fluxes using different parameterizations
 
