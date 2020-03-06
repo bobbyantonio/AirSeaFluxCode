@@ -1,13 +1,41 @@
 import numpy as np
 
-""" Conversion factor for [:math:`^\\circ` C] to [:math:`^\\circ` K] """
 CtoK = 273.16  # 273.15
-""" von Karman's constant """
+""" Conversion factor for (^\circ\,C) to (^\\circ\\,K) """
+
 kappa = 0.4  # NOTE: 0.41
+""" von Karman's constant """
 # ---------------------------------------------------------------------
 
 
 def charnock_C35(wind, u10n, usr, seastate, waveage, wcp, sigH, lat):
+    """ Calculates Charnock number following Edson et al. 2013 based on 
+    C35 matlab code (coare35vn.m)
+    
+    Parameters
+    ----------
+    wind : float
+        wind speed (m/s)
+    u10n : float
+        neutral 10m wind speed (m/s)
+    usr  : float
+        friction velocity (m/s)
+    seastate : bool
+        0 or 1
+    waveage  : bool
+        0 or 1
+    wcp      : float
+        phase speed of dominant waves (m/s)
+    sigH     : float
+        significant wave height (m)
+    lat      : float
+        latitude (deg)
+    
+    Returns
+    -------
+    ac : float
+        Charnock number
+    """
     g = gc(lat, None)
     a1, a2 = 0.0017, -0.0050
     charnC = np.where(u10n > 19, a1*19+a2, a1*u10n+a2)
@@ -34,6 +62,37 @@ def charnock_C35(wind, u10n, usr, seastate, waveage, wcp, sigH, lat):
 
 
 def cd_C35(u10n, wind, usr, charn, monob, Ta, hh_in, lat):
+    """ Calculates exchange coefficients following Edson et al. 2013 based on 
+    C35 matlab code (coare35vn.m)
+    
+    Parameters
+    ----------
+    u10n : float
+        neutral 10m wind speed (m/s)
+    wind : float
+        wind speed (m/s)    
+    charn : float
+        Charnock number
+    monob : float
+        Monin-Obukhov stability length
+    Ta    : float
+        air temperature (K)
+    hh_in : float
+        input sensor's height (m)
+    lat      : float
+        latitude (deg)
+    
+    Returns
+    -------
+    zo : float
+        surface roughness (m)
+    cdhf : float
+        drag coefficient
+    cthf : float
+        heat exchange coefficient
+    cqhf : float
+        moisture exchange coefficient
+    """
     g = gc(lat, None)
     zo = charn*usr**2/g+0.11*visc_air(Ta)/usr  # surface roughness
     rr = zo*usr/visc_air(Ta)
@@ -47,15 +106,31 @@ def cd_C35(u10n, wind, usr, charn, monob, Ta, hh_in, lat):
 # ---------------------------------------------------------------------
 
 
-def cdn_calc(u10n, Ta, Tp, method="Smith80"):
-    if (method == "Smith80"):
+def cdn_calc(u10n, Ta, Tp, method="S80"):
+    """ Calculates neutral drag coefficient
+    
+    Parameters
+    ----------
+    u10n : float
+        neutral 10m wind speed (m/s)
+    Ta   : float
+        air temperature (K)
+    Tp   : float
+        wave period
+    method : str
+    
+    Returns
+    -------
+    cdn : float
+    """
+    if (method == "S80"):
         cdn = np.where(u10n <= 3, (0.61+0.567/u10n)*0.001,
                        (0.61+0.063*u10n)*0.001)
     elif (method == "LP82"):
         cdn = np.where((u10n < 11) & (u10n >= 4), 1.2*0.001,
                        np.where((u10n <= 25) & (u10n >= 11),
                        (0.49+0.065*u10n)*0.001, 1.14*0.001))
-    elif (method == "Smith88" or method == "COARE3.0" or
+    elif (method == "S88" or method == "C30" or
           method == "COARE4.0" or method == "UA" or method == "ERA5"):
         cdn = cdn_from_roughness(u10n, Ta, None, method)
     elif (method == "HEXOS"):
@@ -64,7 +139,7 @@ def cdn_calc(u10n, Ta, Tp, method="Smith80"):
     elif (method == "HEXOSwave"):
         cdn = cdn_from_roughness(u10n, Ta, Tp, method)
     elif (method == "YT96"):
-        # for u<3 same as Smith80
+        # for u<3 same as S80
         cdn = np.where((u10n < 6) & (u10n >= 3),
                        (0.29+3.1/u10n+7.7/u10n**2)*0.001,
                        np.where((u10n <= 26) & (u10n >= 6),
@@ -78,7 +153,23 @@ def cdn_calc(u10n, Ta, Tp, method="Smith80"):
 # ---------------------------------------------------------------------
 
 
-def cdn_from_roughness(u10n, Ta, Tp, method="Smith88"):
+def cdn_from_roughness(u10n, Ta, Tp, method="S88"):
+    """ Calculates neutral drag coefficient from roughness length
+    
+    Parameters
+    ----------
+    u10n : float
+        neutral 10m wind speed (m/s)
+    Ta   : float
+        air temperature (K)
+    Tp   : float
+        wave period
+    method : str
+    
+    Returns
+    -------
+    cdn : float
+    """
     g, tol = 9.812, 0.000001
     cdn, usr = np.zeros(Ta.shape), np.zeros(Ta.shape)
     cdnn = (0.61+0.063*u10n)*0.001
@@ -86,13 +177,13 @@ def cdn_from_roughness(u10n, Ta, Tp, method="Smith88"):
     for it in range(5):
         cdn = np.copy(cdnn)
         usr = np.sqrt(cdn*u10n**2)
-        if (method == "Smith88"):
+        if (method == "S88"):
             # .....Charnock roughness length (equn 4 in Smith 88)
             zc = 0.011*np.power(usr, 2)/g
             # .....smooth surface roughness length (equn 6 in Smith 88)
             zs = 0.11*visc_air(Ta)/usr
             zo = zc + zs  # .....equns 7 & 8 in Smith 88 to calculate new CDN
-        elif (method == "COARE3.0"):
+        elif (method == "C30"):
             zc = 0.011 + (u10n-10)/(18-10)*(0.018-0.011)
             zc = np.where(u10n < 10, 0.011, np.where(u10n > 18, 0.018, zc))
             zs = 0.11*visc_air(Ta)/usr
@@ -116,9 +207,32 @@ def cdn_from_roughness(u10n, Ta, Tp, method="Smith88"):
 # ---------------------------------------------------------------------
 
 
-def ctcqn_calc(zol, cdn, u10n, zo, Ta, method="Smith80"):
-    if (method == "Smith80" or method == "Smith88" or method == "YT96"):
-        cqn = np.ones(Ta.shape)*1.20*0.001  # from Smith88
+def ctcqn_calc(zol, cdn, u10n, zo, Ta, method="S80"):
+    """ Calculates neutral heat and moisture exchange coefficients
+    
+    Parameters
+    ----------
+    zol  : float
+        height over MO length
+    cdn  : float
+        neatral drag coefficient
+    u10n : float
+        neutral 10m wind speed (m/s)
+    zo   : float
+        surface roughness (m)
+    Ta   : float
+        air temperature (K)
+    method : str
+    
+    Returns
+    -------
+    ctn : float
+        neutral heat exchange coefficient
+    cqn : float
+        neutral moisture exchange coefficient
+    """
+    if (method == "S80" or method == "S88" or method == "YT96"):
+        cqn = np.ones(Ta.shape)*1.20*0.001  # from S88
         ctn = np.ones(Ta.shape)*1.00*0.001
     elif (method == "LP82"):
         cqn = np.where((zol <= 0) & (u10n > 4) & (u10n < 14), 1.15*0.001,
@@ -128,7 +242,7 @@ def ctcqn_calc(zol, cdn, u10n, zo, Ta, method="Smith80"):
     elif (method == "HEXOS" or method == "HEXOSwave"):
         cqn = np.where((u10n <= 23) & (u10n >= 3), 1.1*0.001, np.nan)
         ctn = np.where((u10n <= 18) & (u10n >= 3), 1.1*0.001, np.nan)
-    elif (method == "COARE3.0" or method == "COARE4.0"):
+    elif (method == "C30" or method == "COARE4.0"):
         usr = (cdn*u10n**2)**0.5
         rr = zo*usr/visc_air(Ta)
         zoq = 5.5e-5/rr**0.6
@@ -162,6 +276,23 @@ def ctcqn_calc(zol, cdn, u10n, zo, Ta, method="Smith80"):
 
 
 def cd_calc(cdn, height, ref_ht, psim):
+    """ Calculates drag coefficient at reference height
+    
+    Parameters
+    ----------
+    cdn : float
+        neutral drag coefficient
+    height : float
+        original sensor height (m)
+    ref_ht : float
+        reference height (m)
+    psim : float
+        momentum stability function
+    
+    Returns
+    -------
+    cd : float
+    """
     cd = (cdn*np.power(1+np.sqrt(cdn)*np.power(kappa, -1) *
           (np.log(height/ref_ht)-psim), -2))
     return cd
@@ -169,16 +300,56 @@ def cd_calc(cdn, height, ref_ht, psim):
 
 
 def ctcq_calc(cdn, cd, ctn, cqn, h_t, h_q, ref_ht, psit, psiq):
+    """ Calculates heat and moisture exchange coefficients at reference height
+    
+    Parameters
+    ----------
+    cdn : float
+        neutral drag coefficient
+    cd  : float
+        drag coefficient at reference height
+    ctn : float
+        neutral heat exchange coefficient
+    cqn : float
+        neutral moisture exchange coefficient
+    h_t : float
+        original temperature sensor height (m)
+    h_q : float
+        original moisture sensor height (m)
+    ref_ht : float
+        reference height (m)
+    psit : float
+        heat stability function
+    psiq : float
+        moisture stability function
+    
+    Returns
+    -------
+    ct : float
+    cq : float
+    """
     ct = ctn*(cd/cdn)**0.5/(1+ctn*((np.log(h_t/ref_ht)-psit)/(kappa*cdn**0.5)))
     cq = cqn*(cd/cdn)**0.5/(1+cqn*((np.log(h_q/ref_ht)-psiq)/(kappa*cdn**0.5)))
     return ct, cq
 # ---------------------------------------------------------------------
 
 
-def psim_calc(zol, method="Smith80"):
+def psim_calc(zol, method="S80"):
+    """ Calculates momentum stability function
+    
+    Parameters
+    ----------
+    zol : float
+        height over MO length
+    method : str
+    
+    Returns
+    -------
+    psim : float
+    """
     coeffs = get_stabco(method)
     alpha, beta, gamma = coeffs[0], coeffs[1], coeffs[2]
-    if (method == "COARE3.0" or method == "COARE4.0"):
+    if (method == "C30" or method == "COARE4.0"):
         psim = np.where(zol < 0, psim_conv_coare3(zol, alpha, beta, gamma),
                         psim_stab_coare3(zol, alpha, beta, gamma))
     elif (method == "ERA5"):
@@ -191,10 +362,22 @@ def psim_calc(zol, method="Smith80"):
 # ---------------------------------------------------------------------
 
 
-def psit_calc(zol, method="Smith80"):
+def psit_calc(zol, method="S80"):
+    """ Calculates heat stability function
+    
+    Parameters
+    ----------
+    zol : float
+        height over MO length
+    method : str
+    
+    Returns
+    -------
+    psit : float
+    """
     coeffs = get_stabco(method)
     alpha, beta, gamma = coeffs[0], coeffs[1], coeffs[2]
-    if (method == "COARE3.0" or method == "COARE4.0"):
+    if (method == "C30" or method == "COARE4.0"):
         psit = np.where(zol < 0, psi_conv_coare3(zol, alpha, beta, gamma),
                         psi_stab_coare3(zol, alpha, beta, gamma))
     elif (method == "ERA5"):
@@ -207,8 +390,18 @@ def psit_calc(zol, method="Smith80"):
 # ---------------------------------------------------------------------
 
 
-def get_stabco(method="Smith80"):
-    if (method == "Smith80" or method == "Smith88" or method == "LY04" or
+def get_stabco(method="S80"):
+    """ Gives the coefficients \\alpha, \\beta, \\gamma for stability functions
+    
+    Parameters
+    ----------
+    method : str
+    
+    Returns
+    -------
+    coeffs : float
+    """
+    if (method == "S80" or method == "S88" or method == "LY04" or
             method == "UA" or method == "ERA5"):
         alpha, beta, gamma = 16, 0.25, 5  # Smith 1980, from Dyer (1974)
     elif (method == "LP82"):
@@ -217,7 +410,7 @@ def get_stabco(method="Smith80"):
         alpha, beta, gamma = 16, 0.25, 8
     elif (method == "YT96"):
         alpha, beta, gamma = 20, 0.25, 5
-    elif (method == "COARE3.0" or method == "COARE4.0"):
+    elif (method == "C30" or method == "COARE4.0"):
         # use separate subroutine
         alpha, beta, gamma = 15, 1/3, 5   # not sure about gamma=34.15
     else:
@@ -231,6 +424,22 @@ def get_stabco(method="Smith80"):
 
 
 def psi_conv_coare3(zol, alpha, beta, gamma):
+    """ Calculates heat stability function for unstable conditions 
+        for method C30
+    
+    Parameters
+    ----------
+    zol : float
+        height over MO length
+    alpha : float
+    beta : float
+    gamma : float
+        constants given by get_stabco
+    
+    Returns
+    -------
+    psit : float
+    """
     x = (1-alpha*zol)**0.5  # Kansas unstable
     psik = 2*np.log((1+x)/2.)
     y = (1-34.15*zol)**beta
@@ -242,7 +451,21 @@ def psi_conv_coare3(zol, alpha, beta, gamma):
 # ---------------------------------------------------------------------
 
 
-def psi_stab_coare3(zol, alpha, beta, gamma):  # Stable
+def psi_stab_coare3(zol, alpha, beta, gamma):
+    """ Calculates heat stability function for stable conditions 
+        for method C30
+    
+    Parameters
+    ----------
+    zol : float
+        height over MO length
+    alpha, beta, gamma : float
+        constants given by get_stabco
+    
+    Returns
+    -------
+    psi : float
+    """
     c = np.where(0.35*zol > 50, 50, 0.35*zol)  # Stable
     psit = -((1+2*zol/3)**1.5+0.6667*(zol-14.28)/np.exp(c)+8.525)
     return psit
@@ -250,6 +473,20 @@ def psi_stab_coare3(zol, alpha, beta, gamma):  # Stable
 
 
 def psi_stab_era5(zol, alpha, beta, gamma):
+    """ Calculates heat stability function for stable conditions 
+        for method ERA5
+    
+    Parameters
+    ----------
+    zol : float
+        height over MO length
+    alpha, beta, gamma : float
+        constants given by get_stabco
+    
+    Returns
+    -------
+    psit : float
+    """
     # eq (3.22) p. 39 IFS Documentation cy46r1
     a, b, c, d = 1, 2/3, 5, 0.35
     psit = -b*(zol-c/d)*np.exp(-d*zol)-np.power(1+(2/3)*a*zol, 1.5)-(b*c)/d+1
@@ -257,6 +494,19 @@ def psi_stab_era5(zol, alpha, beta, gamma):
 # ---------------------------------------------------------------------
 
 def psi_conv(zol, alpha, beta, gamma):
+    """ Calculates heat stability function for unstable conditions
+    
+    Parameters
+    ----------
+    zol : float
+        height over MO length
+    alpha, beta, gamma : float
+        constants given by get_stabco
+    
+    Returns
+    -------
+    psit : float
+    """
     xtmp = (1-alpha*zol)**beta
     psit = 2*np.log((1+xtmp**2)*0.5)
     return psit
@@ -264,30 +514,65 @@ def psi_conv(zol, alpha, beta, gamma):
 
 
 def psi_stab(zol, alpha, beta, gamma):
+    """ Calculates heat stability function for stable conditions
+    
+    Parameters
+    ----------
+    zol : float
+        height over MO length
+    alpha, beta, gamma : float
+        constants given by get_stabco
+    
+    Returns
+    -------
+    psit : float
+    """
     psit = -gamma*zol
     return psit
 # ---------------------------------------------------------------------
 
 
-def psit_26(zet):
+def psit_26(zol):
+    """ Computes temperature structure function as in C35
+    
+    Parameters
+    ----------
+    zol : float
+        height over MO length
+        
+    Returns
+    -------
+    psi : float
     """
-    computes temperature structure function as in COARE3.5
-    """
-    dzet = np.where(0.35*zet > 50, 50, 0.35*zet)  # stable
-    psi = -((1+0.6667*zet)**1.5+0.6667*(zet-14.28)*np.exp(-dzet)+8.525)
-    k = np.where(zet < 0)  # unstable
-    x = (1-15*zet[k])**0.5
+    dzol = np.where(0.35*zol > 50, 50, 0.35*zol)  # stable
+    psi = -((1+0.6667*zol)**1.5+0.6667*(zol-14.28)*np.exp(-dzol)+8.525)
+    k = np.where(zol < 0)  # unstable
+    x = (1-15*zol[k])**0.5
     psik = 2*np.log((1+x)/2)
-    x = (1-34.15*zet[k])**0.3333
+    x = (1-34.15*zol[k])**0.3333
     psic = (1.5*np.log((1+x+x**2)/3)-np.sqrt(3)*np.arctan((1+2*x) /
             np.sqrt(3))+4*np.arctan(1)/np.sqrt(3))
-    f = zet[k]**2/(1+zet[k]**2)
+    f = zol[k]**2/(1+zol[k]**2)
     psi[k] = (1-f)*psik+f*psic
     return psi
 # ---------------------------------------------------------------------
 
 
 def psim_conv_coare3(zol, alpha, beta, gamma):
+    """ Calculates momentum stability function for unstable conditions 
+        for method C30
+    
+    Parameters
+    ----------
+    zol : float
+        height over MO length
+    alpha, beta, gamma : float
+        constants given by get_stabco
+    
+    Returns
+    -------
+    psim : float
+    """
     x = (1-15*zol)**0.25  # Kansas unstable
     psik = 2*np.log((1+x)/2)+np.log((1+x*x)/2)-2*np.arctan(x)+2*np.arctan(1)
     y = (1-10.15*zol)**0.3333  # Convective
@@ -300,6 +585,20 @@ def psim_conv_coare3(zol, alpha, beta, gamma):
 
 
 def psim_stab_coare3(zol, alpha, beta, gamma):
+    """ Calculates momentum stability function for stable conditions 
+        for method C30
+    
+    Parameters
+    ----------
+    zol : float
+        height over MO length
+    alpha, beta, gamma : float
+        constants given by get_stabco
+    
+    Returns
+    -------
+    psim : float
+    """
     c = np.where(0.35*zol > 50, 50, 0.35*zol)  # Stable
     psim = -((1+1*zol)**1.0+0.6667*(zol-14.28)/np.exp(-c)+8.525)
     return psim
@@ -307,6 +606,20 @@ def psim_stab_coare3(zol, alpha, beta, gamma):
 
 
 def psim_stab_era5(zol, alpha, beta, gamma):
+    """ Calculates momentum stability function for stable conditions 
+        for method ERA5
+    
+    Parameters
+    ----------
+    zol : float
+        height over MO length
+    alpha, beta, gamma : float
+        constants given by get_stabco
+    
+    Returns
+    -------
+    psim : float
+    """
     # eq (3.22) p. 39 IFS Documentation cy46r1
     a, b, c, d = 1, 2/3, 5, 0.35
     psim = -b*(zol-c/d)*np.exp(-d*zol)-a*zol-(b*c)/d
@@ -315,6 +628,19 @@ def psim_stab_era5(zol, alpha, beta, gamma):
 
 
 def psim_conv(zol, alpha, beta, gamma):
+    """ Calculates momentum stability function for unstable conditions
+    
+    Parameters
+    ----------
+    zol : float
+        height over MO length
+    alpha, beta, gamma : float
+        constants given by get_stabco
+    
+    Returns
+    -------
+    psim : float
+    """
     xtmp = (1-alpha*zol)**beta
     psim = (2*np.log((1+xtmp)*0.5)+np.log((1+xtmp**2)*0.5) -
             2*np.arctan(xtmp)+np.pi/2)
@@ -323,50 +649,112 @@ def psim_conv(zol, alpha, beta, gamma):
 
 
 def psim_stab(zol, alpha, beta, gamma):
+    """ Calculates momentum stability function for stable conditions
+    
+    Parameters
+    ----------
+    zol : float
+        height over MO length
+    alpha, beta, gamma : float
+        constants given by get_stabco
+    
+    Returns
+    -------
+    psim : float
+    """
     psim = -gamma*zol
     return psim
 # ---------------------------------------------------------------------
 
 
-def psiu_26(zet):
+def psiu_26(zol):
+    """ Computes velocity structure function C35
+    
+    Parameters
+    ----------
+    zol : float
+        height over MO length
+   
+    Returns
+    -------
+    psi : float
     """
-    computes velocity structure function COARE3.5
-    """
-    dzet = np.where(0.35*zet > 50, 50, 0.35*zet)  # stable
+    dzol = np.where(0.35*zol > 50, 50, 0.35*zol)  # stable
     a, b, c, d = 0.7, 3/4, 5, 0.35
-    psi = -(a*zet+b*(zet-c/d)*np.exp(-dzet)+b*c/d)
-    k = np.where(zet < 0)  # unstable
-    x = (1-15*zet[k])**0.25
+    psi = -(a*zol+b*(zol-c/d)*np.exp(-dzol)+b*c/d)
+    k = np.where(zol < 0)  # unstable
+    x = (1-15*zol[k])**0.25
     psik = 2*np.log((1+x)/2)+np.log((1+x**2)/2)-2*np.arctan(x)+2*np.arctan(1)
-    x = (1-10.15*zet[k])**0.3333
+    x = (1-10.15*zol[k])**0.3333
     psic = (1.5*np.log((1+x+x**2)/3)-np.sqrt(3)*np.arctan((1+2*x)/np.sqrt(3)) +
             4*np.arctan(1)/np.sqrt(3))
-    f = zet[k]**2/(1+zet[k]**2)
+    f = zol[k]**2/(1+zol[k]**2)
     psi[k] = (1-f)*psik+f*psic
     return psi
 # ------------------------------------------------------------------------------
 
 
-def psiu_40(zet):
+def psiu_40(zol):
+    """ Computes velocity structure function C35
+    
+    Parameters
+    ----------
+    zol : float
+        height over MO length
+   
+    Returns
+    -------
+    psi : float
     """
-    computes velocity structure function COARE3.5
-    """
-    dzet = np.where(0.35*zet > 50, 50, 0.35*zet)  # stable
+    dzol = np.where(0.35*zol > 50, 50, 0.35*zol)  # stable
     a, b, c, d = 1, 3/4, 5, 0.35
-    psi = -(a*zet+b*(zet-c/d)*np.exp(-dzet)+b*c/d)
-    k = np.where(zet < 0)  # unstable
-    x = (1-18*zet[k])**0.25
+    psi = -(a*zol+b*(zol-c/d)*np.exp(-dzol)+b*c/d)
+    k = np.where(zol < 0)  # unstable
+    x = (1-18*zol[k])**0.25
     psik = 2*np.log((1+x)/2)+np.log((1+x**2)/2)-2*np.arctan(x)+2*np.arctan(1)
-    x = (1-10*zet[k])**0.3333
+    x = (1-10*zol[k])**0.3333
     psic = (1.5*np.log((1+x+x**2)/3)-np.sqrt(3)*np.arctan((1+2*x)/np.sqrt(3)) +
             4*np.arctan(1)/np.sqrt(3))
-    f = zet[k]**2/(1+zet[k]**2)
+    f = zol[k]**2/(1+zol[k]**2)
     psi[k] = (1-f)*psik+f*psic
     return psi
 # ---------------------------------------------------------------------
 
 
-def get_skin(sst, qsea, rho, jcool, Rl, Rs, Rnl, cp, lv, usr, tsr, qsr, lat):
+def get_skin(sst, qsea, rho, Rl, Rs, Rnl, cp, lv, usr, tsr, qsr, lat):
+    """ Computes cool skin
+    
+    Parameters
+    ----------
+    sst : float
+        sea surface temperature ($^\circ$\,C)
+    qsea : float
+        specific humidity over sea (g/kg)
+    rho : float
+        density of air (kg/m^3)
+    Rl : float
+        downward longwave radiation (W/m^2)
+    Rs : float
+        downward shortwave radiation (W/m^2)
+    cp : float
+       specific heat of air at constant pressure
+    lv : float
+       latent heat of vaporization
+    usr : float
+       friction velocity
+    tsr : float
+       star temperature
+    qsr : float
+       star humidity
+    lat : float
+       latitude
+    
+    Returns
+    -------
+    dter : float
+    dqer : float      
+    
+    """
     # coded following Saunders (1967) with lambda = 6
     g = gc(lat, None)
     if (np.nanmin(sst) > 200):  # if Ta in Kelvin convert to Celsius
@@ -397,6 +785,27 @@ def get_skin(sst, qsea, rho, jcool, Rl, Rs, Rnl, cp, lv, usr, tsr, qsr, lat):
 
 
 def get_gust(beta, Ta, usr, tsrv, zi, lat):
+    """ Computes gustiness
+    
+    Parameters
+    ----------
+    beta : float
+        constant
+    Ta : float
+        air temperature (K)
+    usr : float
+        friction velocity (m/s)
+    tsrv : float
+        star virtual temperature of air (K)
+    zi : int
+        scale height of the boundary layer depth (m)
+    lat : float
+        latitude
+    
+    Returns
+    -------
+    ug : float
+    """
     if (np.max(Ta) < 200):  # convert to K if in Celsius
         Ta = Ta+273.16
     if np.isnan(zi):
@@ -410,6 +819,17 @@ def get_gust(beta, Ta, usr, tsrv, zi, lat):
 
 
 def get_heights(h):
+    """ Reads input heights for velocity, temperature and humidity
+    
+    Parameters
+    ----------
+    h : float
+        input heights (m)
+        
+    Returns
+    -------
+    hh : array
+    """
     hh = np.zeros(3)
     if (type(h) == float or type(h) == int):
         hh[0], hh[1], hh[2] = h, h, h
@@ -422,10 +842,17 @@ def get_heights(h):
 
 
 def svp_calc(T):
-    """
-    calculates saturation vapour pressure
-    T is in Kelvin
-    svp in mb, pure water
+    """ Calculates saturation vapour pressure
+    
+    Parameters
+    ----------
+    T : float
+        temperature (K)
+    
+    Returns
+    -------
+    svp : float
+        in mb, pure water
     """
     if (np.nanmin(T) < 200):  # if T in Celsius convert to Kelvin
         T = T+273.16
@@ -435,10 +862,19 @@ def svp_calc(T):
 
 
 def qsea_calc(sst, pres):
-    """
-    sst in Kelvin
-    pres in mb
-    qsea in kg/kg
+    """ Computes specific humidity of the  sea surface air
+    
+    Parameters
+    ----------
+    sst : float
+        sea surface temperature (K)
+    pres : float
+        pressure (mb)
+    
+    Returns
+    -------
+    qsea : float 
+        (kg/kg)
     """
     if (np.nanmin(sst) < 200):  # if sst in Celsius convert to Kelvin
         sst = sst+273.16
@@ -451,11 +887,20 @@ def qsea_calc(sst, pres):
 
 
 def q_calc(Ta, rh, pres):
-    """
-    rh in %
-    air in K, if not it will be converted to K
-    pres in mb
-    qair in kg/kg, as in Haltiner and Martin p.24
+    """ Computes specific humidity following Haltiner and Martin p.24
+    
+    Parameters
+    ----------
+    Ta : float
+        air temperature (K)
+    rh : float
+        relative humidity (%)
+    pres : float
+        air pressure (mb)
+        
+    Returns
+    -------
+    qair : float, (kg/kg)
     """
     if (np.nanmin(Ta) < 200):  # if sst in Celsius convert to Kelvin
         Ta = Ta+273.15
@@ -466,9 +911,18 @@ def q_calc(Ta, rh, pres):
 
 
 def bucksat(T, P):
-    """
-    computes saturation vapor pressure [mb] as in COARE3.5
-    given T [degC] and P [mb]
+    """ Computes saturation vapor pressure (mb) as in C35
+    
+    Parameters
+    ----------
+    T : float
+        temperature ($^\\circ$\\,C)
+    P : float
+        pressure (mb)
+    
+    Returns
+    -------
+    exx : float
     """
     T = np.asarray(T)
     if (np.nanmin(T) > 200):  # if Ta in Kelvin convert to Celsius
@@ -479,9 +933,18 @@ def bucksat(T, P):
 
 
 def qsat26sea(T, P):
-    """
-    computes surface saturation specific humidity [g/kg] as in COARE3.5
-    given T [degC] and P [mb]
+    """ Computes surface saturation specific humidity (g/kg) as in C35
+    
+    Parameters
+    ----------
+    T : float
+        temperature ($^\\circ$\\,C)
+    P : float
+        pressure (mb)
+        
+    Returns
+    -------
+    qs : float
     """
     T = np.asarray(T)
     if (np.nanmin(T) > 200):  # if Ta in Kelvin convert to Celsius
@@ -494,9 +957,19 @@ def qsat26sea(T, P):
 
 
 def qsat26air(T, P, rh):
-    """
-    computes saturation specific humidity [g/kg] as in COARE3.5
-    given T [degC] and P [mb]
+    """ Computes saturation specific humidity (g/kg) as in C35
+    
+    Parameters
+    ----------
+    T : float
+        temperature ($^\circ$\,C)
+    P : float
+        pressure (mb)
+        
+    Returns
+    -------
+    q : float
+    em : float
     """
     T = np.asarray(T)
     if (np.nanmin(T) > 200):  # if Ta in Kelvin convert to Celsius
@@ -509,13 +982,19 @@ def qsat26air(T, P, rh):
 
 
 def gc(lat, lon=None):
-    """
-    computes gravity relative to latitude
-    inputs:
-        lat : latitudes in deg
-        lon : longitudes (optional)
-    output:
-        gc: gravity constant
+    """ Computes gravity relative to latitude
+    
+    Parameters
+    ----------
+    lat : float
+        latitude ($^\circ$)
+    lon : float
+        longitude ($^\circ$, optional)
+    
+    Returns
+    -------
+    gc : float
+        gravity constant (m/s^2)
     """
     gamma = 9.7803267715
     c1 = 0.0052790414
@@ -535,13 +1014,18 @@ def gc(lat, lon=None):
 
 
 def visc_air(Ta):
-    """
-    Computes the kinematic viscosity of dry air as a function of air temp.
+    """ Computes the kinematic viscosity of dry air as a function of air temp.
     following Andreas (1989), CRREL Report 89-11.
-    input:
-        Ta : air temperature [Celsius]
-    output
-    visa : kinematic viscosity [m^2/s]
+    
+    Parameters
+    ----------
+    Ta : float
+        air temperature ($^\circ$\,C)
+    
+    Returns
+    -------
+    visa : float
+        kinematic viscosity (m^2/s)
     """
     Ta = np.asarray(Ta)
     if (np.nanmin(Ta) > 200):  # if Ta in Kelvin convert to Celsius
