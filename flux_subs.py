@@ -130,14 +130,8 @@ def cdn_calc(u10n, Ta, Tp, method="S80"):
         cdn = np.where((u10n < 11) & (u10n >= 4), 1.2*0.001,
                        np.where((u10n <= 25) & (u10n >= 11),
                        (0.49+0.065*u10n)*0.001, 1.14*0.001))
-    elif (method == "S88" or method == "C30" or
-          method == "COARE4.0" or method == "UA" or method == "ERA5"):
+    elif (method == "S88" or method == "UA" or method == "ERA5"):
         cdn = cdn_from_roughness(u10n, Ta, None, method)
-    elif (method == "HEXOS"):
-        # Smith et al. 1991 #(0.27 + 0.116*u10n)*0.001  Smith et al. 1992
-        cdn = (0.5+0.091*u10n)*0.001
-    elif (method == "HEXOSwave"):
-        cdn = cdn_from_roughness(u10n, Ta, Tp, method)
     elif (method == "YT96"):
         # for u<3 same as S80
         cdn = np.where((u10n < 6) & (u10n >= 3),
@@ -183,16 +177,6 @@ def cdn_from_roughness(u10n, Ta, Tp, method="S88"):
             # .....smooth surface roughness length (equn 6 in Smith 88)
             zs = 0.11*visc_air(Ta)/usr
             zo = zc + zs  # .....equns 7 & 8 in Smith 88 to calculate new CDN
-        elif (method == "C30"):
-            zc = 0.011 + (u10n-10)/(18-10)*(0.018-0.011)
-            zc = np.where(u10n < 10, 0.011, np.where(u10n > 18, 0.018, zc))
-            zs = 0.11*visc_air(Ta)/usr
-            zo = zc*np.power(usr, 2)/g + zs
-        elif (method == "HEXOSwave"):
-            if ((Tp is None) or np.nansum(Tp) == 0):
-                Tp = 0.729*u10n  # Taylor and Yelland 2001
-            cp_wave = g*Tp/2/np.pi  # use input wave period
-            zo = 0.48*np.power(usr, 3)/g/cp_wave  # Smith et al. 1992
         elif (method == "UA"):
             # valid for 0<u<18m/s # Zeng et al. 1998 (24)
             zo = 0.013*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr
@@ -239,17 +223,6 @@ def ctcqn_calc(zol, cdn, u10n, zo, Ta, method="S80"):
                        np.nan)
         ctn = np.where((zol <= 0) & (u10n > 4) & (u10n < 25), 1.13*0.001,
                        0.66*0.001)
-    elif (method == "HEXOS" or method == "HEXOSwave"):
-        cqn = np.where((u10n <= 23) & (u10n >= 3), 1.1*0.001, np.nan)
-        ctn = np.where((u10n <= 18) & (u10n >= 3), 1.1*0.001, np.nan)
-    elif (method == "C30" or method == "COARE4.0"):
-        usr = (cdn*u10n**2)**0.5
-        rr = zo*usr/visc_air(Ta)
-        zoq = 5.5e-5/rr**0.6
-        zoq[zoq > 1.15e-4] = 1.15e-4
-        zot = zoq
-        cqn = kappa**2/np.log(10/zo)/np.log(10/zoq)
-        ctn = kappa**2/np.log(10/zo)/np.log(10/zot)
     elif (method == "LY04"):
         cqn = 34.6*0.001*cdn**0.5
         ctn = np.where(zol <= 0, 32.7*0.001*cdn**0.5, 18*0.001*cdn**0.5)
@@ -349,10 +322,7 @@ def psim_calc(zol, method="S80"):
     """
     coeffs = get_stabco(method)
     alpha, beta, gamma = coeffs[0], coeffs[1], coeffs[2]
-    if (method == "C30" or method == "COARE4.0"):
-        psim = np.where(zol < 0, psim_conv_coare3(zol, alpha, beta, gamma),
-                        psim_stab_coare3(zol, alpha, beta, gamma))
-    elif (method == "ERA5"):
+    if (method == "ERA5"):
         psim = np.where(zol < 0, psim_conv(zol, alpha, beta, gamma),
                         psim_stab_era5(zol, alpha, beta, gamma))
     else:
@@ -377,10 +347,7 @@ def psit_calc(zol, method="S80"):
     """
     coeffs = get_stabco(method)
     alpha, beta, gamma = coeffs[0], coeffs[1], coeffs[2]
-    if (method == "C30" or method == "COARE4.0"):
-        psit = np.where(zol < 0, psi_conv_coare3(zol, alpha, beta, gamma),
-                        psi_stab_coare3(zol, alpha, beta, gamma))
-    elif (method == "ERA5"):
+    if (method == "ERA5"):
         psit = np.where(zol < 0, psi_conv(zol, alpha, beta, gamma),
                         psi_stab_era5(zol, alpha, beta, gamma))
     else:
@@ -406,13 +373,8 @@ def get_stabco(method="S80"):
         alpha, beta, gamma = 16, 0.25, 5  # Smith 1980, from Dyer (1974)
     elif (method == "LP82"):
         alpha, beta, gamma = 16, 0.25, 7
-    elif (method == "HEXOS" or method == "HEXOSwave"):
-        alpha, beta, gamma = 16, 0.25, 8
     elif (method == "YT96"):
         alpha, beta, gamma = 20, 0.25, 5
-    elif (method == "C30" or method == "COARE4.0"):
-        # use separate subroutine
-        alpha, beta, gamma = 15, 1/3, 5   # not sure about gamma=34.15
     else:
         print("unknown method stabco: "+method)
     coeffs = np.zeros(3)
@@ -420,55 +382,6 @@ def get_stabco(method="S80"):
     coeffs[1] = beta
     coeffs[2] = gamma
     return coeffs
-# ---------------------------------------------------------------------
-
-
-def psi_conv_coare3(zol, alpha, beta, gamma):
-    """ Calculates heat stability function for unstable conditions 
-        for method C30
-    
-    Parameters
-    ----------
-    zol : float
-        height over MO length
-    alpha : float
-    beta : float
-    gamma : float
-        constants given by get_stabco
-    
-    Returns
-    -------
-    psit : float
-    """
-    x = (1-alpha*zol)**0.5  # Kansas unstable
-    psik = 2*np.log((1+x)/2.)
-    y = (1-34.15*zol)**beta
-    psic = (1.5*np.log((1+y+y*y)/3.)-(3)**0.5*np.arctan((1+2*y)/(3)**0.5) +
-            4*np.arctan(1)/(3)**0.5)
-    f = zol*zol/(1.+zol*zol)
-    psit = (1-f)*psik+f*psic
-    return psit
-# ---------------------------------------------------------------------
-
-
-def psi_stab_coare3(zol, alpha, beta, gamma):
-    """ Calculates heat stability function for stable conditions 
-        for method C30
-    
-    Parameters
-    ----------
-    zol : float
-        height over MO length
-    alpha, beta, gamma : float
-        constants given by get_stabco
-    
-    Returns
-    -------
-    psi : float
-    """
-    c = np.where(0.35*zol > 50, 50, 0.35*zol)  # Stable
-    psit = -((1+2*zol/3)**1.5+0.6667*(zol-14.28)/np.exp(c)+8.525)
-    return psit
 # ---------------------------------------------------------------------
 
 
@@ -555,53 +468,6 @@ def psit_26(zol):
     f = zol[k]**2/(1+zol[k]**2)
     psi[k] = (1-f)*psik+f*psic
     return psi
-# ---------------------------------------------------------------------
-
-
-def psim_conv_coare3(zol, alpha, beta, gamma):
-    """ Calculates momentum stability function for unstable conditions 
-        for method C30
-    
-    Parameters
-    ----------
-    zol : float
-        height over MO length
-    alpha, beta, gamma : float
-        constants given by get_stabco
-    
-    Returns
-    -------
-    psim : float
-    """
-    x = (1-15*zol)**0.25  # Kansas unstable
-    psik = 2*np.log((1+x)/2)+np.log((1+x*x)/2)-2*np.arctan(x)+2*np.arctan(1)
-    y = (1-10.15*zol)**0.3333  # Convective
-    psic = (1.5*np.log((1+y+y*y)/3.)-np.sqrt(3)*np.arctan((1+2*y)/np.sqrt(3)) +
-            4.*np.arctan(1)/np.sqrt(3))
-    f = zol*zol/(1+zol*zol)
-    psim = (1-f)*psik+f*psic
-    return psim
-# ---------------------------------------------------------------------
-
-
-def psim_stab_coare3(zol, alpha, beta, gamma):
-    """ Calculates momentum stability function for stable conditions 
-        for method C30
-    
-    Parameters
-    ----------
-    zol : float
-        height over MO length
-    alpha, beta, gamma : float
-        constants given by get_stabco
-    
-    Returns
-    -------
-    psim : float
-    """
-    c = np.where(0.35*zol > 50, 50, 0.35*zol)  # Stable
-    psim = -((1+1*zol)**1.0+0.6667*(zol-14.28)/np.exp(-c)+8.525)
-    return psim
 # ---------------------------------------------------------------------
 
 
