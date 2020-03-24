@@ -8,107 +8,9 @@ kappa = 0.4  # NOTE: 0.41
 # ---------------------------------------------------------------------
 
 
-def charnock_C35(wind, u10n, usr, seastate, waveage, wcp, sigH, lat):
-    """ Calculates Charnock number following Edson et al. 2013 based on 
-    C35 matlab code (coare35vn.m)
-    
-    Parameters
-    ----------
-    wind : float
-        wind speed (m/s)
-    u10n : float
-        neutral 10m wind speed (m/s)
-    usr  : float
-        friction velocity (m/s)
-    seastate : bool
-        0 or 1
-    waveage  : bool
-        0 or 1
-    wcp      : float
-        phase speed of dominant waves (m/s)
-    sigH     : float
-        significant wave height (m)
-    lat      : float
-        latitude (deg)
-    
-    Returns
-    -------
-    ac : float
-        Charnock number
-    """
-    g = gc(lat, None)
-    a1, a2 = 0.0017, -0.0050
-    charnC = np.where(u10n > 19, a1*19+a2, a1*u10n+a2)
-    A, B = 0.114, 0.622  # wave-age dependent coefficients
-    Ad, Bd = 0.091, 2.0  # Sea-state/wave-age dependent coefficients
-    charnW = A*(usr/wcp)**B
-    zoS = sigH*Ad*(usr/wcp)**Bd
-    charnS = (zoS*g)/usr**2
-    charn = np.where(wind > 10, 0.011+(wind-10)/(18-10)*(0.018-0.011),
-                     np.where(wind > 18, 0.018, 0.011*np.ones(np.shape(wind))))
-    if waveage:
-        if seastate:
-            charn = charnS
-        else:
-            charn = charnW
-    else:
-        charn = charnC
-    ac = np.zeros((len(wind), 3))
-    ac[:, 0] = charn
-    ac[:, 1] = charnS
-    ac[:, 2] = charnW
-    return ac
-# ---------------------------------------------------------------------
-
-
-def cd_C35(u10n, wind, usr, charn, monob, Ta, hh_in, lat):
-    """ Calculates exchange coefficients following Edson et al. 2013 based on 
-    C35 matlab code (coare35vn.m)
-    
-    Parameters
-    ----------
-    u10n : float
-        neutral 10m wind speed (m/s)
-    wind : float
-        wind speed (m/s)    
-    charn : float
-        Charnock number
-    monob : float
-        Monin-Obukhov stability length
-    Ta    : float
-        air temperature (K)
-    hh_in : float
-        input sensor's height (m)
-    lat      : float
-        latitude (deg)
-    
-    Returns
-    -------
-    zo : float
-        surface roughness (m)
-    cdhf : float
-        drag coefficient
-    cthf : float
-        heat exchange coefficient
-    cqhf : float
-        moisture exchange coefficient
-    """
-    g = gc(lat, None)
-    zo = charn*usr**2/g+0.11*visc_air(Ta)/usr  # surface roughness
-    rr = zo*usr/visc_air(Ta)
-    # These thermal roughness lengths give Stanton and
-    zoq = np.where(5.8e-5/rr**0.72 > 1.6e-4, 1.6e-4, 5.8e-5/rr**0.72)
-    zot = zoq  # Dalton numbers that closely approximate COARE 3.0
-    cdhf = kappa/(np.log(hh_in[0]/zo)-psiu_26(hh_in[0]/monob))
-    cthf = kappa/(np.log(hh_in[1]/zot)-psit_26(hh_in[1]/monob))
-    cqhf = kappa/(np.log(hh_in[2]/zoq)-psit_26(hh_in[2]/monob))
-    return zo, cdhf, cthf, cqhf
-# ---------------------------------------------------------------------
-
-
-def cdn_calc(u10n, Ta, Tp, method="S80"):
+def cdn_calc(u10n, Ta, Tp, lat, meth="S80"):
     """ Calculates neutral drag coefficient
-    
+
     Parameters
     ----------
     u10n : float
@@ -117,39 +19,40 @@ def cdn_calc(u10n, Ta, Tp, method="S80"):
         air temperature (K)
     Tp   : float
         wave period
-    method : str
-    
+    meth : str
+
     Returns
     -------
     cdn : float
     """
-    if (method == "S80"):
+    if (meth == "S80"):
         cdn = np.where(u10n <= 3, (0.61+0.567/u10n)*0.001,
                        (0.61+0.063*u10n)*0.001)
-    elif (method == "LP82"):
+    elif (meth == "LP82"):
         cdn = np.where((u10n < 11) & (u10n >= 4), 1.2*0.001,
                        np.where((u10n <= 25) & (u10n >= 11),
                        (0.49+0.065*u10n)*0.001, 1.14*0.001))
-    elif (method == "S88" or method == "UA" or method == "ERA5"):
-        cdn = cdn_from_roughness(u10n, Ta, None, method)
-    elif (method == "YT96"):
+    elif (meth == "S88" or meth == "UA" or meth == "ERA5" or meth == "C30" or
+          meth == "C35" or meth == "C40"):
+        cdn = cdn_from_roughness(u10n, Ta, None, lat, meth)
+    elif (meth == "YT96"):
         # for u<3 same as S80
         cdn = np.where((u10n < 6) & (u10n >= 3),
                        (0.29+3.1/u10n+7.7/u10n**2)*0.001,
                        np.where((u10n <= 26) & (u10n >= 6),
                        (0.60 + 0.070*u10n)*0.001, (0.61+0.567/u10n)*0.001))
-    elif (method == "LY04"):
+    elif (meth == "LY04"):
         cdn = np.where(u10n >= 0.5,
                        (0.142+(2.7/u10n)+(u10n/13.09))*0.001, np.nan)
     else:
-        print("unknown method cdn: "+method)
+        print("unknown method cdn: "+meth)
     return cdn
 # ---------------------------------------------------------------------
 
 
-def cdn_from_roughness(u10n, Ta, Tp, method="S88"):
+def cdn_from_roughness(u10n, Ta, Tp, lat, meth="S88"):
     """ Calculates neutral drag coefficient from roughness length
-    
+
     Parameters
     ----------
     u10n : float
@@ -158,42 +61,59 @@ def cdn_from_roughness(u10n, Ta, Tp, method="S88"):
         air temperature (K)
     Tp   : float
         wave period
-    method : str
-    
+    meth : str
+
     Returns
     -------
     cdn : float
     """
-    g, tol = 9.812, 0.000001
+    g, tol = gc(lat, None), 0.000001
     cdn, usr = np.zeros(Ta.shape), np.zeros(Ta.shape)
     cdnn = (0.61+0.063*u10n)*0.001
     zo, zc, zs = np.zeros(Ta.shape), np.zeros(Ta.shape), np.zeros(Ta.shape)
     for it in range(5):
         cdn = np.copy(cdnn)
         usr = np.sqrt(cdn*u10n**2)
-        if (method == "S88"):
+        if (meth == "S88"):
             # .....Charnock roughness length (equn 4 in Smith 88)
             zc = 0.011*np.power(usr, 2)/g
             # .....smooth surface roughness length (equn 6 in Smith 88)
             zs = 0.11*visc_air(Ta)/usr
             zo = zc + zs  # .....equns 7 & 8 in Smith 88 to calculate new CDN
-        elif (method == "UA"):
+        elif (meth == "UA"):
             # valid for 0<u<18m/s # Zeng et al. 1998 (24)
             zo = 0.013*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr
-        elif (method == "ERA5"):
+        elif (meth == "C30"):
+            a = 0.011*np.ones(Ta.shape)
+            a = np.where(u10n > 10, 0.011+(u10n-10)/(18-10)*(0.018-0.011),
+                         np.where(u10n > 18, 0.018, a))
+            zo = a*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr
+        elif (meth == "C35"):
+            a = 0.011*np.ones(Ta.shape)
+            a = np.where(u10n > 18, 0.0017*19-0.0050,
+                         np.where((u10n > 7) & (u10n <= 18),
+                                  0.0017*u10n-0.0050, a))
+#            charn = np.where(wind > 10, 0.011+(wind-10)/(18-10)*(0.018-0.011),
+#                     np.where(wind > 18, 0.018, 0.011*np.ones(np.shape(wind))))
+            zo = 0.11*visc_air(Ta)/usr+a*np.power(usr, 2)/g
+        elif (meth == "C40"):
+            a = 0.011*np.ones(Ta.shape)
+            a = np.where(u10n > 22, 0.0016*22-0.0035, 0.0016*u10n-0.0035)
+            zo = a*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr # surface roughness
+        elif (meth == "ERA5"):
             # eq. (3.26) p.40 over sea IFS Documentation cy46r1
             zo = 0.11*visc_air(Ta)/usr+0.018*np.power(usr, 2)/g
         else:
-            print("unknown method for cdn_from_roughness "+method)
+            print("unknown method for cdn_from_roughness "+meth)
         cdnn = (kappa/np.log(10/zo))**2
     cdn = np.where(np.abs(cdnn-cdn) < tol, cdnn, np.nan)
     return cdnn
 # ---------------------------------------------------------------------
 
 
-def ctcqn_calc(zol, cdn, u10n, zo, Ta, method="S80"):
+def ctcqn_calc(zol, cdn, u10n, zo, Ta, meth="S80"):
     """ Calculates neutral heat and moisture exchange coefficients
-    
+
     Parameters
     ----------
     zol  : float
@@ -206,8 +126,8 @@ def ctcqn_calc(zol, cdn, u10n, zo, Ta, method="S80"):
         surface roughness (m)
     Ta   : float
         air temperature (K)
-    method : str
-    
+    meth : str
+
     Returns
     -------
     ctn : float
@@ -215,27 +135,57 @@ def ctcqn_calc(zol, cdn, u10n, zo, Ta, method="S80"):
     cqn : float
         neutral moisture exchange coefficient
     """
-    if (method == "S80" or method == "S88" or method == "YT96"):
+    if (meth == "S80" or meth == "S88" or meth == "YT96"):
         cqn = np.ones(Ta.shape)*1.20*0.001  # from S88
         ctn = np.ones(Ta.shape)*1.00*0.001
-    elif (method == "LP82"):
+    elif (meth == "LP82"):
         cqn = np.where((zol <= 0) & (u10n > 4) & (u10n < 14), 1.15*0.001,
                        np.nan)
         ctn = np.where((zol <= 0) & (u10n > 4) & (u10n < 25), 1.13*0.001,
                        0.66*0.001)
-    elif (method == "LY04"):
-        cqn = 34.6*0.001*cdn**0.5
-        ctn = np.where(zol <= 0, 32.7*0.001*cdn**0.5, 18*0.001*cdn**0.5)
-    elif (method == "UA"):
-        usr = (cdn * u10n**2)**0.5
+    elif (meth == "LY04"):
+        cqn = 34.6*0.001*np.sqrt(cdn)
+        ctn = np.where(zol <= 0, 32.7*0.001*np.sqrt(cdn), 18*0.001*np.sqrt(cdn))
+    elif (meth == "UA"):
+        usr = np.sqrt(cdn*np.power(u10n, 2))
         # Zeng et al. 1998 (25)
-        zoq = zo*np.exp(-(2.67*np.power(usr*zo/visc_air(Ta), 1/4)-2.57))
+        re=usr*zo/visc_air(Ta)
+        zoq = zo/np.exp(2.67*np.power(re, 1/4)-2.57)
         zot = zoq
         cqn = np.where((u10n > 0.5) & (u10n < 18), np.power(kappa, 2) /
                        (np.log(10/zo)*np.log(10/zoq)), np.nan)
         ctn = np.where((u10n > 0.5) & (u10n < 18), np.power(kappa, 2) /
                        (np.log(10/zo)*np.log(10/zoq)), np.nan)
-    elif (method == "ERA5"):
+    elif (meth == "C30"):
+        usr = np.sqrt(cdn*np.power(u10n, 2))
+        rr = zo*usr/visc_air(Ta)
+        zoq = np.where(5e-5/np.power(rr, 0.6) > 1.15e-4, 1.15e-4,
+                       5e-5/np.power(rr, 0.6))  # moisture roughness
+        zot=zoq  # temperature roughness
+        cqn = kappa**2/np.log(10/zo)/np.log(10/zoq)
+        ctn = kappa**2/np.log(10/zo)/np.log(10/zot)
+    elif (meth == "C35"):
+        usr = np.sqrt(cdn*np.power(u10n, 2))
+        rr = zo*usr/visc_air(Ta)
+        zoq = np.where(5.8e-5/np.power(rr, 0.72) > 1.6e-4, 1.6e-4,
+                       5.8e-5/np.power(rr, 0.72))  # moisture roughness
+        zot=zoq  # temperature roughness
+        cqn = kappa**2/np.log(10/zo)/np.log(10/zoq)
+        ctn = kappa**2/np.log(10/zo)/np.log(10/zot)
+    elif (meth == "C40"):
+        usr = np.sqrt(cdn*np.power(u10n, 2))
+        rr = zo*usr/visc_air(Ta)
+        zot = np.where(1.0e-4/np.power(rr, 0.55) > 2.4e-4/np.power(rr, 1.2),
+                       2.4e-4/np.power(rr, 1.2),
+                       1.0e-4/np.power(rr, 0.55)) # temperature roughness
+        zoq = np.where(2.0e-5/np.power(rr,0.22) > 1.1e-4/np.power(rr,0.9),
+                       1.1e-4/np.power(rr,0.9), 2.0e-5/np.power(rr,0.22))
+        # moisture roughness determined by the CLIMODE, GASEX and CBLAST data
+#        zoq = np.where(5e-5/np.power(rr, 0.6) > 1.15e-4, 1.15e-4,
+#                       5e-5/np.power(rr, 0.6))  # moisture roughness as in C30
+        cqn = kappa**2/np.log(10/zo)/np.log(10/zoq)
+        ctn = kappa**2/np.log(10/zo)/np.log(10/zot)
+    elif (meth == "ERA5"):
         # eq. (3.26) p.40 over sea IFS Documentation cy46r1
         usr = np.sqrt(cdn*np.power(u10n, 2))
         zot = 0.40*visc_air(Ta)/usr
@@ -243,14 +193,14 @@ def ctcqn_calc(zol, cdn, u10n, zo, Ta, method="S80"):
         cqn = kappa**2/np.log(10/zo)/np.log(10/zoq)
         ctn = kappa**2/np.log(10/zo)/np.log(10/zot)
     else:
-        print("unknown method ctcqn: "+method)
+        print("unknown method ctcqn: "+meth)
     return ctn, cqn
 # ---------------------------------------------------------------------
 
 
 def cd_calc(cdn, height, ref_ht, psim):
     """ Calculates drag coefficient at reference height
-    
+
     Parameters
     ----------
     cdn : float
@@ -261,7 +211,7 @@ def cd_calc(cdn, height, ref_ht, psim):
         reference height (m)
     psim : float
         momentum stability function
-    
+
     Returns
     -------
     cd : float
@@ -274,7 +224,7 @@ def cd_calc(cdn, height, ref_ht, psim):
 
 def ctcq_calc(cdn, cd, ctn, cqn, h_t, h_q, ref_ht, psit, psiq):
     """ Calculates heat and moisture exchange coefficients at reference height
-    
+
     Parameters
     ----------
     cdn : float
@@ -295,7 +245,7 @@ def ctcq_calc(cdn, cd, ctn, cqn, h_t, h_q, ref_ht, psit, psiq):
         heat stability function
     psiq : float
         moisture stability function
-    
+
     Returns
     -------
     ct : float
@@ -307,24 +257,26 @@ def ctcq_calc(cdn, cd, ctn, cqn, h_t, h_q, ref_ht, psit, psiq):
 # ---------------------------------------------------------------------
 
 
-def psim_calc(zol, method="S80"):
+def psim_calc(zol, meth="S80"):
     """ Calculates momentum stability function
-    
+
     Parameters
     ----------
     zol : float
         height over MO length
-    method : str
-    
+    meth : str
+
     Returns
     -------
     psim : float
     """
-    coeffs = get_stabco(method)
+    coeffs = get_stabco(meth)
     alpha, beta, gamma = coeffs[0], coeffs[1], coeffs[2]
-    if (method == "ERA5"):
+    if (meth == "ERA5"):
         psim = np.where(zol < 0, psim_conv(zol, alpha, beta, gamma),
                         psim_stab_era5(zol, alpha, beta, gamma))
+    elif (meth == "C30" or meth == "C35" or meth == "C40"):
+        psim = psiu_26(zol, meth)
     else:
         psim = np.where(zol < 0, psim_conv(zol, alpha, beta, gamma),
                         psim_stab(zol, alpha, beta, gamma))
@@ -332,24 +284,26 @@ def psim_calc(zol, method="S80"):
 # ---------------------------------------------------------------------
 
 
-def psit_calc(zol, method="S80"):
+def psit_calc(zol, meth="S80"):
     """ Calculates heat stability function
-    
+
     Parameters
     ----------
     zol : float
         height over MO length
-    method : str
-    
+    meth : str
+
     Returns
     -------
     psit : float
     """
-    coeffs = get_stabco(method)
+    coeffs = get_stabco(meth)
     alpha, beta, gamma = coeffs[0], coeffs[1], coeffs[2]
-    if (method == "ERA5"):
+    if (meth == "ERA5"):
         psit = np.where(zol < 0, psi_conv(zol, alpha, beta, gamma),
                         psi_stab_era5(zol, alpha, beta, gamma))
+    elif (meth == "C30" or meth == "C35" or meth == "C40"):
+        psit = psit_26(zol)
     else:
         psit = np.where(zol < 0, psi_conv(zol, alpha, beta, gamma),
                         psi_stab(zol, alpha, beta, gamma))
@@ -357,26 +311,27 @@ def psit_calc(zol, method="S80"):
 # ---------------------------------------------------------------------
 
 
-def get_stabco(method="S80"):
+def get_stabco(meth="S80"):
     """ Gives the coefficients \\alpha, \\beta, \\gamma for stability functions
-    
+
     Parameters
     ----------
-    method : str
-    
+    meth : str
+
     Returns
     -------
     coeffs : float
     """
-    if (method == "S80" or method == "S88" or method == "LY04" or
-            method == "UA" or method == "ERA5"):
+    if (meth == "S80" or meth == "S88" or meth == "LY04" or
+        meth == "UA" or meth == "ERA5" or meth == "C30" or meth == "C35" or
+        meth == "C40"):
         alpha, beta, gamma = 16, 0.25, 5  # Smith 1980, from Dyer (1974)
-    elif (method == "LP82"):
+    elif (meth == "LP82"):
         alpha, beta, gamma = 16, 0.25, 7
-    elif (method == "YT96"):
+    elif (meth == "YT96"):
         alpha, beta, gamma = 20, 0.25, 5
     else:
-        print("unknown method stabco: "+method)
+        print("unknown method stabco: "+meth)
     coeffs = np.zeros(3)
     coeffs[0] = alpha
     coeffs[1] = beta
@@ -386,16 +341,16 @@ def get_stabco(method="S80"):
 
 
 def psi_stab_era5(zol, alpha, beta, gamma):
-    """ Calculates heat stability function for stable conditions 
+    """ Calculates heat stability function for stable conditions
         for method ERA5
-    
+
     Parameters
     ----------
     zol : float
         height over MO length
     alpha, beta, gamma : float
         constants given by get_stabco
-    
+
     Returns
     -------
     psit : float
@@ -406,16 +361,43 @@ def psi_stab_era5(zol, alpha, beta, gamma):
     return psit
 # ---------------------------------------------------------------------
 
+
+def psit_26(zol):
+    """ Computes temperature structure function as in C35
+
+    Parameters
+    ----------
+    zol : float
+        height over MO length
+
+    Returns
+    -------
+    psi : float
+    """
+    b, d = 2/3, 0.35
+    dzol = np.where(d*zol > 50, 50, d*zol)  # stable
+    psi = -((1+b*zol)**1.5+b*(zol-14.28)*np.exp(-dzol)+8.525)
+    psi = np.where(zol < 0, (1-(np.power(zol, 2)/(1+np.power(zol, 2))))*2 *
+                   np.log((1+np.sqrt(1-15*zol))/2)+(np.power(zol, 2) /
+                   (1+np.power(zol, 2))) *
+                   (1.5*np.log((1+np.power(1-34.15*zol, 1/3) +
+                   np.power(1-34.15*zol, 2/3))/3) -
+                   np.sqrt(3)*np.arctan((1+2*np.power(1-34.15*zol, 1/3)) /
+                   np.sqrt(3))+4*np.arctan(1)/np.sqrt(3)), psi)
+    return psi
+# ---------------------------------------------------------------------
+
+
 def psi_conv(zol, alpha, beta, gamma):
     """ Calculates heat stability function for unstable conditions
-    
+
     Parameters
     ----------
     zol : float
         height over MO length
     alpha, beta, gamma : float
         constants given by get_stabco
-    
+
     Returns
     -------
     psit : float
@@ -428,14 +410,14 @@ def psi_conv(zol, alpha, beta, gamma):
 
 def psi_stab(zol, alpha, beta, gamma):
     """ Calculates heat stability function for stable conditions
-    
+
     Parameters
     ----------
     zol : float
         height over MO length
     alpha, beta, gamma : float
         constants given by get_stabco
-    
+
     Returns
     -------
     psit : float
@@ -445,43 +427,17 @@ def psi_stab(zol, alpha, beta, gamma):
 # ---------------------------------------------------------------------
 
 
-def psit_26(zol):
-    """ Computes temperature structure function as in C35
-    
-    Parameters
-    ----------
-    zol : float
-        height over MO length
-        
-    Returns
-    -------
-    psi : float
-    """
-    dzol = np.where(0.35*zol > 50, 50, 0.35*zol)  # stable
-    psi = -((1+0.6667*zol)**1.5+0.6667*(zol-14.28)*np.exp(-dzol)+8.525)
-    k = np.where(zol < 0)  # unstable
-    x = (1-15*zol[k])**0.5
-    psik = 2*np.log((1+x)/2)
-    x = (1-34.15*zol[k])**0.3333
-    psic = (1.5*np.log((1+x+x**2)/3)-np.sqrt(3)*np.arctan((1+2*x) /
-            np.sqrt(3))+4*np.arctan(1)/np.sqrt(3))
-    f = zol[k]**2/(1+zol[k]**2)
-    psi[k] = (1-f)*psik+f*psic
-    return psi
-# ---------------------------------------------------------------------
-
-
 def psim_stab_era5(zol, alpha, beta, gamma):
-    """ Calculates momentum stability function for stable conditions 
+    """ Calculates momentum stability function for stable conditions
         for method ERA5
-    
+
     Parameters
     ----------
     zol : float
         height over MO length
     alpha, beta, gamma : float
         constants given by get_stabco
-    
+
     Returns
     -------
     psim : float
@@ -495,14 +451,14 @@ def psim_stab_era5(zol, alpha, beta, gamma):
 
 def psim_conv(zol, alpha, beta, gamma):
     """ Calculates momentum stability function for unstable conditions
-    
+
     Parameters
     ----------
     zol : float
         height over MO length
     alpha, beta, gamma : float
         constants given by get_stabco
-    
+
     Returns
     -------
     psim : float
@@ -516,14 +472,14 @@ def psim_conv(zol, alpha, beta, gamma):
 
 def psim_stab(zol, alpha, beta, gamma):
     """ Calculates momentum stability function for stable conditions
-    
+
     Parameters
     ----------
     zol : float
         height over MO length
     alpha, beta, gamma : float
         constants given by get_stabco
-    
+
     Returns
     -------
     psim : float
@@ -533,41 +489,54 @@ def psim_stab(zol, alpha, beta, gamma):
 # ---------------------------------------------------------------------
 
 
-def psiu_26(zol):
+def psiu_26(zol, meth):
     """ Computes velocity structure function C35
-    
+
     Parameters
     ----------
     zol : float
         height over MO length
-   
+
     Returns
     -------
     psi : float
     """
-    dzol = np.where(0.35*zol > 50, 50, 0.35*zol)  # stable
-    a, b, c, d = 0.7, 3/4, 5, 0.35
-    psi = -(a*zol+b*(zol-c/d)*np.exp(-dzol)+b*c/d)
-    k = np.where(zol < 0)  # unstable
-    x = (1-15*zol[k])**0.25
-    psik = 2*np.log((1+x)/2)+np.log((1+x**2)/2)-2*np.arctan(x)+2*np.arctan(1)
-    x = (1-10.15*zol[k])**0.3333
-    psic = (1.5*np.log((1+x+x**2)/3)-np.sqrt(3)*np.arctan((1+2*x)/np.sqrt(3)) +
-            4*np.arctan(1)/np.sqrt(3))
-    f = zol[k]**2/(1+zol[k]**2)
-    psi[k] = (1-f)*psik+f*psic
+    if (meth == "C30"):
+        dzol = np.where(0.35*zol > 50, 50, 0.35*zol) # stable
+        psi = -((1+zol)+0.6667*(zol-14.28)*np.exp(-dzol)+8.525)
+        k = np.where(zol < 0)  # unstable
+        x = np.power(1-15*zol[k], 0.25)
+        psik = (2*np.log((1+x)/2)+np.log((1+np.power(x, 2))/2)-2*np.arctan(x) +
+                2*np.arctan(1))
+        x = np.power(1-10.15*zol[k], 0.3333)
+        psic = (1.5*np.log((1+x+np.power(x, 2))/3)-np.sqrt(3) *
+                np.arctan((1+2*x)/np.sqrt(3))+4*np.arctan(1)/np.sqrt(3))
+        f = np.power(zol[k], 2)/(1+np.power(zol[k], 2))
+        psi[k] = (1-f)*psik+f*psic
+    elif (meth == "C35" or meth == "C40"):
+        dzol = np.where(0.35*zol > 50, 50, 0.35*zol)  # stable
+        a, b, c, d = 0.7, 3/4, 5, 0.35
+        psi = -(a*zol+b*(zol-c/d)*np.exp(-dzol)+b*c/d)
+        k = np.where(zol < 0)  # unstable
+        x = np.power(1-15*zol[k], 0.25)
+        psik = 2*np.log((1+x)/2)+np.log((1+x**2)/2)-2*np.arctan(x)+2*np.arctan(1)
+        x = np.power(1-10.15*zol[k], 0.3333)
+        psic = (1.5*np.log((1+x+np.power(x, 2))/3)-np.sqrt(3) *
+                np.arctan((1+2*x)/np.sqrt(3))+4*np.arctan(1)/np.sqrt(3))
+        f = np.power(zol[k], 2)/(1+np.power(zol[k], 2))
+        psi[k] = (1-f)*psik+f*psic
     return psi
 # ------------------------------------------------------------------------------
 
 
 def psiu_40(zol):
     """ Computes velocity structure function C35
-    
+
     Parameters
     ----------
     zol : float
         height over MO length
-   
+
     Returns
     -------
     psi : float
@@ -587,9 +556,9 @@ def psiu_40(zol):
 # ---------------------------------------------------------------------
 
 
-def get_skin(sst, qsea, rho, Rl, Rs, Rnl, cp, lv, usr, tsr, qsr, lat):
+def get_skin(sst, qsea, rho, Rl, Rs, Rnl, cp, lv, tkt, usr, tsr, qsr, lat):
     """ Computes cool skin
-    
+
     Parameters
     ----------
     sst : float
@@ -602,10 +571,14 @@ def get_skin(sst, qsea, rho, Rl, Rs, Rnl, cp, lv, usr, tsr, qsr, lat):
         downward longwave radiation (W/m^2)
     Rs : float
         downward shortwave radiation (W/m^2)
+    Rnl : float
+        upwelling IR radiation (W/m^2)
     cp : float
        specific heat of air at constant pressure
     lv : float
        latent heat of vaporization
+    tkt : float
+       cool skin thickness
     usr : float
        friction velocity
     tsr : float
@@ -614,12 +587,12 @@ def get_skin(sst, qsea, rho, Rl, Rs, Rnl, cp, lv, usr, tsr, qsr, lat):
        star humidity
     lat : float
        latitude
-    
+
     Returns
     -------
     dter : float
-    dqer : float      
-    
+    dqer : float
+
     """
     # coded following Saunders (1967) with lambda = 6
     g = gc(lat, None)
@@ -629,30 +602,31 @@ def get_skin(sst, qsea, rho, Rl, Rs, Rnl, cp, lv, usr, tsr, qsr, lat):
     # density of water, specific heat capacity of water, water viscosity,
     # thermal conductivity of water
     rhow, cpw, visw, tcw = 1022, 4000, 1e-6, 0.6
-    Al = 2.1e-5*(sst+3.2)**0.79
+    Al = 2.1e-5*np.power(sst+3.2, 0.79)
     be = 0.026
-    bigc = 16*g*cpw*(rhow*visw)**3/(tcw*tcw*rho*rho)
-    wetc = 0.622*lv*qsea/(287.1*(sst+273.16)**2)
+    bigc = 16*g*cpw*np.power(rhow*visw, 3)/(np.power(tcw, 2)*np.power(rho, 2))
+    wetc = 0.622*lv*qsea/(287.1*np.power(sst+273.16, 2))
     Rns = 0.945*Rs  # albedo correction
     hsb = -rho*cp*usr*tsr
     hlb = -rho*lv*usr*qsr
     qout = Rnl+hsb+hlb
-    tkt = 0.001*np.ones(np.shape(sst))
     dels = Rns*(0.065+11*tkt-6.6e-5/tkt*(1-np.exp(-tkt/8.0e-4)))
     qcol = qout-dels
     alq = Al*qcol+be*hlb*cpw/lv
+    xlamx = 6*np.ones(sst.shape)
     xlamx = np.where(alq > 0, 6/(1+(bigc*alq/usr**4)**0.75)**0.333, 6)
-    tkt = xlamx*visw/(np.sqrt(rho/rhow)*usr)
-    tkt = np.where(alq > 0, np.where(tkt > 0.01, 0.01, tkt), tkt)
+    tkt = np.where(alq > 0, xlamx*visw/(np.sqrt(rho/rhow)*usr),
+                   np.where(xlamx*visw/(np.sqrt(rho/rhow)*usr) > 0.01, 0.01,
+                   xlamx*visw/(np.sqrt(rho/rhow)*usr)))
     dter = qcol*tkt/tcw
     dqer = wetc*dter
-    return dter, dqer
+    return dter, dqer, tkt
 # ---------------------------------------------------------------------
 
 
 def get_gust(beta, Ta, usr, tsrv, zi, lat):
     """ Computes gustiness
-    
+
     Parameters
     ----------
     beta : float
@@ -667,17 +641,15 @@ def get_gust(beta, Ta, usr, tsrv, zi, lat):
         scale height of the boundary layer depth (m)
     lat : float
         latitude
-    
+
     Returns
     -------
     ug : float
     """
     if (np.max(Ta) < 200):  # convert to K if in Celsius
         Ta = Ta+273.16
-    if np.isnan(zi):
-        zi = 600
     g = gc(lat, None)
-    Bf = -g/Ta*usr*tsrv
+    Bf = (-g/Ta)*usr*tsrv
     ug = np.ones(np.shape(Ta))*0.2
     ug = np.where(Bf > 0, beta*np.power(Bf*zi, 1/3), 0.2)
     return ug
@@ -686,12 +658,12 @@ def get_gust(beta, Ta, usr, tsrv, zi, lat):
 
 def get_heights(h):
     """ Reads input heights for velocity, temperature and humidity
-    
+
     Parameters
     ----------
     h : float
         input heights (m)
-        
+
     Returns
     -------
     hh : array
@@ -709,12 +681,12 @@ def get_heights(h):
 
 def svp_calc(T):
     """ Calculates saturation vapour pressure
-    
+
     Parameters
     ----------
     T : float
         temperature (K)
-    
+
     Returns
     -------
     svp : float
@@ -729,17 +701,17 @@ def svp_calc(T):
 
 def qsea_calc(sst, pres):
     """ Computes specific humidity of the  sea surface air
-    
+
     Parameters
     ----------
     sst : float
         sea surface temperature (K)
     pres : float
         pressure (mb)
-    
+
     Returns
     -------
-    qsea : float 
+    qsea : float
         (kg/kg)
     """
     if (np.nanmin(sst) < 200):  # if sst in Celsius convert to Kelvin
@@ -754,7 +726,7 @@ def qsea_calc(sst, pres):
 
 def q_calc(Ta, rh, pres):
     """ Computes specific humidity following Haltiner and Martin p.24
-    
+
     Parameters
     ----------
     Ta : float
@@ -763,7 +735,7 @@ def q_calc(Ta, rh, pres):
         relative humidity (%)
     pres : float
         air pressure (mb)
-        
+
     Returns
     -------
     qair : float, (kg/kg)
@@ -778,14 +750,14 @@ def q_calc(Ta, rh, pres):
 
 def bucksat(T, P):
     """ Computes saturation vapor pressure (mb) as in C35
-    
+
     Parameters
     ----------
     T : float
         temperature ($^\\circ$\\,C)
     P : float
         pressure (mb)
-    
+
     Returns
     -------
     exx : float
@@ -800,14 +772,14 @@ def bucksat(T, P):
 
 def qsat26sea(T, P):
     """ Computes surface saturation specific humidity (g/kg) as in C35
-    
+
     Parameters
     ----------
     T : float
         temperature ($^\\circ$\\,C)
     P : float
         pressure (mb)
-        
+
     Returns
     -------
     qs : float
@@ -824,14 +796,14 @@ def qsat26sea(T, P):
 
 def qsat26air(T, P, rh):
     """ Computes saturation specific humidity (g/kg) as in C35
-    
+
     Parameters
     ----------
     T : float
         temperature ($^\circ$\,C)
     P : float
         pressure (mb)
-        
+
     Returns
     -------
     q : float
@@ -849,14 +821,14 @@ def qsat26air(T, P, rh):
 
 def gc(lat, lon=None):
     """ Computes gravity relative to latitude
-    
+
     Parameters
     ----------
     lat : float
         latitude ($^\circ$)
     lon : float
         longitude ($^\circ$, optional)
-    
+
     Returns
     -------
     gc : float
@@ -879,22 +851,23 @@ def gc(lat, lon=None):
 # ---------------------------------------------------------------------
 
 
-def visc_air(Ta):
+def visc_air(T):
     """ Computes the kinematic viscosity of dry air as a function of air temp.
     following Andreas (1989), CRREL Report 89-11.
-    
+
     Parameters
     ----------
     Ta : float
         air temperature ($^\circ$\,C)
-    
+
     Returns
     -------
     visa : float
         kinematic viscosity (m^2/s)
     """
-    Ta = np.asarray(Ta)
-    if (np.nanmin(Ta) > 200):  # if Ta in Kelvin convert to Celsius
-        Ta = Ta-273.16
-    visa = 1.326e-5 * (1 + 6.542e-3*Ta + 8.301e-6*Ta**2 - 4.84e-9*Ta**3)
+    T = np.asarray(T)
+    if (np.nanmin(T) > 200):  # if Ta in Kelvin convert to Celsius
+        T = T-273.16
+    visa = 1.326e-5*(1+6.542e-3*T+8.301e-6*np.power(T, 2) -
+                     4.84e-9*np.power(T, 3))
     return visa
