@@ -450,23 +450,13 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
         new = np.array([np.copy(u10n), np.copy(t10n), np.copy(q10n),
                        np.copy(usr), np.copy(tsr), np.copy(qsr)])
         d = np.abs(new-old)
-#        ind = np.where((d[0, :] > tol[0])+(d[1, :] > tol[1]) +
-#                       (d[2, :] > tol[2])+(d[3, :] > tol[3]) +
-#                       (d[4, :] > tol[4])+(d[5, :] > tol[5]))
+        ind = np.where((d[0, :] > tol[0])+(d[1, :] > tol[1]) +
+                       (d[2, :] > tol[2])+(d[3, :] > tol[3]) +
+                       (d[4, :] > tol[4])+(d[5, :] > tol[5]))
         if (ind[0].size == 0):
             ii = False
         else:
             ii = True
-        if ((it == 3) or (it == 6) or (it == 10)):
-            print('Method {}, # {} tol u10n: {} | t10n: {} | q10n: {} | '
-                  'u*: {} | t*: {} | q*: {}'.format(meth, it,
-                  np.ma.max(d[0, ~np.isnan(d[0,:])]),
-                  np.ma.max(d[1, ~np.isnan(d[1,:])]),
-                  np.ma.max(d[2, ~np.isnan(d[2,:])]),
-                  np.ma.max(d[3, ~np.isnan(d[3,:])]),
-                  np.ma.max(d[4, ~np.isnan(d[4,:])]),
-                  np.ma.max(d[5, ~np.isnan(d[5,:])])),
-                  file=open('tol_mid.txt','a'))
     logging.info('method %s | # of iterations:%s', meth, it)
     logging.info('method %s | # of points that did not converge :%s', meth,
                   ind[0].size)
