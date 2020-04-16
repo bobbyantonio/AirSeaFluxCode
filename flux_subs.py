@@ -75,11 +75,11 @@ def cdn_from_roughness(u10n, Ta, Tp, lat, meth="S88"):
         cdn = np.copy(cdnn)
         usr = np.sqrt(cdn*u10n**2)
         if (meth == "S88"):
-            # .....Charnock roughness length (equn 4 in Smith 88)
+            # Charnock roughness length (eq. 4 in Smith 88)
             zc = 0.011*np.power(usr, 2)/g
-            # .....smooth surface roughness length (equn 6 in Smith 88)
+            #  smooth surface roughness length (eq. 6 in Smith 88)
             zs = 0.11*visc_air(Ta)/usr
-            zo = zc + zs  # .....equns 7 & 8 in Smith 88 to calculate new CDN
+            zo = zc + zs  #  eq. 7 & 8 in Smith 88
         elif (meth == "UA"):
             # valid for 0<u<18m/s # Zeng et al. 1998 (24)
             zo = 0.013*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr
@@ -90,11 +90,10 @@ def cdn_from_roughness(u10n, Ta, Tp, lat, meth="S88"):
             zo = a*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr
         elif (meth == "C35"):
             a = 0.011*np.ones(Ta.shape)
-            a = np.where(u10n > 18, 0.0017*19-0.0050,
-                         np.where((u10n > 7) & (u10n <= 18),
-                                  0.0017*u10n-0.0050, a))
-#            charn = np.where(wind > 10, 0.011+(wind-10)/(18-10)*(0.018-0.011),
-#                     np.where(wind > 18, 0.018, 0.011*np.ones(np.shape(wind))))
+#            a = np.where(u10n > 19, 0.0017*19-0.0050,
+#                         np.where((u10n > 7) & (u10n <= 18),
+#                                  0.0017*u10n-0.0050, a))
+            a = np.where(u10n > 19, 0.0017*19-0.0050, 0.0017*u10n-0.0050)
             zo = 0.11*visc_air(Ta)/usr+a*np.power(usr, 2)/g
         elif (meth == "C40"):
             a = 0.011*np.ones(Ta.shape)
@@ -140,7 +139,7 @@ def ctcqn_calc(zol, cdn, u10n, zo, Ta, meth="S80"):
         ctn = np.ones(Ta.shape)*1.00*0.001
     elif (meth == "LP82"):
         cqn = np.where((zol <= 0) & (u10n > 4) & (u10n < 14), 1.15*0.001,
-                       np.nan)
+                       1*0.001)
         ctn = np.where((zol <= 0) & (u10n > 4) & (u10n < 25), 1.13*0.001,
                        0.66*0.001)
     elif (meth == "LY04"):
@@ -377,13 +376,13 @@ def psit_26(zol):
     b, d = 2/3, 0.35
     dzol = np.where(d*zol > 50, 50, d*zol)  # stable
     psi = -((1+b*zol)**1.5+b*(zol-14.28)*np.exp(-dzol)+8.525)
-    psi = np.where(zol < 0, (1-(np.power(zol, 2)/(1+np.power(zol, 2))))*2 *
-                   np.log((1+np.sqrt(1-15*zol))/2)+(np.power(zol, 2) /
-                   (1+np.power(zol, 2))) *
-                   (1.5*np.log((1+np.power(1-34.15*zol, 1/3) +
-                   np.power(1-34.15*zol, 2/3))/3) -
-                   np.sqrt(3)*np.arctan((1+2*np.power(1-34.15*zol, 1/3)) /
-                   np.sqrt(3))+4*np.arctan(1)/np.sqrt(3)), psi)
+    psik = 2*np.log((1+np.sqrt(1-15*zol))/2)
+    psic = (1.5*np.log((1+np.power(1-34.15*zol, 1/3) +
+            np.power(1-34.15*zol, 2/3))/3)-np.sqrt(3) *
+            np.arctan(1+2*np.power(1-34.15*zol, 1/3))/np.sqrt(3) +
+            4*np.arctan(1)/np.sqrt(3))
+    f = np.power(zol, 2)/(1+np.power(zol, 2))
+    psi = np.where(zol < 0, (1-f)*psik+f*psic, psi)
     return psi
 # ---------------------------------------------------------------------
 
@@ -646,7 +645,7 @@ def get_gust(beta, Ta, usr, tsrv, zi, lat):
     -------
     ug : float
     """
-    if (np.max(Ta) < 200):  # convert to K if in Celsius
+    if (np.nanmax(Ta) < 200):  # convert to K if in Celsius
         Ta = Ta+273.16
     g = gc(lat, None)
     Bf = (-g/Ta)*usr*tsrv

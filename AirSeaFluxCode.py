@@ -1,7 +1,6 @@
 import numpy as np
 import sys
 import logging
-#import metpy.constants as mpcon
 from flux_subs import (kappa, CtoK, get_heights, cdn_calc, cd_calc, get_skin,
                        psim_calc, psit_calc, ctcq_calc, ctcqn_calc, get_gust,
                        gc, q_calc, qsea_calc, qsat26sea, qsat26air,
@@ -40,8 +39,8 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
             downward longwave radiation (W/m^2)
         Rs : float
             downward shortwave radiation (W/m^2)
-        jcool : bool
-            0 if sst is true ocean skin temperature called in COARE
+        jcool : int
+            0 if sst is true ocean skin temperature called in COARE, else 1
         n : int
             number of iterations
 
@@ -124,12 +123,12 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
         meth == "C40")):
         lat=45*np.ones(np.shape(spd))
     ####
-    th = np.where(np.nanmax(T) < 200, (np.copy(T)+CtoK) *
+    th = np.where(T < 200, (np.copy(T)+CtoK) *
                   np.power(1000/P,287.1/1004.67),
                   np.copy(T)*np.power(1000/P,287.1/1004.67))  # potential T
-    Ta = np.where(np.nanmax(T) < 200, np.copy(T)+CtoK+tlapse*hh_in[1],
+    Ta = np.where(T < 200, np.copy(T)+CtoK+tlapse*hh_in[1],
                   np.copy(T)+tlapse*hh_in[1])  # convert to Kelvin if needed
-    sst = np.where(np.nanmax(SST) < 200, np.copy(SST)+CtoK, np.copy(SST))
+    sst = np.where(SST < 200, np.copy(SST)+CtoK, np.copy(SST))
     if (meth == "C30" or meth == "C35" or meth == "C40"  or meth == "UA" or
         meth == "ERA5"):
         qsea = qsat26sea(sst, P)/1000  # surface water specific humidity (g/kg)
@@ -161,12 +160,11 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
     tv=th*(1.+0.61*qair)   # virtual potential T
     dtv=dt*(1.+0.61*qair)+0.61*th*dq
     # ------------
-#    rho = P*100/(287.1*tv10n)
-    rho = P*100/(287.1*(T+CtoK)*(1+0.61*qair))
-    # rho=P*100/(287.1*sst*(1+0.61*qsea))  # Zeng et al. 1998
+    rho = P*100/(287.1*tv10n)
+#    rho=P*100/(287.1*sst*(1+0.61*qsea))  # Zeng et al. 1998
     lv = (2.501-0.00237*SST)*1e6
     cp = 1004.67*(1 + 0.00084*qsea)
-#    cp = 1004.67  # Zeng et al. 1998, C3.0, C3.5
+#    cp = 1004.67*np.ones(Ta.shape)  # Zeng et al. 1998, C3.0, C3.5
     u10n = np.copy(spd)
     monob = -100*np.ones(u10n.shape)  # Monin-Obukhov length
     cdn = cdn_calc(u10n, Ta, None, lat, meth)
@@ -175,9 +173,14 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
     cd = cd_calc(cdn, hh_in[0], ref_ht, psim)
     tsr, tsrv = np.zeros(u10n.shape), np.zeros(u10n.shape)
     qsr = np.zeros(u10n.shape)
+    # if jcool == 1:
+    tkt = 0.001*np.ones(T.shape)
+    Rnl = 0.97*(5.67e-8*np.power(sst-0.3*jcool+CtoK, 4)-Rl)
+    dter = np.ones(T.shape)*0.3 
+    dqer = dter*0.622*lv*qsea/(287.1*np.power(sst, 2))
     if (meth == "UA"):
-        wind = np.where(dtv >= 0,np.where(spd > 0.1, spd, 0.1),
-                        np.sqrt(np.power(np.copy(spd),2)+np.power(0.5,2)))
+        wind = np.where(dtv >= 0, np.where(spd > 0.1, spd, 0.1),
+                        np.sqrt(np.power(np.copy(spd), 2)+np.power(0.5, 2)))
         usr = 0.06
         for i in range(5):
             zo = 0.013*np.power(usr,2)/g+0.11*visc_air(Ta)/usr
@@ -190,7 +193,7 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
         zo = 0.013*np.power(usr, 2)/g + 0.11*visc_air(Ta)/usr
         zot = zo/np.exp(2.67*np.power(usr*zo/visc_air(Ta), 0.25)-2.57)
         zoq = zot
-        logging.info('method %s | wind:%s, usr:%s,'
+        logging.info('method %s | wind:%s, usr:%s, '
                      'zo:%s, zot:%s, zoq:%s, Rb:%s, monob:%s', meth,
                      np.ma.median(wind[~np.isnan(wind)]),
                      np.ma.median(usr[~np.isnan(usr)]),
@@ -201,7 +204,7 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
                      np.ma.median(monob[~np.isnan(monob)]))
     elif (meth == "ERA5"):
         wind = np.sqrt(np.power(np.copy(spd), 2)+np.power(0.5, 2))
-        usr = np.sqrt(cd*wind**2)
+        usr = np.sqrt(cd*np.power(wind, 2))
         Rb = ((g*hh_in[0]*((2*dt)/(Ta+sst-g*hh_in[0]) +
                 0.61*dq))/np.power(wind, 2))
         zo = 0.11*visc_air(Ta)/usr+0.018*np.power(usr, 2)/g
@@ -212,8 +215,8 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
                psit_calc((hh_in[0]+zo)/monob, meth) +
                psit_calc(zot/monob, meth))))
         monob = hh_in[0]/zol
-        logging.info('method %s | wind:%s, usr:%s,'
-                     'zo:%s, zot:%s, zoq:%s, Rb:%s, monob:%s', meth,
+        logging.info('method %s | wind:%s, usr:%s, '
+                     'zo:%s, zot:%s, Rb:%s, monob:%s', meth,
                      np.ma.median(wind[~np.isnan(wind)]),
                      np.ma.median(usr[~np.isnan(usr)]),
                      np.ma.median(zo[~np.isnan(zo)]),
@@ -222,14 +225,14 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
                      np.ma.median(monob[~np.isnan(monob)]))
     elif (meth == "C30" or meth == "C35" or meth == "C40"):
         wind = np.sqrt(np.power(np.copy(spd), 2)+np.power(0.5, 2))
-        usr = 0.035*wind*np.log(10/1e-4)/np.log(hh_in[0]/1e-4)
+        usr = np.sqrt(cd*np.power(wind, 2))
         a = 0.011*np.ones(T.shape)
         a = np.where(wind > 10, 0.011+(wind-10)/(18-10)*(0.018-0.011),
                          np.where(wind > 18, 0.018, a))
         zo = a*np.power(usr, 2)/g+0.11*visc_air(T)/usr
         rr = zo*usr/visc_air(T)
         zoq = np.minimum(5e-5/np.power(rr, 0.6), 1.15e-4)
-        zot=zoq
+        zot = zoq
         Rb = g*hh_in[0]*dtv/((T+CtoK)*np.power(wind, 2))
         zol =  (Rb*((np.log((hh_in[0]+zo)/zo)-psim_calc((hh_in[0]+zo) /
                monob, meth)+psim_calc(zo/monob, meth)) /
@@ -237,12 +240,8 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
                psit_calc((hh_in[0]+zo)/monob, meth) +
                psit_calc(zot/monob, meth))))
         monob = hh_in[0]/zol
-#        wetc = 0.622*lv*qsea/(287.1*np.power(sst, 2))
-        tkt = 0.001*np.ones(T.shape)
-        Rnl = 0.97*(5.67e-8*np.power(sst-0.3*jcool+CtoK, 4)-Rl)
-        dter, dqer = np.ones(T.shape)*0.3, np.zeros(T.shape)*np.nan
-        logging.info('method %s | wind:%s, usr:%s,'
-                     'zo:%s, zot:%s, zoq:%s, Rb:%s, monob:%s', meth,
+        logging.info('method %s | wind:%s, usr:%s, '
+                     'zo:%s, zot:%s, Rb:%s, monob:%s', meth,
                      np.ma.median(wind[~np.isnan(wind)]),
                      np.ma.median(usr[~np.isnan(usr)]),
                      np.ma.median(zo[~np.isnan(zo)]),
@@ -252,27 +251,31 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
     else:
         wind = np.copy(spd)
         zo, zot = 0.0001*np.ones(u10n.shape), 0.0001*np.ones(u10n.shape)
-        usr = np.sqrt(cd * wind**2)
-        logging.info('method %s | wind:%s, usr:%s,'
-                     'zo:%s, zot:%s, zoq:%s, Rb:%s, monob:%s', meth,
+        usr = np.sqrt(cd*np.power(wind, 2))
+        logging.info('method %s | wind:%s, usr:%s, '
+                     'zo:%s, zot:%s, Rb:%s, monob:%s', meth,
                      np.ma.median(wind[~np.isnan(wind)]),
                      np.ma.median(usr[~np.isnan(usr)]),
                      np.ma.median(zo[~np.isnan(zo)]),
                      np.ma.median(zot[~np.isnan(zot)]),
                      np.ma.median(monob[~np.isnan(monob)]))
+    tsr = (dt+dter*jcool)*kappa/(np.log(hin[1]/zot) -
+                                 psit_calc(hh_in[1]/monob, meth))
+    qsr = (dq+dqer*jcool)*kappa/(np.log(hin[2]/zot) -
+                                 psit_calc(hh_in[2]/monob, meth))   
     # tolerance for u,t,q,usr,tsr,qsr
-    tol = np.array([1e-06, 0.01, 5e-05, 1e-06, 0.001, 5e-07])
-    it, ind, ii, itera = 0, np.where(spd > 0), True, np.zeros(spd.shape)*np.nan
+    tol = np.array([1e-06, 0.01, 5e-07, 1e-06, 0.001, 5e-07])
+    it, ind = 0, np.where(spd > 0)
+    ii, itera = True, np.zeros(spd.shape)*np.nan
     while np.any(ii):
         it += 1
         if it > n:
             break
-        old = np.array([np.copy(u10n[ind]), np.copy(t10n[ind]),
-                       np.copy(q10n[ind]), np.copy(usr[ind]),
-                       np.copy(tsr[ind]), np.copy(qsr[ind])])
+        old = np.array([np.copy(u10n), np.copy(t10n), np.copy(q10n),
+                       np.copy(usr), np.copy(tsr), np.copy(qsr)])
         cdn[ind] = cdn_calc(u10n[ind], Ta[ind], None, lat[ind], meth)
         if (np.all(np.isnan(cdn))):
-            break  # sys.exit("cdn cannot be nan")
+            break
             logging.info('break %s at iteration %s cdn<0', meth, it)
         zo[ind] = ref_ht/np.exp(kappa/np.sqrt(cdn[ind]))
         psim[ind] = psim_calc(hh_in[0]/monob[ind], meth)
@@ -289,8 +292,8 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
                                 (np.log(-1.574*monob[ind]/zo[ind]) -
                                 psim_calc(-1.574, meth) +
                                 psim_calc(zo[ind]/monob[ind], meth) +
-                                1.14*(np.power(-hh_in[0]/monob[ind],1/3) -
-                                np.power(1.574,1/3))),
+                                1.14*(np.power(-hh_in[0]/monob[ind], 1/3) -
+                                np.power(1.574, 1/3))),
                                 np.where((hh_in[0]/monob[ind] > -1.574) &
                                 (hh_in[0]/monob[ind] < 0),
                                 kappa*wind[ind]/(np.log(hh_in[0]/zo[ind]) -
@@ -305,54 +308,55 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
                                 5*np.log(hh_in[0]/monob[ind]) +
                                 hh_in[0]/monob[ind]-1))))
                                 # Zeng et al. 1998 (7-10)
-            tsr[ind] = np.where(hh_in[1]/monob[ind] < -0.465, kappa*dt[ind] /
+            tsr[ind] = np.where(hh_in[1]/monob[ind] < -0.465, kappa*(dt[ind] +
+                                dter[ind]*jcool) /
                                 (np.log((-0.465*monob[ind])/zot[ind]) -
                                 psit_calc(-0.465, meth)+0.8 *
-                                (np.power(0.465,-1/3) -
-                                np.power(-hh_in[1]/monob[ind],-1/3))),
-                                np.where((hh_in[1]/monob[ind]>-0.465) &
-                                (hh_in[1]/monob[ind]<0),
-                                kappa*dt[ind]/(np.log(hh_in[1]/zot[ind]) -
+                                (np.power(0.465, -1/3) -
+                                np.power(-hh_in[1]/monob[ind], -1/3))),
+                                np.where((hh_in[1]/monob[ind] > -0.465) &
+                                (hh_in[1]/monob[ind] < 0),
+                                kappa*(dt[ind]+dter[ind]*jcool) /
+                                (np.log(hh_in[1]/zot[ind]) -
                                 psit_calc(hh_in[1]/monob[ind], meth) +
                                 psit_calc(zot[ind]/monob[ind], meth)),
-                                np.where((hh_in[1]/monob[ind]>0) &
-                                (hh_in[1]/monob[ind]<1),
-                                kappa*dt[ind]/(np.log(hh_in[1]/zot[ind]) +
+                                np.where((hh_in[1]/monob[ind] > 0) &
+                                (hh_in[1]/monob[ind] < 1),
+                                kappa*(dt[ind]+dter[ind]*jcool) /
+                                (np.log(hh_in[1]/zot[ind]) +
                                 5*hh_in[1]/monob[ind]-5*zot[ind]/monob[ind]),
-                                kappa*dt[ind]/(np.log(monob[ind]/zot[ind])+5 -
-                                5**zot[ind]/monob[ind] +
+                                kappa*(dt[ind]+dter[ind]*jcool) /
+                                (np.log(monob[ind]/zot[ind])+5 -
+                                5*zot[ind]/monob[ind] +
                                 5*np.log(hh_in[1]/monob[ind]) +
                                 hh_in[1]/monob[ind]-1))))
                                 # Zeng et al. 1998 (11-14)
-            qsr[ind] = np.where(hh_in[2]/monob[ind] < -0.465, kappa*dq[ind] /
+            qsr[ind] = np.where(hh_in[2]/monob[ind] < -0.465, kappa*(dq[ind] +
+                                dqer[ind]*jcool) /
                                 (np.log((-0.465*monob[ind])/zoq[ind]) -
                                 psit_calc(-0.465, meth) +
                                 psit_calc(zoq[ind]/monob[ind], meth) +
-                                0.8*(np.power(0.465,-1/3) -
-                                np.power(-hh_in[2]/monob[ind],-1/3))),
-                                np.where((hh_in[2]/monob[ind]>-0.465) &
-                                (hh_in[2]/monob[ind]<0),
-                                kappa*dq[ind]/(np.log(hh_in[1]/zot[ind]) -
+                                0.8*(np.power(0.465, -1/3) -
+                                np.power(-hh_in[2]/monob[ind], -1/3))),
+                                np.where((hh_in[2]/monob[ind] > -0.465) &
+                                (hh_in[2]/monob[ind] < 0),
+                                kappa*(dq[ind]+dqer[ind]*jcool) /
+                                (np.log(hh_in[1]/zot[ind]) -
                                 psit_calc(hh_in[2]/monob[ind], meth) +
                                 psit_calc(zoq[ind]/monob[ind], meth)),
-                                np.where((hh_in[2]/monob[ind]>0) &
-                                (hh_in[2]/monob[ind]<1), kappa*dq[ind] /
+                                np.where((hh_in[2]/monob[ind] > 0) &
+                                (hh_in[2]/monob[ind]<1), kappa*(dq[ind] +
+                                dqer[ind]*jcool) /
                                 (np.log(hh_in[1]/zoq[ind]) +
                                 5*hh_in[2]/monob[ind]-5*zoq[ind]/monob[ind]),
-                                kappa*dq[ind]/(np.log(monob[ind]/zoq[ind])+5 -
+                                kappa*(dq[ind]+dqer[ind]*jcool) /
+                                (np.log(monob[ind]/zoq[ind])+5 -
                                 5*zoq[ind]/monob[ind] +
                                 5*np.log(hh_in[2]/monob[ind]) +
                                 hh_in[2]/monob[ind]-1))))
         elif (meth == "C30" or meth == "C35" or meth == "C40"):
             usr[ind] = (wind[ind]*kappa/(np.log(hh_in[0]/zo[ind]) -
                         psiu_26(hh_in[0]/monob[ind], meth)))
-            dter[ind], dqer[ind], tkt[ind] = get_skin(sst[ind], qsea[ind],
-                                                      rho[ind], Rl[ind],
-                                                      Rs[ind], Rnl[ind],
-                                                      cp[ind], lv[ind],
-                                                      np.copy(tkt[ind]),
-                                                      usr[ind], tsr[ind],
-                                                      qsr[ind], lat[ind])
             logging.info('method %s | dter = %s | Rnl = %s '
                          '| usr = %s | tsr = %s | qsr = %s', meth,
                          np.ma.median(dter[~np.isnan(dter)]),
@@ -364,16 +368,24 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
                         (np.log(hin[2]/zoq[ind])-psit_26(hin[2]/monob[ind]))))
             tsr[ind] = ((dt[ind]+dter[ind]*jcool)*(kappa /
                         (np.log(hin[1]/zot[ind])-psit_26(hin[1]/monob[ind]))))
-            Rnl[ind] = 0.97*(5.67e-8*np.power(SST[ind] -
-                             dter[ind]*jcool+CtoK, 4)-Rl[ind])
         else:
-            usr[ind] = np.sqrt(cd[ind]*wind[ind]**2)
-            tsr[ind] = ct[ind]*wind[ind]*dt[ind]/usr[ind]
-            qsr[ind] = cq[ind]*wind[ind]*dq[ind]/usr[ind]
-        fact = (np.log(hh_in[1]/ref_ht)-psit[ind])/kappa
-        t10n[ind] = Ta[ind] - (tsr[ind]*fact)
-        fact = (np.log(hh_in[2]/ref_ht)-psiq[ind])/kappa
-        q10n[ind] = qair[ind] - (qsr[ind]*fact)
+            usr[ind] = (wind[ind]*kappa/(np.log(hh_in[0]/zo[ind]) -
+                        psim_calc(hh_in[0]/monob[ind], meth)))#np.sqrt(cd[ind]*wind[ind]**2)
+            tsr[ind] = ct[ind]*wind[ind]*(dt[ind]+dter[ind]*jcool)/usr[ind]
+            qsr[ind] = cq[ind]*wind[ind]*(dq[ind]+dqer[ind]*jcool)/usr[ind]
+        dter[ind], dqer[ind], tkt[ind] = get_skin(sst[ind], qsea[ind],
+                                                  rho[ind], Rl[ind],
+                                                  Rs[ind], Rnl[ind],
+                                                  cp[ind], lv[ind],
+                                                  np.copy(tkt[ind]),
+                                                  usr[ind], tsr[ind],
+                                                  qsr[ind], lat[ind])
+        Rnl[ind] = 0.97*(5.67e-8*np.power(SST[ind] -
+                         dter[ind]*jcool+CtoK, 4)-Rl[ind])
+        t10n[ind] = (Ta[ind] -
+                     (tsr[ind]*(np.log(hh_in[1]/ref_ht)-psit[ind])/kappa))
+        q10n[ind] = (qair[ind] -
+                     (qsr[ind]*(np.log(hh_in[2]/ref_ht)-psiq[ind])/kappa))
         tv10n[ind] = t10n[ind]*(1+0.61*q10n[ind])
         if (meth == "UA"):
             tsrv[ind] = tsr[ind]*(1.+0.61*qair[ind])+0.61*th[ind]*qsr[ind]
@@ -407,7 +419,7 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
             wind[ind] = np.where(dtv[ind] >= 0, np.where(spd[ind] > 0.1,
                                  spd[ind], 0.1),
                                  np.sqrt(np.power(np.copy(spd[ind]), 2) +
-                                 np.power(get_gust(1,tv[ind], usr[ind],
+                                 np.power(get_gust(1, tv[ind], usr[ind],
                                  tsrv[ind], zi, lat[ind]), 2)))
                                  # Zeng et al. 1998 (20)
             u10n[ind] = (wind[ind]-(usr[ind]/kappa)*(np.log(hh_in[0]/10) -
@@ -434,29 +446,36 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
             u10n[ind] = (wind[ind]-(usr[ind]/kappa)*(np.log(hh_in[0]/10) -
                          psim[ind]))
             u10n[u10n < 0] = np.nan
-        new = np.array([np.copy(u10n[ind]), np.copy(t10n[ind]),
-                       np.copy(q10n[ind]), np.copy(usr[ind]),
-                       np.copy(tsr[ind]), np.copy(qsr[ind])])
-        d = np.abs(new-old)
-        ind = np.where((d[0, :] > tol[0])+(d[1, :] > tol[1]) +
-                       (d[2, :] > tol[2])+(d[3, :] > tol[3]) +
-                       (d[4, :] > tol[4])+(d[5, :] > tol[5]))
         itera[ind] = np.ones(1)*it
-        if np.shape(ind)[0] == 0:
-            break
+        new = np.array([np.copy(u10n), np.copy(t10n), np.copy(q10n),
+                       np.copy(usr), np.copy(tsr), np.copy(qsr)])
+        d = np.abs(new-old)
+#        ind = np.where((d[0, :] > tol[0])+(d[1, :] > tol[1]) +
+#                       (d[2, :] > tol[2])+(d[3, :] > tol[3]) +
+#                       (d[4, :] > tol[4])+(d[5, :] > tol[5]))
+        if (ind[0].size == 0):
+            ii = False
         else:
-            ii = ((d[0, ind] > tol[0])+(d[1, ind] > tol[1]) +
-                  (d[2, ind] > tol[2])+(d[3, ind] > tol[3]) +
-                  (d[4, ind] > tol[4])+(d[5, ind] > tol[5]))
-    logging.info('method %s | # of iterations:%s', meth, np.ma.median(it))
+            ii = True
+        if ((it == 3) or (it == 6) or (it == 10)):
+            print('Method {}, # {} tol u10n: {} | t10n: {} | q10n: {} | '
+                  'u*: {} | t*: {} | q*: {}'.format(meth, it,
+                  np.ma.max(d[0, ~np.isnan(d[0,:])]),
+                  np.ma.max(d[1, ~np.isnan(d[1,:])]),
+                  np.ma.max(d[2, ~np.isnan(d[2,:])]),
+                  np.ma.max(d[3, ~np.isnan(d[3,:])]),
+                  np.ma.max(d[4, ~np.isnan(d[4,:])]),
+                  np.ma.max(d[5, ~np.isnan(d[5,:])])),
+                  file=open('tol_mid.txt','a'))
+    logging.info('method %s | # of iterations:%s', meth, it)
     logging.info('method %s | # of points that did not converge :%s', meth,
-                  np.shape(ind))
+                  ind[0].size)
     # calculate output parameters
-#    rho = (0.34838*P)/(tv10n)
-    rho = P*100./(287.1*(T+CtoK)*(1+0.61*qair))  # C35
+    rho = (0.34838*P)/(tv10n)
+#    rho = P*100./(287.1*(T+CtoK)*(1+0.61*qair))  # C35
     t10n = t10n-(273.16+tlapse*ref_ht)
-    sensible = -1*tsr*usr*cp*rho
-    latent = -1*qsr*usr*lv*rho
+    sensible = -rho*cp*usr*tsr
+    latent = -rho*lv*usr*qsr
     if (meth == "C30" or meth == "C35" or meth == "C40" or meth == "UA" or
         meth == "ERA5"):
         tau = rho*np.power(usr, 2)*(spd/wind)
