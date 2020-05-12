@@ -34,13 +34,13 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
         hout : float
             output height, default is 10m
         zi : int
-            PBL height (m) called in C35
+            PBL height (m)
         Rl : float
             downward longwave radiation (W/m^2)
         Rs : float
             downward shortwave radiation (W/m^2)
         jcool : int
-            0 if sst is true ocean skin temperature called in COARE, else 1
+            0 if sst is true ocean skin temperature, else 1
         n : int
             number of iterations
 
@@ -89,6 +89,7 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
     g = gc(lat, None)             # acceleration due to gravity
     ctn, ct, cqn, cq = (np.zeros(spd.shape)*np.nan, np.zeros(spd.shape)*np.nan,
                         np.zeros(spd.shape)*np.nan, np.zeros(spd.shape)*np.nan)
+    cdn = np.zeros(spd.shape)*np.nan
     # if input values are nan break
     if (np.all(np.isnan(spd)) or np.all(np.isnan(T)) or np.all(np.isnan(SST))):
         sys.exit("input wind, T or SST is empty")
@@ -119,16 +120,13 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
         zi = 600  # set to default for COARE3.5
     elif ((np.all(np.isnan(zi))) and (meth == "ERA5" or meth == "UA")):
         zi = 1000
-    if (np.all(np.isnan(lat)) and (meth == "C30" or meth == "C35" or
-        meth == "C40")):
-        lat=45*np.ones(np.shape(spd))
     ####
-    th = np.where(T < 200, (np.copy(T)+CtoK) *
+    th = np.where(np.nanmax(T) < 200, (np.copy(T)+CtoK) *
                   np.power(1000/P,287.1/1004.67),
                   np.copy(T)*np.power(1000/P,287.1/1004.67))  # potential T
-    Ta = np.where(T < 200, np.copy(T)+CtoK+tlapse*hh_in[1],
+    Ta = np.where(np.nanmax(T) < 200, np.copy(T)+CtoK+tlapse*hh_in[1],
                   np.copy(T)+tlapse*hh_in[1])  # convert to Kelvin if needed
-    sst = np.where(SST < 200, np.copy(SST)+CtoK, np.copy(SST))
+    sst = np.where(np.nanmax(SST) < 200, np.copy(SST)+CtoK, np.copy(SST))
     if (meth == "C30" or meth == "C35" or meth == "C40"  or meth == "UA" or
         meth == "ERA5"):
         qsea = qsat26sea(sst, P)/1000  # surface water specific humidity (g/kg)
@@ -161,10 +159,8 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
     dtv=dt*(1.+0.61*qair)+0.61*th*dq
     # ------------
     rho = P*100/(287.1*tv10n)
-#    rho=P*100/(287.1*sst*(1+0.61*qsea))  # Zeng et al. 1998
     lv = (2.501-0.00237*SST)*1e6
     cp = 1004.67*(1 + 0.00084*qsea)
-#    cp = 1004.67*np.ones(Ta.shape)  # Zeng et al. 1998, C3.0, C3.5
     u10n = np.copy(spd)
     monob = -100*np.ones(u10n.shape)  # Monin-Obukhov length
     cdn = cdn_calc(u10n, Ta, None, lat, meth)
@@ -176,7 +172,7 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
     # if jcool == 1:
     tkt = 0.001*np.ones(T.shape)
     Rnl = 0.97*(5.67e-8*np.power(sst-0.3*jcool+CtoK, 4)-Rl)
-    dter = np.ones(T.shape)*0.3 
+    dter = np.ones(T.shape)*0.3
     dqer = dter*0.622*lv*qsea/(287.1*np.power(sst, 2))
     if (meth == "UA"):
         wind = np.where(dtv >= 0, np.where(spd > 0.1, spd, 0.1),
@@ -262,9 +258,9 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
     tsr = (dt+dter*jcool)*kappa/(np.log(hin[1]/zot) -
                                  psit_calc(hh_in[1]/monob, meth))
     qsr = (dq+dqer*jcool)*kappa/(np.log(hin[2]/zot) -
-                                 psit_calc(hh_in[2]/monob, meth))   
+                                 psit_calc(hh_in[2]/monob, meth))
     # tolerance for u,t,q,usr,tsr,qsr
-    tol = np.array([1e-06, 0.01, 5e-07, 1e-06, 0.001, 5e-07])
+    tol = np.array([0.01, 0.01, 5e-05, 0.005, 0.001, 5e-07])
     it, ind = 0, np.where(spd > 0)
     ii, itera = True, np.zeros(spd.shape)*np.nan
     while np.any(ii):
@@ -369,17 +365,21 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
             tsr[ind] = ((dt[ind]+dter[ind]*jcool)*(kappa /
                         (np.log(hin[1]/zot[ind])-psit_26(hin[1]/monob[ind]))))
         else:
-            usr[ind] = (wind[ind]*kappa/(np.log(hh_in[0]/zo[ind]) -
-                        psim_calc(hh_in[0]/monob[ind], meth)))#np.sqrt(cd[ind]*wind[ind]**2)
+            usr[ind] = np.sqrt(cd[ind]*np.power(wind[ind], 2))
             tsr[ind] = ct[ind]*wind[ind]*(dt[ind]+dter[ind]*jcool)/usr[ind]
             qsr[ind] = cq[ind]*wind[ind]*(dq[ind]+dqer[ind]*jcool)/usr[ind]
-        dter[ind], dqer[ind], tkt[ind] = get_skin(sst[ind], qsea[ind],
-                                                  rho[ind], Rl[ind],
-                                                  Rs[ind], Rnl[ind],
-                                                  cp[ind], lv[ind],
-                                                  np.copy(tkt[ind]),
-                                                  usr[ind], tsr[ind],
-                                                  qsr[ind], lat[ind])
+        if (jcool == 1):
+            dter[ind], dqer[ind], tkt[ind] = get_skin(sst[ind], qsea[ind],
+                                                      rho[ind], Rl[ind],
+                                                      Rs[ind], Rnl[ind],
+                                                      cp[ind], lv[ind],
+                                                      np.copy(tkt[ind]),
+                                                      usr[ind], tsr[ind],
+                                                      qsr[ind], lat[ind])
+        else:
+            dter[ind] = np.zeros(spd[ind].shape)
+            dqer[ind] = np.zeros(spd[ind].shape)
+            tkt[ind] = np.zeros(spd[ind].shape)
         Rnl[ind] = 0.97*(5.67e-8*np.power(SST[ind] -
                          dter[ind]*jcool+CtoK, 4)-Rl[ind])
         t10n[ind] = (Ta[ind] -
@@ -451,8 +451,8 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
                        np.copy(usr), np.copy(tsr), np.copy(qsr)])
         d = np.abs(new-old)
         ind = np.where((d[0, :] > tol[0])+(d[1, :] > tol[1]) +
-                       (d[2, :] > tol[2])+(d[3, :] > tol[3]) +
-                       (d[4, :] > tol[4])+(d[5, :] > tol[5]))
+                      (d[2, :] > tol[2])+(d[3, :] > tol[3]) +
+                      (d[4, :] > tol[4])+(d[5, :] > tol[5]))
         if (ind[0].size == 0):
             ii = False
         else:
@@ -462,7 +462,6 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
                   ind[0].size)
     # calculate output parameters
     rho = (0.34838*P)/(tv10n)
-#    rho = P*100./(287.1*(T+CtoK)*(1+0.61*qair))  # C35
     t10n = t10n-(273.16+tlapse*ref_ht)
     sensible = -rho*cp*usr*tsr
     latent = -rho*lv*usr*qsr
