@@ -159,8 +159,10 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
     dtv=dt*(1.+0.61*qair)+0.61*th*dq
     # ------------
     rho = P*100/(287.1*tv10n)
+#    rho=P*100/(287.1*sst*(1+0.61*qsea))  # Zeng et al. 1998
     lv = (2.501-0.00237*SST)*1e6
     cp = 1004.67*(1 + 0.00084*qsea)
+#    cp = 1004.67*np.ones(Ta.shape)  # Zeng et al. 1998, C3.0, C3.5
     u10n = np.copy(spd)
     monob = -100*np.ones(u10n.shape)  # Monin-Obukhov length
     cdn = cdn_calc(u10n, Ta, None, lat, meth)
@@ -260,7 +262,7 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
     qsr = (dq+dqer*jcool)*kappa/(np.log(hin[2]/zot) -
                                  psit_calc(hh_in[2]/monob, meth))
     # tolerance for u,t,q,usr,tsr,qsr
-    tol = np.array([0.01, 0.01, 5e-05, 0.005, 0.001, 5e-07])
+    tol = np.array([0.01, 0.01, 5e-05, 0.005, 0.001, 5e-07])  #[1e-06, 0.01, 5e-07, 1e-06, 0.001, 5e-07]
     it, ind = 0, np.where(spd > 0)
     ii, itera = True, np.zeros(spd.shape)*np.nan
     while np.any(ii):
@@ -366,6 +368,8 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
                         (np.log(hin[1]/zot[ind])-psit_26(hin[1]/monob[ind]))))
         else:
             usr[ind] = np.sqrt(cd[ind]*np.power(wind[ind], 2))
+            #        = (wind[ind]*kappa/(np.log(hh_in[0]/zo[ind]) -
+            #           psim_calc(hh_in[0]/monob[ind], meth)))
             tsr[ind] = ct[ind]*wind[ind]*(dt[ind]+dter[ind]*jcool)/usr[ind]
             qsr[ind] = cq[ind]*wind[ind]*(dq[ind]+dqer[ind]*jcool)/usr[ind]
         if (jcool == 1):
@@ -422,7 +426,7 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
                                  np.power(get_gust(1, tv[ind], usr[ind],
                                  tsrv[ind], zi, lat[ind]), 2)))
                                  # Zeng et al. 1998 (20)
-            u10n[ind] = (wind[ind]-(usr[ind]/kappa)*(np.log(hh_in[0]/10) -
+            u10n[ind] = (wind[ind]+(usr[ind]/kappa)*(np.log(hh_in[0]/10) -
                          psim[ind]))
             u10n[u10n < 0] = np.nan
         elif (meth == "C30" or meth == "C35" or meth == "C40"):
@@ -443,7 +447,7 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
                          ref_ht)-psim[ind]))
             u10n[u10n < 0] = np.nan
         else:
-            u10n[ind] = (wind[ind]-(usr[ind]/kappa)*(np.log(hh_in[0]/10) -
+            u10n[ind] = (wind[ind]+(usr[ind]/kappa)*(np.log(hh_in[0]/10) -
                          psim[ind]))
             u10n[u10n < 0] = np.nan
         itera[ind] = np.ones(1)*it
@@ -457,11 +461,22 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi=600,
             ii = False
         else:
             ii = True
+        # if ((it == 3) or (it == 6) or (it == 10)):
+        #     print('Method {}, # {} tol u10n: {} | t10n: {} | q10n: {} | '
+        #           'u*: {} | t*: {} | q*: {}'.format(meth, it,
+        #           np.ma.max(d[0, ~np.isnan(d[0,:])]),
+        #           np.ma.max(d[1, ~np.isnan(d[1,:])]),
+        #           np.ma.max(d[2, ~np.isnan(d[2,:])]),
+        #           np.ma.max(d[3, ~np.isnan(d[3,:])]),
+        #           np.ma.max(d[4, ~np.isnan(d[4,:])]),
+        #           np.ma.max(d[5, ~np.isnan(d[5,:])])),
+        #           file=open('tol_mid.txt','a'))
     logging.info('method %s | # of iterations:%s', meth, it)
     logging.info('method %s | # of points that did not converge :%s', meth,
                   ind[0].size)
     # calculate output parameters
     rho = (0.34838*P)/(tv10n)
+#    rho = P*100./(287.1*(T+CtoK)*(1+0.61*qair))  # C35
     t10n = t10n-(273.16+tlapse*ref_ht)
     sensible = -rho*cp*usr*tsr
     latent = -rho*lv*usr*qsr
