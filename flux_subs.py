@@ -1,4 +1,5 @@
 import numpy as np
+from VaporPressure import VaporPressure
 
 CtoK = 273.16  # 273.15
 """ Conversion factor for (^\circ\,C) to (^\\circ\\,K) """
@@ -25,6 +26,7 @@ def cdn_calc(u10n, Ta, Tp, lat, meth="S80"):
     -------
     cdn : float
     """
+    cdn = np.zeros(Ta.shape)*np.nan
     if (meth == "S80"):
         cdn = np.where(u10n <= 3, (0.61+0.567/u10n)*0.001,
                        (0.61+0.063*u10n)*0.001)
@@ -101,7 +103,7 @@ def cdn_from_roughness(u10n, Ta, Tp, lat, meth="S88"):
             zo = a*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr # surface roughness
         elif (meth == "ERA5"):
             # eq. (3.26) p.40 over sea IFS Documentation cy46r1
-            zo = 0.11*visc_air(Ta)/usr+0.018*np.power(usr, 2)/g
+            zo = 0.018*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr
         else:
             print("unknown method for cdn_from_roughness "+meth)
         cdnn = (kappa/np.log(10/zo))**2
@@ -215,8 +217,7 @@ def cd_calc(cdn, height, ref_ht, psim):
     -------
     cd : float
     """
-    cd = (cdn*np.power(1+np.sqrt(cdn)*np.power(kappa, -1) *
-          (np.log(height/ref_ht)-psim), -2))
+    cd = (cdn/np.power(1+(np.sqrt(cdn)*(np.log(height/ref_ht)-psim))/kappa, 2))
     return cd
 # ---------------------------------------------------------------------
 
@@ -250,8 +251,10 @@ def ctcq_calc(cdn, cd, ctn, cqn, h_t, h_q, ref_ht, psit, psiq):
     ct : float
     cq : float
     """
-    ct = ctn*(cd/cdn)**0.5/(1+ctn*((np.log(h_t/ref_ht)-psit)/(kappa*cdn**0.5)))
-    cq = cqn*(cd/cdn)**0.5/(1+cqn*((np.log(h_q/ref_ht)-psiq)/(kappa*cdn**0.5)))
+    ct = (ctn*np.sqrt(cd/cdn) /
+          (1+ctn*((np.log(h_t/ref_ht)-psit)/(kappa*np.sqrt(cdn)))))
+    cq = (cqn*np.sqrt(cd/cdn) /
+          (1+cqn*((np.log(h_q/ref_ht)-psiq)/(kappa*np.sqrt(cdn)))))
     return ct, cq
 # ---------------------------------------------------------------------
 
@@ -401,8 +404,8 @@ def psi_conv(zol, alpha, beta, gamma):
     -------
     psit : float
     """
-    xtmp = (1-alpha*zol)**beta
-    psit = 2*np.log((1+xtmp**2)*0.5)
+    xtmp = np.power(1-alpha*zol, beta)
+    psit = 2*np.log((1+np.power(xtmp, 2))*0.5)
     return psit
 # ---------------------------------------------------------------------
 
@@ -462,8 +465,8 @@ def psim_conv(zol, alpha, beta, gamma):
     -------
     psim : float
     """
-    xtmp = (1-alpha*zol)**beta
-    psim = (2*np.log((1+xtmp)*0.5)+np.log((1+xtmp**2)*0.5) -
+    xtmp = np.power(1-alpha*zol, beta)
+    psim = (2*np.log((1+xtmp)*0.5)+np.log((1+np.power(xtmp, 2))*0.5) -
             2*np.arctan(xtmp)+np.pi/2)
     return psim
 # ---------------------------------------------------------------------
@@ -524,33 +527,6 @@ def psiu_26(zol, meth):
                 np.arctan((1+2*x)/np.sqrt(3))+4*np.arctan(1)/np.sqrt(3))
         f = np.power(zol[k], 2)/(1+np.power(zol[k], 2))
         psi[k] = (1-f)*psik+f*psic
-    return psi
-# ------------------------------------------------------------------------------
-
-
-def psiu_40(zol):
-    """ Computes velocity structure function C35
-
-    Parameters
-    ----------
-    zol : float
-        height over MO length
-
-    Returns
-    -------
-    psi : float
-    """
-    dzol = np.where(0.35*zol > 50, 50, 0.35*zol)  # stable
-    a, b, c, d = 1, 3/4, 5, 0.35
-    psi = -(a*zol+b*(zol-c/d)*np.exp(-dzol)+b*c/d)
-    k = np.where(zol < 0)  # unstable
-    x = (1-18*zol[k])**0.25
-    psik = 2*np.log((1+x)/2)+np.log((1+x**2)/2)-2*np.arctan(x)+2*np.arctan(1)
-    x = (1-10*zol[k])**0.3333
-    psic = (1.5*np.log((1+x+x**2)/3)-np.sqrt(3)*np.arctan((1+2*x)/np.sqrt(3)) +
-            4*np.arctan(1)/np.sqrt(3))
-    f = zol[k]**2/(1+zol[k]**2)
-    psi[k] = (1-f)*psik+f*psic
     return psi
 # ---------------------------------------------------------------------
 
@@ -655,7 +631,7 @@ def get_gust(beta, Ta, usr, tsrv, zi, lat):
 # ---------------------------------------------------------------------
 
 
-def get_heights(h):
+def get_heights(h, dim_len):
     """ Reads input heights for velocity, temperature and humidity
 
     Parameters
@@ -667,88 +643,28 @@ def get_heights(h):
     -------
     hh : array
     """
-    hh = np.zeros(3)
+    hh = np.zeros((3, dim_len))
     if (type(h) == float or type(h) == int):
-        hh[0], hh[1], hh[2] = h, h, h
-    elif len(h) == 2:
-        hh[0], hh[1], hh[2] = h[0], h[1], h[1]
-    else:
-        hh[0], hh[1], hh[2] = h[0], h[1], h[2]
+        hh[0, :], hh[1, :], hh[2, :] = h, h, h
+    elif (len(h) == 2 and h.ndim == 1):
+        hh[0, :], hh[1, :], hh[2, :] = h[0], h[1], h[1]
+    elif (len(h) == 3 and h.ndim == 1):
+        hh[0, :], hh[1, :], hh[2, :] = h[0], h[1], h[2]
+    elif (len(h) == 1 and h.ndim == 2):
+        hh = np.zeros((3, h.shape[1]))
+        hh[0, :], hh[1, :], hh[2, :] = h[0, :], h[0, :], h[0, :]
+    elif (len(h) == 2 and h.ndim == 2):
+        hh = np.zeros((3, h.shape[1]))
+        hh[0, :], hh[1, :], hh[2, :] = h[0, :], h[1, :], h[1, :]
+    elif (len(h) == 3 and h.ndim == 2):
+        hh = np.zeros((3, h.shape[1]))
+        hh = np.copy(h)
     return hh
 # ---------------------------------------------------------------------
 
 
-def svp_calc(T):
-    """ Calculates saturation vapour pressure
-
-    Parameters
-    ----------
-    T : float
-        temperature (K)
-
-    Returns
-    -------
-    svp : float
-        in mb, pure water
-    """
-    if (np.nanmin(T) < 200):  # if T in Celsius convert to Kelvin
-        T = T+273.16
-    svp = np.where(np.isnan(T), np.nan, 2.1718e08*np.exp(-4157/(T-33.91-0.16)))
-    return svp
-# ---------------------------------------------------------------------
-
-
-def qsea_calc(sst, pres):
-    """ Computes specific humidity of the  sea surface air
-
-    Parameters
-    ----------
-    sst : float
-        sea surface temperature (K)
-    pres : float
-        pressure (mb)
-
-    Returns
-    -------
-    qsea : float
-        (kg/kg)
-    """
-    if (np.nanmin(sst) < 200):  # if sst in Celsius convert to Kelvin
-        sst = sst+273.16
-    ed = svp_calc(sst)
-    e = 0.98*ed
-    qsea = (0.622*e)/(pres-0.378*e)
-    qsea = np.where(~np.isnan(sst+pres), qsea, np.nan)
-    return qsea
-# ---------------------------------------------------------------------
-
-
-def q_calc(Ta, rh, pres):
-    """ Computes specific humidity following Haltiner and Martin p.24
-
-    Parameters
-    ----------
-    Ta : float
-        air temperature (K)
-    rh : float
-        relative humidity (%)
-    pres : float
-        air pressure (mb)
-
-    Returns
-    -------
-    qair : float, (kg/kg)
-    """
-    if (np.nanmin(Ta) < 200):  # if sst in Celsius convert to Kelvin
-        Ta = Ta+273.15
-    e = np.where(np.isnan(Ta+rh+pres), np.nan, svp_calc(Ta)*rh*0.01)
-    qair = np.where(np.isnan(e), np.nan, ((0.62197*e)/(pres-0.378*e)))
-    return qair
-# ------------------------------------------------------------------------------
-
-
-def bucksat(T, P):
-    """ Computes saturation vapor pressure (mb) as in C35
+def qsat_sea(T, P, qmeth):
+    """ Computes surface saturation specific humidity (g/kg)
 
     Parameters
     ----------
@@ -756,28 +672,8 @@ def bucksat(T, P):
         temperature ($^\\circ$\\,C)
     P : float
         pressure (mb)
-
-    Returns
-    -------
-    exx : float
-    """
-    T = np.asarray(T)
-    if (np.nanmin(T) > 200):  # if Ta in Kelvin convert to Celsius
-        T = T-CtoK
-    exx = 6.1121*np.exp(17.502*T/(T+240.97))*(1.0007+3.46e-6*P)
-    return exx
-# ------------------------------------------------------------------------------
-
-
-def qsat26sea(T, P):
-    """ Computes surface saturation specific humidity (g/kg) as in C35
-
-    Parameters
-    ----------
-    T : float
-        temperature ($^\\circ$\\,C)
-    P : float
-        pressure (mb)
+    qmeth : str
+        method to calculate vapor pressure
 
     Returns
     -------
@@ -786,14 +682,14 @@ def qsat26sea(T, P):
     T = np.asarray(T)
     if (np.nanmin(T) > 200):  # if Ta in Kelvin convert to Celsius
         T = T-CtoK
-    ex = bucksat(T, P)
+    ex = VaporPressure(T, P, 'liquid', qmeth)
     es = 0.98*ex  # reduction at sea surface
     qs = 622*es/(P-0.378*es)
     return qs
 # ------------------------------------------------------------------------------
 
 
-def qsat26air(T, P, rh):
+def qsat_air(T, P, rh, qmeth):
     """ Computes saturation specific humidity (g/kg) as in C35
 
     Parameters
@@ -802,6 +698,10 @@ def qsat26air(T, P, rh):
         temperature ($^\circ$\,C)
     P : float
         pressure (mb)
+    rh : float
+       relative humidity (%)
+    qmeth : str
+        method to calculate vapor pressure
 
     Returns
     -------
@@ -811,10 +711,10 @@ def qsat26air(T, P, rh):
     T = np.asarray(T)
     if (np.nanmin(T) > 200):  # if Ta in Kelvin convert to Celsius
         T = T-CtoK
-    es = bucksat(T, P)
+    es = VaporPressure(T, P, 'liquid', qmeth)
     em = 0.01*rh*es
     q = 622*em/(P-0.378*em)
-    return q, em
+    return q
 # ---------------------------------------------------------------------
 
 
