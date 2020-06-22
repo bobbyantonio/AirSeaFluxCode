@@ -283,7 +283,7 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi, Rl, Rs, jcool,
                                 (h_in[0, ind]/monob[ind] < 0),
                                 kappa*wind[ind]/(np.log(h_in[0, ind]/zo[ind]) -
                                 psim_calc(h_in[0, ind]/monob[ind], meth) +
-                                psim_calc(zo[ind, ind]/monob[ind], meth)),
+                                psim_calc(zo[ind]/monob[ind], meth)),
                                 np.where((h_in[0, ind]/monob[ind] > 0) &
                                 (h_in[0, ind]/monob[ind] < 1),
                                 kappa*wind[ind]/(np.log(h_in[0, ind]/zo[ind]) +
