@@ -115,6 +115,8 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi, Rl, Rs, jcool,
     elif ((np.all(np.isnan(Rl)) and meth == "C35") or
           (np.all(np.isnan(Rl)) and meth == "C40")):
         Rl = np.ones(spd.shape)*370    # set to default for COARE3.5
+    elif (np.all(np.isnan(Rl))):
+        Rl = np.ones(spd.shape)*370    # set to default for COARE3.5
     if (np.all(np.isnan(Rs)) and meth == "C30"):
         Rs = np.ones(spd.shape)*370  # set to default for COARE3.0
     elif ((np.all(np.isnan(Rs))) and (meth == "C35" or meth == "C40")):
@@ -124,6 +126,8 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi, Rl, Rs, jcool,
         zi = 600  # set to default for COARE3.5
     elif ((np.all(np.isnan(zi))) and (meth == "ERA5" or meth == "UA")):
         zi = 1000
+    elif (np.all(np.isnan(zi))):
+        zi = 800
     ####
     th = np.where(T < 200, (np.copy(T)+CtoK) *
                   np.power(1000/P,287.1/1004.67),
@@ -248,7 +252,7 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi, Rl, Rs, jcool,
     qsr = (dq+dqer*jcool)*kappa/(np.log(hin[2]/zot) -
                                  psit_calc(h_in[2]/monob, meth))
     # tolerance for u,t,q,usr,tsr,qsr
-    tol = np.array([0.01, 0.01, 5e-05, 0.005, 0.001, 5e-07]) 
+    tol = np.array([0.01, 0.01, 5e-05, 0.005, 0.001, 5e-07])
     it, ind = 0, np.where(spd > 0)
     ii, itera = True, np.zeros(spd.shape)*np.nan
     while np.any(ii):
@@ -423,22 +427,22 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi, Rl, Rs, jcool,
         if (meth == "UA"):
             u10n[ind] = (wind[ind]+(usr[ind]/kappa)*(np.log(h_in[0, ind]/10) -
                          psim[ind]))
-            # u10n[u10n < 0] = np.nan
+            u10n[u10n < 0] = np.nan
         elif (meth == "C30" or meth == "C35" or meth == "C40"):
             u10n[ind] = ((wind[ind] + usr[ind]/kappa*(np.log(10/h_in[0, ind]) -
                          psiu_26(10/monob[ind], meth) +
                          psiu_26(h_in[0, ind]/monob[ind], meth)) +
                          psiu_26(10/monob[ind], meth)*usr[ind]/kappa /
                          (wind[ind]/spd[ind])))
-            # u10n[u10n < 0] = np.nan
+            u10n[u10n < 0] = np.nan
         elif (meth == "ERA5"):
             u10n[ind] = (spd[ind]+(usr[ind]/kappa)*(np.log(h_in[0, ind] /
                          ref_ht)-psim[ind]))
-            # u10n[u10n < 0] = np.nan
+            u10n[u10n < 0] = np.nan
         else:
             u10n[ind] = (wind[ind]+(usr[ind]/kappa)*(np.log(h_in[0, ind]/10) -
                          psim[ind]))
-            # u10n[u10n < 0] = np.nan
+            u10n[u10n < 0] = np.nan
         itera[ind] = np.ones(1)*it
         new = np.array([np.copy(u10n), np.copy(t10n), np.copy(q10n),
                        np.copy(usr), np.copy(tsr), np.copy(qsr)])
