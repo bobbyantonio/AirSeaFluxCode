@@ -425,22 +425,22 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi, Rl, Rs, jcool,
         elif (gust == 0):
             wind[ind] = np.copy(spd[ind])
         if (meth == "UA"):
-            u10n[ind] = (wind[ind]+(usr[ind]/kappa)*(np.log(h_in[0, ind]/10) -
+            u10n[ind] = (wind[ind]-(usr[ind]/kappa)*(np.log(h_in[0, ind]/10) -
                          psim[ind]))
             u10n[u10n < 0] = np.nan
         elif (meth == "C30" or meth == "C35" or meth == "C40"):
-            u10n[ind] = ((wind[ind] + usr[ind]/kappa*(np.log(10/h_in[0, ind]) -
+            u10n[ind] = ((wind[ind]+usr[ind]/kappa*(np.log(10/h_in[0, ind]) -
                          psiu_26(10/monob[ind], meth) +
                          psiu_26(h_in[0, ind]/monob[ind], meth)) +
-                         psiu_26(10/monob[ind], meth)*usr[ind]/kappa /
-                         (wind[ind]/spd[ind])))
+                         psiu_26(10/monob[ind], meth)*usr[ind]/kappa) /
+                         (wind[ind]/spd[ind]))
             u10n[u10n < 0] = np.nan
         elif (meth == "ERA5"):
-            u10n[ind] = (spd[ind]+(usr[ind]/kappa)*(np.log(h_in[0, ind] /
+            u10n[ind] = (spd[ind]-(usr[ind]/kappa)*(np.log(h_in[0, ind] /
                          ref_ht)-psim[ind]))
             u10n[u10n < 0] = np.nan
         else:
-            u10n[ind] = (wind[ind]+(usr[ind]/kappa)*(np.log(h_in[0, ind]/10) -
+            u10n[ind] = (wind[ind]-(usr[ind]/kappa)*(np.log(h_in[0, ind]/10) -
                          psim[ind]))
             u10n[u10n < 0] = np.nan
         itera[ind] = np.ones(1)*it
@@ -448,8 +448,8 @@ def AirSeaFluxCode(spd, T, SST, lat, RH, P, hin, hout, zi, Rl, Rs, jcool,
                        np.copy(usr), np.copy(tsr), np.copy(qsr)])
         d = np.abs(new-old)
         ind = np.where((d[0, :] > tol[0])+(d[1, :] > tol[1]) +
-                      (d[2, :] > tol[2])+(d[3, :] > tol[3]) +
-                      (d[4, :] > tol[4])+(d[5, :] > tol[5]))
+                       (d[2, :] > tol[2])+(d[3, :] > tol[3]) +
+                       (d[4, :] > tol[4])+(d[5, :] > tol[5]))
         if (ind[0].size == 0):
             ii = False
         else:
