@@ -2,10 +2,38 @@ import numpy as np
 from VaporPressure import VaporPressure
 
 CtoK = 273.16  # 273.15
-""" Conversion factor for (^\circ\,C) to (^\\circ\\,K) """
+""" Conversion factor for $^\circ\,$C to K """
 
 kappa = 0.4  # NOTE: 0.41
 """ von Karman's constant """
+# ---------------------------------------------------------------------
+def get_stabco(meth="S80"):
+    """ Gives the coefficients \\alpha, \\beta, \\gamma for stability functions
+
+    Parameters
+    ----------
+    meth : str
+
+    Returns
+    -------
+    coeffs : float
+    """
+    alpha, beta, gamma = 0, 0, 0
+    if (meth == "S80" or meth == "S88" or meth == "LY04" or
+        meth == "UA" or meth == "ERA5" or meth == "C30" or meth == "C35" or
+        meth == "C40"):
+        alpha, beta, gamma = 16, 0.25, 5  # Smith 1980, from Dyer (1974)
+    elif (meth == "LP82"):
+        alpha, beta, gamma = 16, 0.25, 7
+    elif (meth == "YT96"):
+        alpha, beta, gamma = 20, 0.25, 5
+    else:
+        print("unknown method stabco: "+meth)
+    coeffs = np.zeros(3)
+    coeffs[0] = alpha
+    coeffs[1] = beta
+    coeffs[2] = gamma
+    return coeffs
 # ---------------------------------------------------------------------
 
 
@@ -20,6 +48,8 @@ def cdn_calc(u10n, Ta, Tp, lat, meth="S80"):
         air temperature (K)
     Tp   : float
         wave period
+    lat : float
+        latitude
     meth : str
 
     Returns
@@ -63,6 +93,8 @@ def cdn_from_roughness(u10n, Ta, Tp, lat, meth="S88"):
         air temperature (K)
     Tp   : float
         wave period
+    lat : float
+        latitude
     meth : str
 
     Returns
@@ -92,9 +124,9 @@ def cdn_from_roughness(u10n, Ta, Tp, lat, meth="S88"):
             zo = a*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr
         elif (meth == "C35"):
             a = 0.011*np.ones(Ta.shape)
-#            a = np.where(u10n > 19, 0.0017*19-0.0050,
-#                         np.where((u10n > 7) & (u10n <= 18),
-#                                  0.0017*u10n-0.0050, a))
+            # a = np.where(u10n > 19, 0.0017*19-0.0050,
+            #             np.where((u10n > 7) & (u10n <= 18),
+            #                       0.0017*u10n-0.0050, a))
             a = np.where(u10n > 19, 0.0017*19-0.0050, 0.0017*u10n-0.0050)
             zo = 0.11*visc_air(Ta)/usr+a*np.power(usr, 2)/g
         elif (meth == "C40"):
@@ -102,13 +134,36 @@ def cdn_from_roughness(u10n, Ta, Tp, lat, meth="S88"):
             a = np.where(u10n > 22, 0.0016*22-0.0035, 0.0016*u10n-0.0035)
             zo = a*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr # surface roughness
         elif (meth == "ERA5"):
-            # eq. (3.26) p.40 over sea IFS Documentation cy46r1
+            # eq. (3.26) p.38 over sea IFS Documentation cy46r1
             zo = 0.018*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr
         else:
             print("unknown method for cdn_from_roughness "+meth)
         cdnn = (kappa/np.log(10/zo))**2
     cdn = np.where(np.abs(cdnn-cdn) < tol, cdnn, np.nan)
-    return cdnn
+    return cdn
+# ---------------------------------------------------------------------
+
+
+def cd_calc(cdn, height, ref_ht, psim):
+    """ Calculates drag coefficient at reference height
+
+    Parameters
+    ----------
+    cdn : float
+        neutral drag coefficient
+    height : float
+        original sensor height (m)
+    ref_ht : float
+        reference height (m)
+    psim : float
+        momentum stability function
+
+    Returns
+    -------
+    cd : float
+    """
+    cd = (cdn/np.power(1+(np.sqrt(cdn)*(np.log(height/ref_ht)-psim))/kappa, 2))
+    return cd
 # ---------------------------------------------------------------------
 
 
@@ -120,7 +175,7 @@ def ctcqn_calc(zol, cdn, u10n, zo, Ta, meth="S80"):
     zol  : float
         height over MO length
     cdn  : float
-        neatral drag coefficient
+        neutral drag coefficient
     u10n : float
         neutral 10m wind speed (m/s)
     zo   : float
@@ -187,7 +242,7 @@ def ctcqn_calc(zol, cdn, u10n, zo, Ta, meth="S80"):
         cqn = kappa**2/np.log(10/zo)/np.log(10/zoq)
         ctn = kappa**2/np.log(10/zo)/np.log(10/zot)
     elif (meth == "ERA5"):
-        # eq. (3.26) p.40 over sea IFS Documentation cy46r1
+        # eq. (3.26) p.38 over sea IFS Documentation cy46r1
         usr = np.sqrt(cdn*np.power(u10n, 2))
         zot = 0.40*visc_air(Ta)/usr
         zoq = 0.62*visc_air(Ta)/usr
@@ -199,30 +254,7 @@ def ctcqn_calc(zol, cdn, u10n, zo, Ta, meth="S80"):
 # ---------------------------------------------------------------------
 
 
-def cd_calc(cdn, height, ref_ht, psim):
-    """ Calculates drag coefficient at reference height
-
-    Parameters
-    ----------
-    cdn : float
-        neutral drag coefficient
-    height : float
-        original sensor height (m)
-    ref_ht : float
-        reference height (m)
-    psim : float
-        momentum stability function
-
-    Returns
-    -------
-    cd : float
-    """
-    cd = (cdn/np.power(1+(np.sqrt(cdn)*(np.log(height/ref_ht)-psim))/kappa, 2))
-    return cd
-# ---------------------------------------------------------------------
-
-
-def ctcq_calc(cdn, cd, ctn, cqn, h_t, h_q, ref_ht, psit, psiq):
+def ctcq_calc(cdn, cd, ctn, cqn, ht, hq, ref_ht, psit, psiq):
     """ Calculates heat and moisture exchange coefficients at reference height
 
     Parameters
@@ -249,12 +281,14 @@ def ctcq_calc(cdn, cd, ctn, cqn, h_t, h_q, ref_ht, psit, psiq):
     Returns
     -------
     ct : float
+       heat exchange coefficient
     cq : float
+       moisture exchange coefficient
     """
     ct = (ctn*np.sqrt(cd/cdn) /
-          (1+ctn*((np.log(h_t/ref_ht)-psit)/(kappa*np.sqrt(cdn)))))
+          (1+ctn*((np.log(ht/ref_ht)-psit)/(kappa*np.sqrt(cdn)))))
     cq = (cqn*np.sqrt(cd/cdn) /
-          (1+cqn*((np.log(h_q/ref_ht)-psiq)/(kappa*np.sqrt(cdn)))))
+          (1+cqn*((np.log(hq/ref_ht)-psiq)/(kappa*np.sqrt(cdn)))))
     return ct, cq
 # ---------------------------------------------------------------------
 
@@ -272,16 +306,13 @@ def psim_calc(zol, meth="S80"):
     -------
     psim : float
     """
-    coeffs = get_stabco(meth)
-    alpha, beta, gamma = coeffs[0], coeffs[1], coeffs[2]
     if (meth == "ERA5"):
-        psim = np.where(zol < 0, psim_conv(zol, alpha, beta, gamma),
-                        psim_stab_era5(zol, alpha, beta, gamma))
+        psim = psim_era5(zol)
     elif (meth == "C30" or meth == "C35" or meth == "C40"):
         psim = psiu_26(zol, meth)
     else:
-        psim = np.where(zol < 0, psim_conv(zol, alpha, beta, gamma),
-                        psim_stab(zol, alpha, beta, gamma))
+        psim = np.where(zol < 0, psim_conv(zol, meth),
+                        psim_stab(zol, meth))
     return psim
 # ---------------------------------------------------------------------
 
@@ -294,55 +325,25 @@ def psit_calc(zol, meth="S80"):
     zol : float
         height over MO length
     meth : str
+        parameterisation method
 
     Returns
     -------
     psit : float
     """
-    coeffs = get_stabco(meth)
-    alpha, beta, gamma = coeffs[0], coeffs[1], coeffs[2]
     if (meth == "ERA5"):
-        psit = np.where(zol < 0, psi_conv(zol, alpha, beta, gamma),
-                        psi_stab_era5(zol, alpha, beta, gamma))
+        psit = np.where(zol < 0, psi_conv(zol, meth),
+                        psi_era5(zol))
     elif (meth == "C30" or meth == "C35" or meth == "C40"):
         psit = psit_26(zol)
     else:
-        psit = np.where(zol < 0, psi_conv(zol, alpha, beta, gamma),
-                        psi_stab(zol, alpha, beta, gamma))
+        psit = np.where(zol < 0, psi_conv(zol, meth),
+                        psi_stab(zol, meth))
     return psit
 # ---------------------------------------------------------------------
 
 
-def get_stabco(meth="S80"):
-    """ Gives the coefficients \\alpha, \\beta, \\gamma for stability functions
-
-    Parameters
-    ----------
-    meth : str
-
-    Returns
-    -------
-    coeffs : float
-    """
-    if (meth == "S80" or meth == "S88" or meth == "LY04" or
-        meth == "UA" or meth == "ERA5" or meth == "C30" or meth == "C35" or
-        meth == "C40"):
-        alpha, beta, gamma = 16, 0.25, 5  # Smith 1980, from Dyer (1974)
-    elif (meth == "LP82"):
-        alpha, beta, gamma = 16, 0.25, 7
-    elif (meth == "YT96"):
-        alpha, beta, gamma = 20, 0.25, 5
-    else:
-        print("unknown method stabco: "+meth)
-    coeffs = np.zeros(3)
-    coeffs[0] = alpha
-    coeffs[1] = beta
-    coeffs[2] = gamma
-    return coeffs
-# ---------------------------------------------------------------------
-
-
-def psi_stab_era5(zol, alpha, beta, gamma):
+def psi_era5(zol):
     """ Calculates heat stability function for stable conditions
         for method ERA5
 
@@ -350,14 +351,12 @@ def psi_stab_era5(zol, alpha, beta, gamma):
     ----------
     zol : float
         height over MO length
-    alpha, beta, gamma : float
-        constants given by get_stabco
 
     Returns
     -------
     psit : float
     """
-    # eq (3.22) p. 39 IFS Documentation cy46r1
+    # eq (3.22) p. 37 IFS Documentation cy46r1
     a, b, c, d = 1, 2/3, 5, 0.35
     psit = -b*(zol-c/d)*np.exp(-d*zol)-np.power(1+(2/3)*a*zol, 1.5)-(b*c)/d+1
     return psit
@@ -377,94 +376,103 @@ def psit_26(zol):
     psi : float
     """
     b, d = 2/3, 0.35
-    dzol = np.where(d*zol > 50, 50, d*zol)  # stable
-    psi = -((1+b*zol)**1.5+b*(zol-14.28)*np.exp(-dzol)+8.525)
-    psik = 2*np.log((1+np.sqrt(1-15*zol))/2)
-    psic = (1.5*np.log((1+np.power(1-34.15*zol, 1/3) +
-            np.power(1-34.15*zol, 2/3))/3)-np.sqrt(3) *
-            np.arctan(1+2*np.power(1-34.15*zol, 1/3))/np.sqrt(3) +
-            4*np.arctan(1)/np.sqrt(3))
+    dzol = np.where(d*zol > 50, 50, d*zol)
+    psi = np.where(zol > 0,-(np.power(1+b*zol, 1.5)+b*(zol-14.28) *
+                             np.exp(-dzol)+8.525), np.nan)
+    psik = np.where(zol < 0, 2*np.log((1+np.sqrt(1-15*zol))/2), np.nan)
+    psic = np.where(zol < 0, 1.5*np.log((1+np.power(1-34.15*zol, 1/3) +
+                    np.power(1-34.15*zol, 2/3))/3)-np.sqrt(3) *
+                    np.arctan(1+2*np.power(1-34.15*zol, 1/3))/np.sqrt(3) +
+                    4*np.arctan(1)/np.sqrt(3), np.nan)
     f = np.power(zol, 2)/(1+np.power(zol, 2))
     psi = np.where(zol < 0, (1-f)*psik+f*psic, psi)
     return psi
 # ---------------------------------------------------------------------
 
 
-def psi_conv(zol, alpha, beta, gamma):
+def psi_conv(zol, meth):
     """ Calculates heat stability function for unstable conditions
 
     Parameters
     ----------
     zol : float
         height over MO length
-    alpha, beta, gamma : float
-        constants given by get_stabco
+    meth : str
+        parameterisation method
 
     Returns
     -------
     psit : float
     """
+    coeffs = get_stabco(meth)
+    alpha, beta = coeffs[0], coeffs[1]
     xtmp = np.power(1-alpha*zol, beta)
     psit = 2*np.log((1+np.power(xtmp, 2))*0.5)
     return psit
 # ---------------------------------------------------------------------
 
 
-def psi_stab(zol, alpha, beta, gamma):
+def psi_stab(zol, meth):
     """ Calculates heat stability function for stable conditions
 
     Parameters
     ----------
     zol : float
         height over MO length
-    alpha, beta, gamma : float
-        constants given by get_stabco
+    meth : str
+        parameterisation method
 
     Returns
     -------
     psit : float
     """
+    coeffs = get_stabco(meth)
+    gamma = coeffs[2]
     psit = -gamma*zol
     return psit
 # ---------------------------------------------------------------------
 
 
-def psim_stab_era5(zol, alpha, beta, gamma):
-    """ Calculates momentum stability function for stable conditions
-        for method ERA5
+def psim_era5(zol):
+    """ Calculates momentum stability function for method ERA5
 
     Parameters
     ----------
     zol : float
         height over MO length
-    alpha, beta, gamma : float
-        constants given by get_stabco
 
     Returns
     -------
     psim : float
     """
-    # eq (3.22) p. 39 IFS Documentation cy46r1
+    # eq (3.20, 3.22) p. 37 IFS Documentation cy46r1
+    coeffs = get_stabco("ERA5")
+    alpha, beta = coeffs[0], coeffs[1]
+    xtmp = np.power(1-alpha*zol, beta)
     a, b, c, d = 1, 2/3, 5, 0.35
-    psim = -b*(zol-c/d)*np.exp(-d*zol)-a*zol-(b*c)/d
+    psim = np.where(zol < 0, np.pi/2-2*np.arctan(xtmp) +
+                    np.log((np.power(1+xtmp, 2)*(1+np.power(xtmp, 2)))/8),
+                    -b*(zol-c/d)*np.exp(-d*zol)-a*zol-(b*c)/d)
     return psim
 # ---------------------------------------------------------------------
 
 
-def psim_conv(zol, alpha, beta, gamma):
+def psim_conv(zol, meth):
     """ Calculates momentum stability function for unstable conditions
 
     Parameters
     ----------
     zol : float
         height over MO length
-    alpha, beta, gamma : float
-        constants given by get_stabco
+    meth : str
+        parameterisation method
 
     Returns
     -------
     psim : float
     """
+    coeffs = get_stabco(meth)
+    alpha, beta = coeffs[0], coeffs[1]
     xtmp = np.power(1-alpha*zol, beta)
     psim = (2*np.log((1+xtmp)*0.5)+np.log((1+np.power(xtmp, 2))*0.5) -
             2*np.arctan(xtmp)+np.pi/2)
@@ -472,20 +480,22 @@ def psim_conv(zol, alpha, beta, gamma):
 # ---------------------------------------------------------------------
 
 
-def psim_stab(zol, alpha, beta, gamma):
+def psim_stab(zol, meth):
     """ Calculates momentum stability function for stable conditions
 
     Parameters
     ----------
     zol : float
         height over MO length
-    alpha, beta, gamma : float
-        constants given by get_stabco
+    meth : str
+        parameterisation method
 
     Returns
     -------
     psim : float
     """
+    coeffs = get_stabco(meth)
+    gamma = coeffs[2]
     psim = -gamma*zol
     return psim
 # ---------------------------------------------------------------------
@@ -505,28 +515,31 @@ def psiu_26(zol, meth):
     """
     if (meth == "C30"):
         dzol = np.where(0.35*zol > 50, 50, 0.35*zol) # stable
-        psi = -((1+zol)+0.6667*(zol-14.28)*np.exp(-dzol)+8.525)
-        k = np.where(zol < 0)  # unstable
-        x = np.power(1-15*zol[k], 0.25)
-        psik = (2*np.log((1+x)/2)+np.log((1+np.power(x, 2))/2)-2*np.arctan(x) +
-                2*np.arctan(1))
-        x = np.power(1-10.15*zol[k], 0.3333)
-        psic = (1.5*np.log((1+x+np.power(x, 2))/3)-np.sqrt(3) *
-                np.arctan((1+2*x)/np.sqrt(3))+4*np.arctan(1)/np.sqrt(3))
-        f = np.power(zol[k], 2)/(1+np.power(zol[k], 2))
-        psi[k] = (1-f)*psik+f*psic
+        psi = np.where(zol > 0, -((1+zol)+0.6667*(zol-14.28)*np.exp(-dzol) +
+                                  8.525), np.nan)
+        x = np.where(zol < 0, np.power(1-15*zol, 0.25), np.nan)
+        psik = np.where(zol < 0, 2*np.log((1+x)/2)+np.log((1+np.power(x, 2)) /
+                        2)-2*np.arctan(x)+2*np.arctan(1), np.nan)
+        x = np.where(zol < 0, np.power(1-10.15*zol, 0.3333), np.nan)
+        psic = np.where(zol < 0, 1.5*np.log((1+x+np.power(x, 2))/3) -
+                        np.sqrt(3)*np.arctan((1+2*x)/np.sqrt(3)) +
+                        4*np.arctan(1)/np.sqrt(3), np.nan)
+        f = np.power(zol, 2)/(1+np.power(zol, 2))
+        psi = np.where(zol < 0, (1-f)*psik+f*psic, psi)
     elif (meth == "C35" or meth == "C40"):
         dzol = np.where(0.35*zol > 50, 50, 0.35*zol)  # stable
         a, b, c, d = 0.7, 3/4, 5, 0.35
-        psi = -(a*zol+b*(zol-c/d)*np.exp(-dzol)+b*c/d)
-        k = np.where(zol < 0)  # unstable
-        x = np.power(1-15*zol[k], 0.25)
-        psik = 2*np.log((1+x)/2)+np.log((1+x**2)/2)-2*np.arctan(x)+2*np.arctan(1)
-        x = np.power(1-10.15*zol[k], 0.3333)
-        psic = (1.5*np.log((1+x+np.power(x, 2))/3)-np.sqrt(3) *
-                np.arctan((1+2*x)/np.sqrt(3))+4*np.arctan(1)/np.sqrt(3))
-        f = np.power(zol[k], 2)/(1+np.power(zol[k], 2))
-        psi[k] = (1-f)*psik+f*psic
+        psi = np.where(zol > 0, -(a*zol+b*(zol-c/d)*np.exp(-dzol)+b*c/d),
+                       np.nan)
+        x = np.where(zol < 0, np.power(1-15*zol, 0.25), np.nan)
+        psik = np.where(zol < 0, 2*np.log((1+x)/2)+np.log((1+x**2)/2) -
+                        2*np.arctan(x)+2*np.arctan(1), np.nan)
+        x = np.where(zol < 0, np.power(1-10.15*zol, 0.3333), np.nan)
+        psic = np.where(zol < 0, 1.5*np.log((1+x+np.power(x, 2))/3) -
+                        np.sqrt(3)*np.arctan((1+2*x)/np.sqrt(3)) +
+                        4*np.arctan(1)/np.sqrt(3), np.nan)
+        f = np.power(zol, 2)/(1+np.power(zol, 2))
+        psi = np.where(zol < 0, (1-f)*psik+f*psic, psi)
     return psi
 # ---------------------------------------------------------------------
 
@@ -638,6 +651,8 @@ def get_heights(h, dim_len):
     ----------
     h : float
         input heights (m)
+    dim_len : int
+        length dimension
 
     Returns
     -------
@@ -646,17 +661,17 @@ def get_heights(h, dim_len):
     hh = np.zeros((3, dim_len))
     if (type(h) == float or type(h) == int):
         hh[0, :], hh[1, :], hh[2, :] = h, h, h
-    elif (len(h) == 2 and h.ndim == 1):
+    elif (len(h) == 2 and np.ndim(h) == 1):
         hh[0, :], hh[1, :], hh[2, :] = h[0], h[1], h[1]
-    elif (len(h) == 3 and h.ndim == 1):
+    elif (len(h) == 3 and np.ndim(h) == 1):
         hh[0, :], hh[1, :], hh[2, :] = h[0], h[1], h[2]
-    elif (len(h) == 1 and h.ndim == 2):
+    elif (len(h) == 1 and np.ndim(h) == 2):
         hh = np.zeros((3, h.shape[1]))
         hh[0, :], hh[1, :], hh[2, :] = h[0, :], h[0, :], h[0, :]
-    elif (len(h) == 2 and h.ndim == 2):
+    elif (len(h) == 2 and np.ndim(h) == 2):
         hh = np.zeros((3, h.shape[1]))
         hh[0, :], hh[1, :], hh[2, :] = h[0, :], h[1, :], h[1, :]
-    elif (len(h) == 3 and h.ndim == 2):
+    elif (len(h) == 3 and np.ndim(h) == 2):
         hh = np.zeros((3, h.shape[1]))
         hh = np.copy(h)
     return hh
