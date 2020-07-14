@@ -7,9 +7,9 @@ from flux_subs import (kappa, CtoK, get_heights, cdn_calc, cd_calc, get_skin,
 
 
 def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
-                       hin=18, hout=10, Rl=None, Rs=None, jcool=None,
-                       gust=None, meth="S80", qmeth="Buck2", tol=None, n=10,
-                       out=0):
+                   hin=18, hout=10, Rl=None, Rs=None, jcool=None,
+                   gust=None, meth="S80", qmeth="Buck2", tol=None, n=10,
+                   out=0):
     """ Calculates momentum and heat fluxes using different parameterizations
 
     Parameters
@@ -25,9 +25,9 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
             latitude (deg), default 45deg
         hum : float
             humidity input switch 2x1 [x, values] default is relative humidity
-            x=0 : relative humidity in %
-            x=1 : specific humidity (g/kg)
-            x=2 : dew point temperature (K)
+            x='rh' : relative humidity in %
+            x='q' : specific humidity (g/kg)
+            x='Td' : dew point temperature (K)
         P : float
             air pressure (hPa), default 1013hPa
         hin : float
@@ -110,31 +110,38 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
     h_in = get_heights(hin, len(spd))  # heights of input measurements/fields
     h_out = get_heights(hout, 1)       # desired height of output variables
     # if input values are nan break
+    if meth not in ["S80", "S88", "LP82", "YT96", "UA", "LY04", "C30", "C35",
+                    "C40","ERA5"]:
+        sys.exit("unknown method")
+    if qmeth not in ["HylandWexler", "Hardy", "Preining", "Wexler", "CIMO",
+                     "GoffGratch", "MagnusTetens", "Buck", "Buck2", "WMO",
+                     "WMO2000", "Sonntag", "Bolton", "IAPWS", "MurphyKoop"]:
+        sys.exit("unknown q-method")
     if (np.all(np.isnan(spd)) or np.all(np.isnan(T)) or np.all(np.isnan(SST))):
         sys.exit("input wind, T or SST is empty")
         logging.debug('all spd or T or SST input is nan')
-    if (np.all(lat) == None):  # set latitude to 45deg if empty
+    if (np.all(lat == None)):  # set latitude to 45deg if empty
         lat = 45*np.ones(spd.shape)
-    elif ((np.all(lat) != None) and (np.size(lat) == 1)):
+    elif ((np.all(lat != None)) and (np.size(lat) == 1)):
         lat = np.ones(spd.shape)*np.copy(lat)
     g = gc(lat, None)             # acceleration due to gravity
-    if ((np.all(P) == None) and (meth == "C30" or meth == "C40")):
+    if ((np.all(P == None)) and (meth == "C30" or meth == "C40")):
         P = np.ones(spd.shape)*1015  # if empty set to default for COARE3.0
-    elif ((np.all(P) == None) or np.all(np.isnan(P))):
+    elif ((np.all(P == None)) or np.all(np.isnan(P))):
         P = np.ones(spd.shape)*1013
         logging.debug('input P is empty and set to 1013hPa')
-    elif (((np.all(P) != None) or np.all(~np.isnan(P))) and np.size(P) == 1):
+    elif (((np.all(P != None)) or np.all(~np.isnan(P))) and np.size(P) == 1):
         P = np.ones(spd.shape)*np.copy(P)
-    if ((np.all(Rl) == None or np.all(np.isnan(Rl))) and meth == "C30"):
+    if ((np.all(Rl == None) or np.all(np.isnan(Rl))) and meth == "C30"):
         Rl = np.ones(spd.shape)*150    # set to default for COARE3.0
-    elif (((np.all(Rl) == None or np.all(np.isnan(Rl))) and meth == "C35") or
-          ((np.all(Rl) == None or np.all(np.isnan(Rl))) and meth == "C40")):
+    elif (((np.all(Rl == None) or np.all(np.isnan(Rl))) and meth == "C35") or
+          ((np.all(Rl == None) or np.all(np.isnan(Rl))) and meth == "C40")):
         Rl = np.ones(spd.shape)*370    # set to default for COARE3.5
-    elif (np.all(Rl) == None or np.all(np.isnan(Rl))):
+    elif (np.all(Rl == None) or np.all(np.isnan(Rl))):
         Rl = np.ones(spd.shape)*370    # set to default for COARE3.5
-    if ((np.all(Rs) == None or np.all(np.isnan(Rs))) and meth == "C30"):
+    if ((np.all(Rs == None) or np.all(np.isnan(Rs))) and meth == "C30"):
         Rs = np.ones(spd.shape)*370  # set to default for COARE3.0
-    elif (np.all(Rs) == None or np.all(np.isnan(Rs))):
+    elif (np.all(Rs == None) or np.all(np.isnan(Rs))):
         Rs = np.ones(spd.shape)*150  # set to default for COARE3.5
     if ((gust == None) and (meth == "C30" or meth == "C35" or meth == "C40")):
         gust = [1, 1.2, 600]
@@ -142,17 +149,21 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
         gust = [1, 1, 1000]
     elif (gust == None):
         gust = [1, 1.2, 800]
+    elif (np.size(gust) < 3):
+        sys.exit("gust input must be a 3x1 array")
     if (tol == None):
         tol = ['flux', 0.01, 1, 1]
+    elif (tol[0] not in ['flux', 'ref', 'all']):
+        sys.exit("unknown tolerance input")
     if ((jcool == None) and (meth == "S80" or meth == "S88" or meth == "LP82"
                              or meth == "YT96")):
        jcool = 0
     elif ((jcool == None) and (meth == "UA" or meth == "LY04" or meth == "C30"
-                              or meth == "C35" or meth == "C40"
-                              or meth == "ERA5")):
+                               or meth == "C35" or meth == "C40"
+                               or meth == "ERA5")):
        jcool = 1
-    logging.info('method %s, inputs: h_in: %s | lat: %s | P: %s | Rl: %s |'
-                 ' Rs: %s | gust: %s | jcool: %s', meth, h_in[:, 1],
+    logging.info('method %s, inputs: lat: %s | P: %s | Rl: %s |'
+                 ' Rs: %s | gust: %s | jcool: %s', meth,
                  np.nanmedian(lat), np.nanmedian(P), np.nanmedian(Rl),
                  np.nanmedian(Rs), gust, jcool)
     ####
@@ -166,16 +177,18 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
         RH = np.ones(spd.shape)*80
         qsea = qsat_sea(sst, P, qmeth)/1000     # surface water q (g/kg)
         qair = qsat_air(T, P, RH, qmeth)/1000   # q of air (g/kg)
-    elif (hum[0] == 0):
+    elif (hum[0] not in ['rh', 'q', 'Td']):
+        sys.exit("unknown humidity input")
+    elif (hum[0] == 'rh'):
         RH = hum[1]
-        if (np.all(RH) < 1):
+        if (np.all(RH < 1)):
             sys.exit("input relative humidity units should be \%")
         qsea = qsat_sea(sst, P, qmeth)/1000    # surface water q (g/kg)
         qair = qsat_air(T, P, RH, qmeth)/1000  # q of air (g/kg)
-    elif (hum[0] == 1):
+    elif (hum[0] == 'q'):
         qair = hum[1]
         qsea = qsat_sea(sst, P, qmeth)/1000  # surface water q (g/kg)
-    elif (hum[0] == 2):
+    elif (hum[0] == 'Td'):
         Td = hum[1] # dew point temperature (K)
         Td = np.where(Td < 200, np.copy(Td)+CtoK, np.copy(Td))
         T = np.where(T < 200, np.copy(T)+CtoK, np.copy(T))
@@ -255,7 +268,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
                 psit_calc(zot/monob, meth))))
         monob = h_in[0]/zol
         logging.info('method %s | wind:%s, usr:%s, '
-                      'zo:%s, zot:%s, Rb:%s, monob:%s', meth,
+                     'zo:%s, zot:%s, Rb:%s, monob:%s', meth,
                       np.nanmedian(wind), np.nanmedian(usr), np.nanmedian(zo),
                       np.nanmedian(zot), np.nanmedian(Rb), np.nanmedian(monob))
     elif (meth == "C30" or meth == "C35" or meth == "C40"):
@@ -411,8 +424,8 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
         else:
             usr[ind] = (wind[ind]*kappa/(np.log(h_in[0, ind]/zo[ind]) -
                         psim_calc(h_in[0, ind]/monob[ind], meth)))
-            tsr[ind] = ct[ind]*wind[ind]*(dt[ind]+dter[ind]*jcool)/usr[ind]
             qsr[ind] = cq[ind]*wind[ind]*(dq[ind]+dqer[ind]*jcool)/usr[ind]
+            tsr[ind] = ct[ind]*wind[ind]*(dt[ind]+dter[ind]*jcool)/usr[ind]
         if (jcool == 1):
             dter[ind], dqer[ind], tkt[ind] = get_skin(sst[ind], qsea[ind],
                                                       rho[ind], Rl[ind],
@@ -458,7 +471,11 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
             monob[ind] = h_in[0, ind]/zol[ind]
         else:
             tsrv[ind] = tsr[ind]+0.61*t10n[ind]*qsr[ind]
-            monob[ind] = (tv10n[ind]*usr[ind]**2)/(g[ind]*kappa*tsrv[ind])
+            monob[ind] = ((tv10n[ind]*np.power(usr[ind], 2)) /
+                          (g[ind]*kappa*tsrv[ind]))
+            monob[ind] = np.where(np.fabs(monob[ind]) < 1,
+                                  np.where(monob[ind] < 0, -1, 1),
+                                  monob[ind])
         psim[ind] = psim_calc(h_in[0, ind]/monob[ind], meth)
         psit[ind] = psit_calc(h_in[1, ind]/monob[ind], meth)
         psiq[ind] = psit_calc(h_in[2, ind]/monob[ind], meth)
@@ -518,9 +535,9 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
     # calculate output parameters
     rho = (0.34838*P)/(tv10n)
     t10n = t10n-(273.16+tlapse*ref_ht)
-    # zo = ref_ht/np.exp(kappa/cdn**0.5)
-    # zot = ref_ht/(np.exp(kappa**2/(ctn*np.log(ref_ht/zo))))
-    # zoq = ref_ht/(np.exp(kappa**2/(cqn*np.log(ref_ht/zo))))
+    zo = ref_ht/np.exp(kappa/cdn**0.5)
+    zot = ref_ht/(np.exp(kappa**2/(ctn*np.log(ref_ht/zo))))
+    zoq = ref_ht/(np.exp(kappa**2/(cqn*np.log(ref_ht/zo))))
     uref = (spd-usr/kappa*(np.log(h_in[0]/h_out[0])-psim +
             psim_calc(h_out[0]/monob, meth)))
     tref = (Ta-tsr/kappa*(np.log(h_in[1]/h_out[1])-psit +
@@ -561,5 +578,6 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
         res[:, ind] = np.nan
     # set missing values where data have non acceptable values
     res = np.where(spd < 0, np.nan, res)
+    
     return res, ind
 
