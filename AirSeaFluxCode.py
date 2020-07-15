@@ -7,9 +7,9 @@ from flux_subs import (kappa, CtoK, get_heights, cdn_calc, cd_calc, get_skin,
 
 
 def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
-                   hin=18, hout=10, Rl=None, Rs=None, cskin=None,
-                   gust=None, meth="S80", qmeth="Buck2", tol=None, n=10,
-                   out=0, L=None):
+                  hin=18, hout=10, Rl=None, Rs=None, cskin=None,
+                  gust=None, meth="S80", qmeth="Buck2", tol=None, n=10,
+                  out=0, L=None):
     """ Calculates momentum and heat fluxes using different parameterizations
 
     Parameters
@@ -318,9 +318,9 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
                      np.nanmedian(wind), np.nanmedian(usr), np.nanmedian(zo),
                      np.nanmedian(zot), np.nanmedian(Rb), np.nanmedian(monob))
 
-    tsr = (dt+dter*cskin)*kappa/(np.log(hin[1]/zot) -
+    tsr = (dt+dter*cskin)*kappa/(np.log(h_in[1]/zot) -
                                  psit_calc(h_in[1]/monob, meth))
-    qsr = (dq+dqer*cskin)*kappa/(np.log(hin[2]/zoq) -
+    qsr = (dq+dqer*cskin)*kappa/(np.log(h_in[2]/zoq) -
                                  psit_calc(h_in[2]/monob, meth))
     it, ind = 0, np.where(spd > 0)
     ii, itera = True, np.zeros(spd.shape)*np.nan
@@ -436,10 +436,10 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
                           np.nanmedian(dter), np.nanmedian(Rnl),
                           np.nanmedian(usr), np.nanmedian(tsr),
                           np.nanmedian(qsr))
-            qsr[ind] = ((dq[ind]+dqer[ind]*cskin)*(kappa/(np.log(hin[2, ind] /
-                        zoq[ind])-psit_26(hin[2, ind]/monob[ind]))))
-            tsr[ind] = ((dt[ind]+dter[ind]*cskin)*(kappa/(np.log(hin[1, ind] /
-                        zot[ind])-psit_26(hin[1, ind]/monob[ind]))))
+            qsr[ind] = ((dq[ind]+dqer[ind]*cskin)*(kappa/(np.log(h_in[2, ind] /
+                        zoq[ind])-psit_26(h_in[2, ind]/monob[ind]))))
+            tsr[ind] = ((dt[ind]+dter[ind]*cskin)*(kappa/(np.log(h_in[1, ind] /
+                        zot[ind])-psit_26(h_in[1, ind]/monob[ind]))))
         else:
             usr[ind] = (wind[ind]*kappa/(np.log(h_in[0, ind]/zo[ind]) -
                         psim_calc(h_in[0, ind]/monob[ind], meth)))
