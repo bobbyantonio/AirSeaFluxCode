@@ -644,6 +644,38 @@ def get_gust(beta, Ta, usr, tsrv, zi, lat):
 # ---------------------------------------------------------------------
 
 
+def get_L(L, lat, usr, tsr, qsr, t10n, tv10n, qair, h_in, T, Ta, th, tv, sst,
+          dt, dq, wind, monob, meth):
+    g = gc(lat)
+    if (L == 0):
+        tsrv = tsr+0.61*t10n*qsr
+        monob = ((tv10n*np.power(usr, 2))/(g*kappa*tsrv))
+        monob = np.where(np.fabs(monob) < 1, np.where(monob < 0, -1, 1), monob)
+    elif (L == 1):
+        tsrv = tsr*(1.+0.61*qair)+0.61*th*qsr
+        monob = ((tv*np.power(usr, 2))/(kappa*g*tsrv))
+    elif (L == 2):
+        tsrv = tsr+0.61*t10n*qsr
+        Rb = ((g*h_in[0]*((2*dt)/(Ta+sst-g*h_in[0])+0.61*dq)) /
+              np.power(wind, 2))
+        zo = (0.11*visc_air(Ta)/usr+0.018*np.power(usr, 2)/g)
+        zot = 0.40*visc_air(Ta)/usr
+        zol = (Rb*(np.power(np.log((h_in[0]+zo)/zo)-psim_calc((h_in[0]+zo) /
+                                                              monob, meth) +
+                            psim_calc(zo/monob, meth), 2) /
+                   (np.log((h_in[0]+zo)/zot) -
+                    psit_calc((h_in[0]+zo)/monob, meth) +
+                    psit_calc(zot/monob, meth))))
+        monob = h_in[0]/zol
+    elif (L == 3):
+        tsrv = tsr+0.61*(T+CtoK)*qsr
+        zol = (kappa*g*h_in[0]/(T+CtoK)*(tsr+0.61*(T+CtoK)*qsr) /
+               np.power(usr, 2))
+        monob = h_in[0]/zol
+    return tsrv, monob
+#----------------------------------------------------------------------
+
+
 def get_heights(h, dim_len):
     """ Reads input heights for velocity, temperature and humidity
 
