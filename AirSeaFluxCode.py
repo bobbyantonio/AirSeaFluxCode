@@ -112,6 +112,9 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
     """
     logging.basicConfig(filename='flux_calc.log',
                         format='%(asctime)s %(message)s',level=logging.INFO)
+    if ((type(spd) != np.ndarray) or (type(T) != np.ndarray) or
+        (type(SST) != np.ndarray)):
+        sys.exit("input type of spd, T and SST should be numpy.ndarray")
     ref_ht, tlapse = 10, 0.0098        # reference height, lapse rate
     h_in = get_heights(hin, len(spd))  # heights of input measurements/fields
     h_out = get_heights(hout, 1)       # desired height of output variables
