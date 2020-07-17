@@ -524,7 +524,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
             wind[ind] = np.copy(spd[ind])
         u10n[ind] = wind[ind]-usr[ind]/kappa*(np.log(h_in[0, ind]/10) -
                                               psim[ind])
-        u10n[u10n < 0] = np.nan
+        u10n = np.where(u10n < 0, np.nan, u10n)
         itera[ind] = np.ones(1)*it
         sensible = -rho*cp*usr*tsr
         latent = -rho*lv*usr*qsr
