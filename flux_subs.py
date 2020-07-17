@@ -646,6 +646,63 @@ def get_gust(beta, Ta, usr, tsrv, zi, lat):
 
 def get_L(L, lat, usr, tsr, qsr, t10n, tv10n, qair, h_in, T, Ta, th, tv, sst,
           dt, dq, wind, monob, meth):
+    """
+    calculates Monin-Obukhov length and virtual star temperature
+
+    Parameters
+    ----------
+    L : int
+        Monin-Obukhov length definition options
+           0 : default for S80, S88, LP82, YT96 and LY04
+           1 : following UA (Zeng et al., 1998), default for UA
+           2 : following ERA5 (IFS Documentation cy46r1), default for ERA5
+           3 : COARE3.5 (Edson et al., 2013), default for C30, C35 and C40
+    lat : float
+        latitude
+    usr : float
+        friction wind speed (m/s)
+    tsr : float
+        star temperature (K)
+    qsr : float
+        star specific humidity (g/kg)
+    t10n : float
+        neutral temperature at 10m (K)
+    tv10n : float
+        neutral virtual temperature at 10m (K)
+    qair : float
+        air specific humidity (g/kg)
+    h_in : float
+        sensor heights (m)
+    T : float
+        air temperature (K)
+    Ta : float
+        air temperature (K)
+    th : float
+        potential temperature (K)
+    tv : float
+        virtual temperature (K)
+    sst : float
+        sea surface temperature (K)
+    dt : float
+        temperature difference (K)
+    dq : float
+        specific humidity difference (g/kg)
+    wind : float
+        wind speed (m/s)
+    monob : float
+        Monin-Obukhov length from previous iteration step (m)
+    meth : str
+        bulk parameterisation method option: "S80", "S88", "LP82", "YT96", "UA",
+        "LY04", "C30", "C35", "C40", "ERA5"
+
+    Returns
+    -------
+    tsrv : TYPE
+        DESCRIPTION.
+    monob : TYPE
+        DESCRIPTION.
+
+    """
     g = gc(lat)
     if (L == 0):
         tsrv = tsr+0.61*t10n*qsr
@@ -673,7 +730,65 @@ def get_L(L, lat, usr, tsr, qsr, t10n, tv10n, qair, h_in, T, Ta, th, tv, sst,
                np.power(usr, 2))
         monob = h_in[0]/zol
     return tsrv, monob
-#----------------------------------------------------------------------
+#------------------------------------------------------------------------------
+
+
+def get_hum(hum, T, sst, P, qmeth):
+    """
+    Get specific humidity output
+
+    Parameters
+    ----------
+    hum : array
+        humidity input switch 2x1 [x, values] default is relative humidity
+            x='rh' : relative humidity in %
+            x='q' : specific humidity (g/kg)
+            x='Td' : dew point temperature (K)
+    T : float
+        air temperature in K
+    sst : float
+        sea surface temperature in K
+    P : float
+        air pressure at sea level in hPa
+    qmeth : str
+        method to calculate specific humidity from vapor pressure
+
+    Returns
+    -------
+    qair : float
+        specific humidity of air
+    qsea : float
+        specific humidity over sea surface
+
+    """
+    if (hum == None):
+        RH = np.ones(sst.shape)*80
+        qsea = qsat_sea(sst, P, qmeth)/1000     # surface water q (g/kg)
+        qair = qsat_air(T, P, RH, qmeth)/1000   # q of air (g/kg)
+    elif (hum[0] not in ['rh', 'q', 'Td']):
+        print("unknown humidity input")
+        qair, qsea = np.nan, np.nan
+    elif (hum[0] == 'rh'):
+        RH = hum[1]
+        if (np.all(RH < 1)):
+            print("input relative humidity units should be \%")
+            qair, qsea = np.nan, np.nan
+        qsea = qsat_sea(sst, P, qmeth)/1000    # surface water q (g/kg)
+        qair = qsat_air(T, P, RH, qmeth)/1000  # q of air (g/kg)
+    elif (hum[0] == 'q'):
+        qair = hum[1]
+        qsea = qsat_sea(sst, P, qmeth)/1000  # surface water q (g/kg)
+    elif (hum[0] == 'Td'):
+        Td = hum[1] # dew point temperature (K)
+        Td = np.where(Td < 200, np.copy(Td)+CtoK, np.copy(Td))
+        T = np.where(T < 200, np.copy(T)+CtoK, np.copy(T))
+        esd = 611.21*np.exp(17.502*((Td-273.16)/(Td-32.19)))
+        es = 611.21*np.exp(17.502*((T-273.16)/(T-32.19)))
+        RH = 100*esd/es
+        qair = qsat_air(T, P, RH, qmeth)/1000  # q of air (g/kg)
+        qsea = qsat_sea(sst, P, qmeth)/1000    # surface water q (g/kg)
+    return qair, qsea
+#-------------------------------------------------------------------------
 
 
 def get_heights(h, dim_len):
