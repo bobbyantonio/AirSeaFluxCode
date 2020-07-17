@@ -431,11 +431,6 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
         elif (meth == "C30" or meth == "C35" or meth == "C40"):
             usr[ind] = (wind[ind]*kappa/(np.log(h_in[0, ind]/zo[ind]) -
                         psiu_26(h_in[0, ind]/monob[ind], meth)))
-            logging.info('method %s | dter = %s | Rnl = %s '
-                          '| usr = %s | tsr = %s | qsr = %s', meth,
-                          np.nanmedian(dter), np.nanmedian(Rnl),
-                          np.nanmedian(usr), np.nanmedian(tsr),
-                          np.nanmedian(qsr))
             qsr[ind] = ((dq[ind]+dqer[ind]*cskin)*(kappa/(np.log(h_in[2, ind] /
                         zoq[ind])-psit_26(h_in[2, ind]/monob[ind]))))
             tsr[ind] = ((dt[ind]+dter[ind]*cskin)*(kappa/(np.log(h_in[1, ind] /
@@ -458,6 +453,12 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
            dter[ind] = np.zeros(sst[ind].shape)
            dqer[ind] = np.zeros(sst[ind].shape)
            tkt[ind] = np.zeros(sst[ind].shape)
+        logging.info('method %s | dter = %s | dqer = %s | tkt = %s | Rnl = %s '
+                     '| usr = %s | tsr = %s | qsr = %s', meth,
+                     np.nanmedian(dter), np.nanmedian(dqer),
+                     np.nanmedian(tkt), np.nanmedian(Rnl),
+                     np.nanmedian(usr), np.nanmedian(tsr),
+                     np.nanmedian(qsr))
         Rnl[ind] = 0.97*(5.67e-8*np.power(SST[ind]-CtoK -
                           dter[ind]*cskin+CtoK, 4)-Rl[ind])
         t10n[ind] = (Ta[ind] -
