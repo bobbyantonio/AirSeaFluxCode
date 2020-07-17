@@ -1,15 +1,16 @@
 import numpy as np
 import sys
 import logging
-from flux_subs import (kappa, CtoK, get_heights, cdn_calc, cd_calc, get_skin,
-                       psim_calc, psit_calc, ctcq_calc, ctcqn_calc, get_gust,
-                       gc, qsat_sea, qsat_air, visc_air, psit_26, psiu_26)
+from flux_subs import (kappa, CtoK, get_heights, get_skin, get_gust, get_L,
+                       psim_calc, psit_calc, psit_26, psiu_26,
+                       cdn_calc, cd_calc, ctcq_calc, ctcqn_calc,
+                       gc, qsat_sea, qsat_air)
 
 
 def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
-                  hin=18, hout=10, Rl=None, Rs=None, cskin=None,
-                  gust=None, meth="S80", qmeth="Buck2", tol=None, n=10,
-                  out=0, L=None):
+                   hin=18, hout=10, Rl=None, Rs=None, cskin=None,
+                   gust=None, meth="S80", qmeth="Buck2", tol=None, n=10,
+                   out=0, L=None):
     """ Calculates momentum and heat fluxes using different parameterizations
 
     Parameters
@@ -255,72 +256,12 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
         wind = np.sqrt(np.power(np.copy(spd), 2)+np.power(0.5, 2))
     elif (gust[0] == 0):
         wind = np.copy(spd)
-    if (L == 0):
-        monob = -100*np.ones(spd.shape)  # Monin-Obukhov length
-        zo = 0.0001*np.ones(spd.shape)
-        zot, zoq = 0.0001*np.ones(spd.shape), 0.0001*np.ones(spd.shape)
-        usr = np.sqrt(cd*np.power(wind, 2))
-        logging.info('method %s | wind:%s, usr:%s, '
-                     'zo:%s, zot:%s, monob:%s', meth,
-                     np.nanmedian(wind), np.nanmedian(usr), np.nanmedian(zo),
-                     np.nanmedian(zot), np.nanmedian(monob))
-    elif (L == 1):
-        usr = 0.06
-        for i in range(5):
-            zo = 0.013*np.power(usr,2)/g+0.11*visc_air(Ta)/usr
-            usr=kappa*wind/np.log(h_in[0]/zo)
-        Rb = g*h_in[0]*dtv/(tv*np.power(wind, 2))
-        zol = np.where(Rb >= 0, Rb*np.log(h_in[0]/zo) /
-                        (1-5*np.where(Rb < 0.19, Rb, 0.19)),
-                        Rb*np.log(h_in[0]/zo))
-        monob = h_in[0]/zol
-        zo = 0.013*np.power(usr, 2)/g + 0.11*visc_air(Ta)/usr
-        zot = zo/np.exp(2.67*np.power(usr*zo/visc_air(Ta), 0.25)-2.57)
-        zoq = zot
-        logging.info('method %s | wind:%s, usr:%s, '
-                      'zo:%s, zot:%s, zoq:%s, Rb:%s, monob:%s', meth,
-                      np.nanmedian(wind), np.nanmedian(usr), np.nanmedian(zo),
-                      np.nanmedian(zot), np.nanmedian(zoq), np.nanmedian(Rb),
-                      np.nanmedian(monob))
-    elif (L == 2):
-        usr = np.sqrt(cd*np.power(wind, 2))
-        Rb = ((g*h_in[0]*((2*dt)/(Ta+sst-g*h_in[0]) +
-                          0.61*dq))/np.power(wind, 2))
-        zo = 0.11*visc_air(Ta)/usr+0.018*np.power(usr, 2)/g
-        zot = 0.40*visc_air(Ta)/usr
-        zoq = 0.62*visc_air(Ta)/usr
-        zol = (Rb*(np.power(np.log((h_in[0]+zo)/zo)-psim_calc((h_in[0]+zo) /
-                                                              monob, meth) +
-                            psim_calc(zo/monob, meth), 2) /
-                   (np.log((h_in[0]+zo)/zot) -
-                    psit_calc((h_in[0]+zo)/monob, meth) +
-                    psit_calc(zot/monob, meth))))
-        monob = h_in[0]/zol
-        logging.info('method %s | wind:%s, usr:%s, '
-                     'zo:%s, zot:%s, Rb:%s, monob:%s', meth,
-                      np.nanmedian(wind), np.nanmedian(usr), np.nanmedian(zo),
-                      np.nanmedian(zot), np.nanmedian(Rb), np.nanmedian(monob))
-    elif (L == 3):
-        usr = np.sqrt(cd*np.power(wind, 2))
-        a = 0.011*np.ones(T.shape)
-        a = np.where(wind > 10, 0.011+(wind-10)/(18-10)*(0.018-0.011),
-                          np.where(wind > 18, 0.018, a))
-        zo = a*np.power(usr, 2)/g+0.11*visc_air(T)/usr
-        rr = zo*usr/visc_air(T)
-        zoq = np.minimum(5e-5/np.power(rr, 0.6), 1.15e-4)
-        zot = np.copy(zoq)
-        Rb = g*h_in[0]*dtv/((T+CtoK)*np.power(wind, 2))
-        zol =  (Rb*((np.log((h_in[0]+zo)/zo)-psim_calc((h_in[0]+zo) /
-                monob, meth)+psim_calc(zo/monob, meth)) /
-                (np.log((h_in[0]+zo)/zot) -
-                psit_calc((h_in[0]+zo)/monob, meth) +
-                psit_calc(zot/monob, meth))))
-        monob = h_in[0]/zol
-        logging.info('method %s | wind:%s, usr:%s, '
-                     'zo:%s, zot:%s, Rb:%s, monob:%s', meth,
-                     np.nanmedian(wind), np.nanmedian(usr), np.nanmedian(zo),
-                     np.nanmedian(zot), np.nanmedian(Rb), np.nanmedian(monob))
-
+    usr = np.sqrt(cd*np.power(wind, 2))
+    Rb = g*h_in[0]*dtv/((T+CtoK)*np.power(wind, 2))
+    zo = 0.0001*np.ones(spd.shape)
+    zot, zoq = 0.0001*np.ones(spd.shape), 0.0001*np.ones(spd.shape)
+    monob = -100*np.ones(spd.shape)  # Monin-Obukhov length
+    zol = h_in[0]/monob
     tsr = (dt+dter*cskin)*kappa/(np.log(h_in[1]/zot) -
                                  psit_calc(h_in[1]/monob, meth))
     qsr = (dq+dqer*cskin)*kappa/(np.log(h_in[2]/zoq) -
@@ -455,55 +396,26 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
         else:
            dter[ind] = np.zeros(sst[ind].shape)
            dqer[ind] = np.zeros(sst[ind].shape)
-           tkt[ind] = np.zeros(sst[ind].shape)
+           tkt[ind] = 0.001*np.ones(T[ind].shape)
         logging.info('method %s | dter = %s | dqer = %s | tkt = %s | Rnl = %s '
                      '| usr = %s | tsr = %s | qsr = %s', meth,
                      np.nanmedian(dter), np.nanmedian(dqer),
                      np.nanmedian(tkt), np.nanmedian(Rnl),
                      np.nanmedian(usr), np.nanmedian(tsr),
                      np.nanmedian(qsr))
-        Rnl[ind] = 0.97*(5.67e-8*np.power(SST[ind]-CtoK -
+        Rnl[ind] = 0.97*(5.67e-8*np.power(sst[ind]-CtoK -
                           dter[ind]*cskin+CtoK, 4)-Rl[ind])
         t10n[ind] = (Ta[ind] -
                      tsr[ind]/kappa*(np.log(h_in[1, ind]/ref_ht)-psit[ind]))
         q10n[ind] = (qair[ind] -
                      qsr[ind]/kappa*(np.log(h_in[2, ind]/ref_ht)-psiq[ind]))
         tv10n[ind] = t10n[ind]*(1+0.61*q10n[ind])
-        if (L == 0):
-            tsrv[ind] = tsr[ind]+0.61*t10n[ind]*qsr[ind]
-            monob[ind] = ((tv10n[ind]*np.power(usr[ind], 2)) /
-                          (g[ind]*kappa*tsrv[ind]))
-            monob[ind] = np.where(np.fabs(monob[ind]) < 1,
-                                  np.where(monob[ind] < 0, -1, 1),
-                                  monob[ind])
-        elif (L == 1):
-            tsrv[ind] = tsr[ind]*(1.+0.61*qair[ind])+0.61*th[ind]*qsr[ind]
-            monob[ind] = ((tv[ind]*np.power(usr[ind], 2)) /
-                          (kappa*g[ind]*tsrv[ind]))
-        elif (L == 2):
-            tsrv[ind] = tsr[ind]+0.61*t10n[ind]*qsr[ind]
-            Rb[ind] = ((g[ind]*h_in[0, ind]*((2*dt[ind])/(Ta[ind] +
-                        sst[ind]-g[ind]*h_in[0, ind])+0.61*dq[ind])) /
-                        np.power(wind[ind], 2))
-            zo[ind] = (0.11*visc_air(Ta[ind])/usr[ind]+0.018 *
-                       np.power(usr[ind], 2)/g[ind])
-            zot[ind] = 0.40*visc_air(Ta[ind])/usr[ind]
-            zoq[ind] = 0.62*visc_air(Ta[ind])/usr[ind]
-            zol[ind] = (Rb[ind]*(np.power(np.log((h_in[0, ind]+zo[ind]) /
-                                                 zo[ind]) -
-                                     psim_calc((h_in[0, ind]+zo[ind]) /
-                                               monob[ind], meth) +
-                                     psim_calc(zo[ind]/monob[ind], meth), 2) /
-                            (np.log((h_in[0, ind]+zo[ind])/zot[ind]) -
-                             psit_calc((h_in[0, ind]+zo[ind])/monob[ind],
-                                       meth) +
-                             psit_calc(zot[ind]/monob[ind], meth))))
-            monob[ind] = h_in[0, ind]/zol[ind]
-        elif (L == 3):
-            tsrv[ind] = tsr[ind]+0.61*(T[ind]+CtoK)*qsr[ind]
-            zol[ind] = (kappa*g[ind]*h_in[0, ind]/(T[ind]+CtoK)*(tsr[ind] +
-                        0.61*(T[ind]+CtoK)*qsr[ind])/np.power(usr[ind], 2))
-            monob[ind] = h_in[0, ind]/zol[ind]
+        tsrv[ind], monob[ind] = get_L(L, lat[ind], usr[ind], tsr[ind],
+                                      qsr[ind], t10n[ind], tv10n[ind],
+                                      qair[ind], h_in[:, ind], T[ind], Ta[ind],
+                                      th[ind], tv[ind], sst[ind], dt[ind],
+                                      dq[ind], wind[ind], np.copy(monob[ind]),
+                                      meth)
         psim[ind] = psim_calc(h_in[0, ind]/monob[ind], meth)
         psit[ind] = psit_calc(h_in[1, ind]/monob[ind], meth)
         psiq[ind] = psit_calc(h_in[2, ind]/monob[ind], meth)
@@ -606,6 +518,5 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
         res[:, ind] = np.nan
     # set missing values where data have non acceptable values
     res = np.where(spd < 0, np.nan, res)
-    
-    return res, ind
 
+    return res, ind
