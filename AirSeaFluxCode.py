@@ -2,15 +2,15 @@ import numpy as np
 import sys
 import logging
 from flux_subs import (kappa, CtoK, get_heights, get_skin, get_gust, get_L,
+                       get_hum,
                        psim_calc, psit_calc, psit_26, psiu_26,
-                       cdn_calc, cd_calc, ctcq_calc, ctcqn_calc,
-                       gc, qsat_sea, qsat_air)
+                       cdn_calc, cd_calc, ctcq_calc, ctcqn_calc)
 
 
-def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
-                   hin=18, hout=10, Rl=None, Rs=None, cskin=None,
-                   gust=None, meth="S80", qmeth="Buck2", tol=None, n=10,
-                   out=0, L=None):
+def AirSeaFluxCode_L(spd, T, SST, lat=None, hum=None, P=None,
+                       hin=18, hout=10, Rl=None, Rs=None, cskin=None,
+                       gust=None, meth="S80", qmeth="Buck2", tol=None, n=10,
+                       out=0, L=None):
     """ Calculates momentum and heat fluxes using different parameterizations
 
     Parameters
@@ -71,7 +71,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
             set 1 to keep points
         L : int
            Monin-Obukhov length definition options
-           0 : constant, default for S80, S88, LP82, YT96 and LY04
+           0 : default for S80, S88, LP82, YT96 and LY04
            1 : following UA (Zeng et al., 1998), default for UA
            2 : following ERA5 (IFS Documentation cy46r1), default for ERA5
            3 : COARE3.5 (Edson et al., 2013), default for C30, C35 and C40
@@ -134,7 +134,6 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
         lat = 45*np.ones(spd.shape)
     elif ((np.all(lat != None)) and (np.size(lat) == 1)):
         lat = np.ones(spd.shape)*np.copy(lat)
-    g = gc(lat, None)             # acceleration due to gravity
     if ((np.all(P == None)) and (meth == "C30" or meth == "C40")):
         P = np.ones(spd.shape)*1015  # if empty set to default for COARE3.0
     elif ((np.all(P == None)) or np.all(np.isnan(P))):
@@ -194,30 +193,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
     Ta = np.where(T < 200, np.copy(T)+CtoK+tlapse*h_in[1],
                   np.copy(T)+tlapse*h_in[1])  # convert to Kelvin if needed
     sst = np.where(SST < 200, np.copy(SST)+CtoK, np.copy(SST))
-    if (hum == None):
-        RH = np.ones(spd.shape)*80
-        qsea = qsat_sea(sst, P, qmeth)/1000     # surface water q (g/kg)
-        qair = qsat_air(T, P, RH, qmeth)/1000   # q of air (g/kg)
-    elif (hum[0] not in ['rh', 'q', 'Td']):
-        sys.exit("unknown humidity input")
-    elif (hum[0] == 'rh'):
-        RH = hum[1]
-        if (np.all(RH < 1)):
-            sys.exit("input relative humidity units should be \%")
-        qsea = qsat_sea(sst, P, qmeth)/1000    # surface water q (g/kg)
-        qair = qsat_air(T, P, RH, qmeth)/1000  # q of air (g/kg)
-    elif (hum[0] == 'q'):
-        qair = hum[1]
-        qsea = qsat_sea(sst, P, qmeth)/1000  # surface water q (g/kg)
-    elif (hum[0] == 'Td'):
-        Td = hum[1] # dew point temperature (K)
-        Td = np.where(Td < 200, np.copy(Td)+CtoK, np.copy(Td))
-        T = np.where(T < 200, np.copy(T)+CtoK, np.copy(T))
-        esd = 611.21*np.exp(17.502*((Td-273.16)/(Td-32.19)))
-        es = 611.21*np.exp(17.502*((T-273.16)/(T-32.19)))
-        RH = 100*esd/es
-        qair = qsat_air(T, P, RH, qmeth)/1000  # q of air (g/kg)
-        qsea = qsat_sea(sst, P, qmeth)/1000    # surface water q (g/kg)
+    qair, qsea = get_hum(hum, T, sst, P, qmeth)
     logging.info('method %s and q method %s | qsea:%s, qair:%s', meth, qmeth,
                   np.nanmedian(qsea), np.nanmedian(qair))
     if (np.all(np.isnan(qsea)) or np.all(np.isnan(qair))):
@@ -257,11 +233,9 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
     elif (gust[0] == 0):
         wind = np.copy(spd)
     usr = np.sqrt(cd*np.power(wind, 2))
-    Rb = g*h_in[0]*dtv/((T+CtoK)*np.power(wind, 2))
     zo = 0.0001*np.ones(spd.shape)
     zot, zoq = 0.0001*np.ones(spd.shape), 0.0001*np.ones(spd.shape)
     monob = -100*np.ones(spd.shape)  # Monin-Obukhov length
-    zol = h_in[0]/monob
     tsr = (dt+dter*cskin)*kappa/(np.log(h_in[1]/zot) -
                                  psit_calc(h_in[1]/monob, meth))
     qsr = (dq+dqer*cskin)*kappa/(np.log(h_in[2]/zoq) -
@@ -382,7 +356,6 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
         else:
             usr[ind] = (wind[ind]*kappa/(np.log(h_in[0, ind]/zo[ind]) -
                         psim_calc(h_in[0, ind]/monob[ind], meth)))
-            #           np.sqrt(cd[ind]*np.power(wind[ind], 2))
             qsr[ind] = cq[ind]*wind[ind]*(dq[ind]+dqer[ind]*cskin)/usr[ind]
             tsr[ind] = ct[ind]*wind[ind]*(dt[ind]+dter[ind]*cskin)/usr[ind]
         if (cskin == 1):
