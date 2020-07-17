@@ -697,10 +697,10 @@ def get_L(L, lat, usr, tsr, qsr, t10n, tv10n, qair, h_in, T, Ta, th, tv, sst,
 
     Returns
     -------
-    tsrv : TYPE
-        DESCRIPTION.
-    monob : TYPE
-        DESCRIPTION.
+    tsrv : float
+        virtual star temperature (K)
+    monob : float
+        M-O length (m)
 
     """
     g = gc(lat)
@@ -789,6 +789,117 @@ def get_hum(hum, T, sst, P, qmeth):
         qsea = qsat_sea(sst, P, qmeth)/1000    # surface water q (g/kg)
     return qair, qsea
 #-------------------------------------------------------------------------
+
+
+def get_strs(h_in, monob, wind, zo, zot, zoq, dt, dq, dter, dqer, ct, cq,
+             cskin, meth):
+    """
+    calculates star wind speed, temperature and specific humidity
+
+    Parameters
+    ----------
+    h_in : float
+        sensor heights (m)
+    monob : float
+        M-O length (m)
+    wind : float
+        wind speed (m/s)
+    zo : float
+        momentum roughness length (m)
+    zot : float
+        temperature roughness length (m)
+    zoq : float
+        moisture roughness length (m)
+    dt : float
+        temperature difference (K)
+    dq : float
+        specific humidity difference (g/kg)
+    dter : float
+        cskin temperature adjustment (K)
+    dqer : float
+        cskin q adjustment (q/kg)
+    ct : float
+        temperature exchange coefficient
+    cq : float
+        moisture exchange coefficient
+    cskin : int
+        cool skin adjustment switch
+    meth : str
+        bulk parameterisation method option: "S80", "S88", "LP82", "YT96", "UA",
+        "LY04", "C30", "C35", "C40", "ERA5"
+
+    Returns
+    -------
+    usr : float
+        friction wind speed (m/s)
+    tsr : float
+        star temperature (K)
+    qsr : float
+        star specific humidity (g/kg)
+
+    """
+    if (meth == "UA"):
+        usr = np.where(h_in[0]/monob < -1.574, kappa*wind /
+                       (np.log(-1.574*monob/zo)-psim_calc(-1.574, meth) +
+                        psim_calc(zo/monob, meth) +
+                        1.14*(np.power(-h_in[0]/monob, 1/3) -
+                        np.power(1.574, 1/3))),
+                       np.where((h_in[0]/monob > -1.574) & (h_in[0]/monob < 0),
+                                kappa*wind/(np.log(h_in[0]/zo) -
+                                psim_calc(h_in[0]/monob, meth) +
+                                psim_calc(zo/monob, meth)),
+                                np.where((h_in[0]/monob > 0) &
+                                (h_in[0]/monob < 1),
+                                kappa*wind/(np.log(h_in[0]/zo) +
+                                5*h_in[0]/monob-5*zo/monob),
+                                kappa*wind/(np.log(monob/zo)+5-5*zo/monob +
+                                5*np.log(h_in[0]/monob)+h_in[0]/monob-1))))
+                                # Zeng et al. 1998 (7-10)
+        tsr = np.where(h_in[1]/monob < -0.465, kappa*(dt+dter*cskin) /
+                       (np.log((-0.465*monob)/zot) -
+                        psit_calc(-0.465, meth)+0.8*(np.power(0.465, -1/3) -
+                        np.power(-h_in[1]/monob, -1/3))),
+                       np.where((h_in[1]/monob > -0.465) & (h_in[1]/monob < 0),
+                                kappa*(dt+dter*cskin)/(np.log(h_in[1]/zot) -
+                       psit_calc(h_in[1]/monob, meth) +
+                       psit_calc(zot/monob, meth)),
+                        np.where((h_in[1]/monob > 0) & (h_in[1]/monob < 1),
+                                 kappa*(dt+dter*cskin)/(np.log(h_in[1]/zot) +
+                                 5*h_in[1]/monob-5*zot/monob),
+                                 kappa*(dt+dter*cskin)/(np.log(monob/zot)+5 -
+                                 5*zot/monob+5*np.log(h_in[1]/monob) +
+                                 h_in[1]/monob-1))))
+                                # Zeng et al. 1998 (11-14)
+        qsr = np.where(h_in[2]/monob < -0.465, kappa*(dq+dqer*cskin) /
+                       (np.log((-0.465*monob)/zoq) -
+                        psit_calc(-0.465, meth)+psit_calc(zoq/monob, meth) +
+                        0.8*(np.power(0.465, -1/3) -
+                             np.power(-h_in[2]/monob, -1/3))),
+                       np.where((h_in[2]/monob > -0.465) & (h_in[2]/monob < 0),
+                                kappa*(dq+dqer*cskin)/(np.log(h_in[1]/zot) -
+                                psit_calc(h_in[2]/monob, meth) +
+                                psit_calc(zoq/monob, meth)),
+                                np.where((h_in[2]/monob > 0) &
+                                         (h_in[2]/monob<1),
+                                         kappa*(dq+dqer*cskin) /
+                                         (np.log(h_in[1]/zoq)+5*h_in[2]/monob -
+                                          5*zoq/monob),
+                                         kappa*(dq+dqer*cskin)/
+                                         (np.log(monob/zoq)+5-5*zoq/monob +
+                                          5*np.log(h_in[2]/monob) +
+                                          h_in[2]/monob-1))))
+    elif (meth == "C30" or meth == "C35" or meth == "C40"):
+        usr = (wind*kappa/(np.log(h_in[0]/zo)-psiu_26(h_in[0]/monob, meth)))
+        tsr = ((dt+dter*cskin)*(kappa/(np.log(h_in[1]/zot) -
+                                       psit_26(h_in[1]/monob))))
+        qsr = ((dq+dqer*cskin)*(kappa/(np.log(h_in[2]/zoq) -
+                                       psit_26(h_in[2]/monob))))
+    else:
+        usr = (wind*kappa/(np.log(h_in[0]/zo)-psim_calc(h_in[0]/monob, meth)))
+        tsr = ct*wind*(dt+dter*cskin)/usr
+        qsr = cq*wind*(dq+dqer*cskin)/usr
+    return usr, tsr, qsr
+#------------------------------------------------------------------------------
 
 
 def get_heights(h, dim_len):
