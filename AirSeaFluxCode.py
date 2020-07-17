@@ -274,90 +274,11 @@ def AirSeaFluxCode_L(spd, T, SST, lat=None, hum=None, P=None,
         ct[ind], cq[ind] = ctcq_calc(cdn[ind], cd[ind], ctn[ind], cqn[ind],
                                       h_in[1, ind], h_in[2, ind], ref_ht,
                                       psit[ind], psiq[ind])
-        if (meth == "UA"):
-            usr[ind] = np.where(h_in[0, ind]/monob[ind] < -1.574,
-                                kappa*wind[ind] /
-                                (np.log(-1.574*monob[ind]/zo[ind]) -
-                                psim_calc(-1.574, meth) +
-                                psim_calc(zo[ind]/monob[ind], meth) +
-                                1.14*(np.power(-h_in[0, ind]/monob[ind], 1/3) -
-                                np.power(1.574, 1/3))),
-                                np.where((h_in[0, ind]/monob[ind] > -1.574) &
-                                (h_in[0, ind]/monob[ind] < 0),
-                                kappa*wind[ind]/(np.log(h_in[0, ind]/zo[ind]) -
-                                psim_calc(h_in[0, ind]/monob[ind], meth) +
-                                psim_calc(zo[ind]/monob[ind], meth)),
-                                np.where((h_in[0, ind]/monob[ind] > 0) &
-                                (h_in[0, ind]/monob[ind] < 1),
-                                kappa*wind[ind]/(np.log(h_in[0, ind]/zo[ind]) +
-                                5*h_in[0, ind]/monob[ind]-5*zo[ind] /
-                                monob[ind]), kappa*wind[ind] /
-                                (np.log(monob[ind]/zo[ind]) +
-                                5-5*zo[ind]/monob[ind] +
-                                5*np.log(h_in[0, ind]/monob[ind]) +
-                                h_in[0, ind]/monob[ind]-1))))
-                                # Zeng et al. 1998 (7-10)
-            tsr[ind] = np.where(h_in[1, ind]/monob[ind] < -0.465,
-                                kappa*(dt[ind] +
-                                dter[ind]*cskin) /
-                                (np.log((-0.465*monob[ind])/zot[ind]) -
-                                psit_calc(-0.465, meth)+0.8 *
-                                (np.power(0.465, -1/3) -
-                                np.power(-h_in[1, ind]/monob[ind], -1/3))),
-                                np.where((h_in[1, ind]/monob[ind] > -0.465) &
-                                (h_in[1, ind]/monob[ind] < 0),
-                                kappa*(dt[ind]+dter[ind]*cskin) /
-                                (np.log(h_in[1, ind]/zot[ind]) -
-                                psit_calc(h_in[1, ind]/monob[ind], meth) +
-                                psit_calc(zot[ind]/monob[ind], meth)),
-                                np.where((h_in[1, ind]/monob[ind] > 0) &
-                                (h_in[1, ind]/monob[ind] < 1),
-                                kappa*(dt[ind]+dter[ind]*cskin) /
-                                (np.log(h_in[1, ind]/zot[ind]) +
-                                5*h_in[1, ind]/monob[ind]-5*zot[ind] /
-                                monob[ind]),
-                                kappa*(dt[ind]+dter[ind]*cskin) /
-                                (np.log(monob[ind]/zot[ind])+5 -
-                                5*zot[ind]/monob[ind] +
-                                5*np.log(h_in[1, ind]/monob[ind]) +
-                                h_in[1, ind]/monob[ind]-1))))
-                                # Zeng et al. 1998 (11-14)
-            qsr[ind] = np.where(h_in[2, ind]/monob[ind] < -0.465,
-                                kappa*(dq[ind] +
-                                dqer[ind]*cskin) /
-                                (np.log((-0.465*monob[ind])/zoq[ind]) -
-                                psit_calc(-0.465, meth) +
-                                psit_calc(zoq[ind]/monob[ind], meth) +
-                                0.8*(np.power(0.465, -1/3) -
-                                np.power(-h_in[2, ind]/monob[ind], -1/3))),
-                                np.where((h_in[2, ind]/monob[ind] > -0.465) &
-                                (h_in[2, ind]/monob[ind] < 0),
-                                kappa*(dq[ind]+dqer[ind]*cskin) /
-                                (np.log(h_in[1, ind]/zot[ind]) -
-                                psit_calc(h_in[2, ind]/monob[ind], meth) +
-                                psit_calc(zoq[ind]/monob[ind], meth)),
-                                np.where((h_in[2, ind]/monob[ind] > 0) &
-                                (h_in[2, ind]/monob[ind]<1), kappa*(dq[ind] +
-                                dqer[ind]*cskin) /
-                                (np.log(h_in[1, ind]/zoq[ind]) +
-                                5*h_in[2, ind]/monob[ind]-5*zoq[ind]/monob[ind]),
-                                kappa*(dq[ind]+dqer[ind]*cskin) /
-                                (np.log(monob[ind]/zoq[ind])+5 -
-                                5*zoq[ind]/monob[ind] +
-                                5*np.log(h_in[2, ind]/monob[ind]) +
-                                h_in[2, ind]/monob[ind]-1))))
-        elif (meth == "C30" or meth == "C35" or meth == "C40"):
-            usr[ind] = (wind[ind]*kappa/(np.log(h_in[0, ind]/zo[ind]) -
-                        psiu_26(h_in[0, ind]/monob[ind], meth)))
-            qsr[ind] = ((dq[ind]+dqer[ind]*cskin)*(kappa/(np.log(h_in[2, ind] /
-                        zoq[ind])-psit_26(h_in[2, ind]/monob[ind]))))
-            tsr[ind] = ((dt[ind]+dter[ind]*cskin)*(kappa/(np.log(h_in[1, ind] /
-                        zot[ind])-psit_26(h_in[1, ind]/monob[ind]))))
-        else:
-            usr[ind] = (wind[ind]*kappa/(np.log(h_in[0, ind]/zo[ind]) -
-                        psim_calc(h_in[0, ind]/monob[ind], meth)))
-            qsr[ind] = cq[ind]*wind[ind]*(dq[ind]+dqer[ind]*cskin)/usr[ind]
-            tsr[ind] = ct[ind]*wind[ind]*(dt[ind]+dter[ind]*cskin)/usr[ind]
+        usr[ind], tsr[ind], qsr[ind] = get_strs(h_in[:, ind], monob[ind],
+                                                wind[ind], zo[ind], zot[ind],
+                                                zoq[ind], dt[ind], dq[ind],
+                                                dter[ind], dqer[ind], ct[ind],
+                                                cq[ind], cskin, meth)
         if (cskin == 1):
             dter[ind], dqer[ind], tkt[ind] = get_skin(sst[ind], qsea[ind],
                                                       rho[ind], Rl[ind],
