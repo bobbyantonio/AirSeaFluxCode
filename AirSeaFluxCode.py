@@ -228,7 +228,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
     dtv=dt*(1.+0.61*qair)+0.61*th*dq
     # ------------
     rho = P*100/(287.1*tv10n)
-    lv = (2.501-0.00237*SST)*1e6
+    lv = (2.501-0.00237*(sst-CtoK))*1e6
     cp = 1004.67*(1 + 0.00084*qsea)
     u10n = np.copy(spd)
     monob = -100*np.ones(spd.shape)
@@ -458,7 +458,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
            dter[ind] = np.zeros(sst[ind].shape)
            dqer[ind] = np.zeros(sst[ind].shape)
            tkt[ind] = np.zeros(sst[ind].shape)
-        Rnl[ind] = 0.97*(5.67e-8*np.power(SST[ind] -
+        Rnl[ind] = 0.97*(5.67e-8*np.power(SST[ind]-CtoK -
                           dter[ind]*cskin+CtoK, 4)-Rl[ind])
         t10n[ind] = (Ta[ind] -
                      tsr[ind]/kappa*(np.log(h_in[1, ind]/ref_ht)-psit[ind]))
