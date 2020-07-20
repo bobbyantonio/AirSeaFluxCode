@@ -2,15 +2,14 @@ import numpy as np
 import sys
 import logging
 from flux_subs import (kappa, CtoK, get_heights, get_skin, get_gust, get_L,
-                       get_hum, get_strs,
-                       psim_calc, psit_calc, 
+                       get_hum, get_strs, psim_calc, psit_calc, 
                        cdn_calc, cd_calc, ctcq_calc, ctcqn_calc)
 
 
 def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
-                  hin=18, hout=10, Rl=None, Rs=None, cskin=None,
-                  gust=None, meth="S80", qmeth="Buck2", tol=None, n=10,
-                  out=0, L=None):
+                   hin=18, hout=10, Rl=None, Rs=None, cskin=None,
+                   gust=None, meth="S80", qmeth="Buck2", tol=None, n=10,
+                   out=0, L=None):
     """ Calculates momentum and heat fluxes using different parameterizations
 
     Parameters
@@ -130,27 +129,21 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
     if (np.all(np.isnan(spd)) or np.all(np.isnan(T)) or np.all(np.isnan(SST))):
         sys.exit("input wind, T or SST is empty")
         logging.debug('all spd or T or SST input is nan')
+    if (np.all(np.isnan(spd)) or np.all(np.isnan(T)) or np.all(np.isnan(SST))):
+        sys.exit("input wind, T or SST is empty")
+        logging.debug('all spd or T or SST input is nan')
     if (np.all(lat == None)):  # set latitude to 45deg if empty
         lat = 45*np.ones(spd.shape)
     elif ((np.all(lat != None)) and (np.size(lat) == 1)):
         lat = np.ones(spd.shape)*np.copy(lat)
-    if ((np.all(P == None)) and (meth == "C30" or meth == "C40")):
-        P = np.ones(spd.shape)*1015  # if empty set to default for COARE3.0
-    elif ((np.all(P == None)) or np.all(np.isnan(P))):
+    if ((np.all(P == None)) or np.all(np.isnan(P))):
         P = np.ones(spd.shape)*1013
         logging.debug('input P is empty and set to 1013hPa')
     elif (((np.all(P != None)) or np.all(~np.isnan(P))) and np.size(P) == 1):
         P = np.ones(spd.shape)*np.copy(P)
-    if ((np.all(Rl == None) or np.all(np.isnan(Rl))) and meth == "C30"):
-        Rl = np.ones(spd.shape)*150    # set to default for COARE3.0
-    elif (((np.all(Rl == None) or np.all(np.isnan(Rl))) and meth == "C35") or
-          ((np.all(Rl == None) or np.all(np.isnan(Rl))) and meth == "C40")):
+    if (np.all(Rl == None) or np.all(np.isnan(Rl))):
         Rl = np.ones(spd.shape)*370    # set to default for COARE3.5
-    elif (np.all(Rl == None) or np.all(np.isnan(Rl))):
-        Rl = np.ones(spd.shape)*370    # set to default for COARE3.5
-    if ((np.all(Rs == None) or np.all(np.isnan(Rs))) and meth == "C30"):
-        Rs = np.ones(spd.shape)*370  # set to default for COARE3.0
-    elif (np.all(Rs == None) or np.all(np.isnan(Rs))):
+    if (np.all(Rs == None) or np.all(np.isnan(Rs))):
         Rs = np.ones(spd.shape)*150  # set to default for COARE3.5
     if ((gust == None) and (meth == "C30" or meth == "C35" or meth == "C40")):
         gust = [1, 1.2, 600]
