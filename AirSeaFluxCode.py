@@ -2,8 +2,8 @@ import numpy as np
 import sys
 import logging
 from flux_subs import (kappa, CtoK, get_heights, get_skin, get_gust, get_L,
-                       get_hum,
-                       psim_calc, psit_calc, psit_26, psiu_26,
+                       get_hum, get_strs,
+                       psim_calc, psit_calc, 
                        cdn_calc, cd_calc, ctcq_calc, ctcqn_calc)
 
 
