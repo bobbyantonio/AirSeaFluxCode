@@ -7,10 +7,10 @@ from flux_subs import (kappa, CtoK, get_heights, get_skin, get_gust, get_L,
                        cdn_calc, cd_calc, ctcq_calc, ctcqn_calc)
 
 
-def AirSeaFluxCode_L(spd, T, SST, lat=None, hum=None, P=None,
-                       hin=18, hout=10, Rl=None, Rs=None, cskin=None,
-                       gust=None, meth="S80", qmeth="Buck2", tol=None, n=10,
-                       out=0, L=None):
+def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
+                  hin=18, hout=10, Rl=None, Rs=None, cskin=None,
+                  gust=None, meth="S80", qmeth="Buck2", tol=None, n=10,
+                  out=0, L=None):
     """ Calculates momentum and heat fluxes using different parameterizations
 
     Parameters
