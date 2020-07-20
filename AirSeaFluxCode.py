@@ -1,8 +1,8 @@
 import numpy as np
 import sys
 import logging
-from flux_subs import (kappa, CtoK, get_heights, get_skin, get_gust, get_L,
-                       get_hum, get_strs, psim_calc, psit_calc, 
+from flux_subs import (kappa, CtoK, get_heights, get_init, get_skin, get_gust,
+                       get_L, get_hum, get_strs, psim_calc, psit_calc, 
                        cdn_calc, cd_calc, ctcq_calc, ctcqn_calc)
 
 
@@ -112,73 +112,17 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
     """
     logging.basicConfig(filename='flux_calc.log',
                         format='%(asctime)s %(message)s',level=logging.INFO)
-    if ((type(spd) != np.ndarray) or (type(T) != np.ndarray) or
-        (type(SST) != np.ndarray)):
-        sys.exit("input type of spd, T and SST should be numpy.ndarray")
+    lat, P, Rl, Rs, cskin, gust, tol, L = get_init(spd, T, SST, lat, P, Rl, Rs,
+                                                   cskin, gust, L, tol, meth,
+                                                   qmeth)
     ref_ht, tlapse = 10, 0.0098        # reference height, lapse rate
     h_in = get_heights(hin, len(spd))  # heights of input measurements/fields
     h_out = get_heights(hout, 1)       # desired height of output variables
-    # if input values are nan break
-    if meth not in ["S80", "S88", "LP82", "YT96", "UA", "LY04", "C30", "C35",
-                    "C40","ERA5"]:
-        sys.exit("unknown method")
-    if qmeth not in ["HylandWexler", "Hardy", "Preining", "Wexler", "CIMO",
-                     "GoffGratch", "MagnusTetens", "Buck", "Buck2", "WMO",
-                     "WMO2000", "Sonntag", "Bolton", "IAPWS", "MurphyKoop"]:
-        sys.exit("unknown q-method")
-    if (np.all(np.isnan(spd)) or np.all(np.isnan(T)) or np.all(np.isnan(SST))):
-        sys.exit("input wind, T or SST is empty")
-        logging.debug('all spd or T or SST input is nan')
-    if (np.all(np.isnan(spd)) or np.all(np.isnan(T)) or np.all(np.isnan(SST))):
-        sys.exit("input wind, T or SST is empty")
-        logging.debug('all spd or T or SST input is nan')
-    if (np.all(lat == None)):  # set latitude to 45deg if empty
-        lat = 45*np.ones(spd.shape)
-    elif ((np.all(lat != None)) and (np.size(lat) == 1)):
-        lat = np.ones(spd.shape)*np.copy(lat)
-    if ((np.all(P == None)) or np.all(np.isnan(P))):
-        P = np.ones(spd.shape)*1013
-        logging.debug('input P is empty and set to 1013hPa')
-    elif (((np.all(P != None)) or np.all(~np.isnan(P))) and np.size(P) == 1):
-        P = np.ones(spd.shape)*np.copy(P)
-    if (np.all(Rl == None) or np.all(np.isnan(Rl))):
-        Rl = np.ones(spd.shape)*370    # set to default for COARE3.5
-    if (np.all(Rs == None) or np.all(np.isnan(Rs))):
-        Rs = np.ones(spd.shape)*150  # set to default for COARE3.5
-    if ((gust == None) and (meth == "C30" or meth == "C35" or meth == "C40")):
-        gust = [1, 1.2, 600]
-    elif ((gust == None) and (meth == "UA" or meth == "ERA5")):
-        gust = [1, 1, 1000]
-    elif (gust == None):
-        gust = [1, 1.2, 800]
-    elif (np.size(gust) < 3):
-        sys.exit("gust input must be a 3x1 array")
-    if (tol == None):
-        tol = ['flux', 0.01, 1, 1]
-    elif (tol[0] not in ['flux', 'ref', 'all']):
-        sys.exit("unknown tolerance input")
-    if ((cskin == None) and (meth == "S80" or meth == "S88" or meth == "LP82"
-                             or meth == "YT96")):
-       cskin = 0
-    elif ((cskin == None) and (meth == "UA" or meth == "LY04" or meth == "C30"
-                               or meth == "C35" or meth == "C40"
-                               or meth == "ERA5")):
-       cskin = 1
+
     logging.info('method %s, inputs: lat: %s | P: %s | Rl: %s |'
-                 ' Rs: %s | gust: %s | cskin: %s', meth,
+                 ' Rs: %s | gust: %s | cskin: %s | L : %s', meth,
                  np.nanmedian(lat), np.nanmedian(P), np.nanmedian(Rl),
-                 np.nanmedian(Rs), gust, cskin)
-    if (L not in [None, 0, 1, 2, 3]):
-        sys.exit("L input must be either None, 0, 1, 2 or 3")
-    if ((L == None) and (meth == "S80" or meth == "S88" or meth == "LP82"
-                             or meth == "YT96" or meth == "LY04")):
-       L = 0
-    elif ((L == None) and (meth == "UA")):
-       L = 1
-    elif ((L == None) and (meth == "ERA5")):
-       L = 2
-    elif ((L == None) and (meth == "C30" or meth == "C35" or meth == "C40")):
-       L = 3
+                 np.nanmedian(Rs), gust, cskin, L)
     ####
     th = np.where(T < 200, (np.copy(T)+CtoK) *
                   np.power(1000/P,287.1/1004.67),
