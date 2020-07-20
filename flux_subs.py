@@ -1,4 +1,5 @@
 import numpy as np
+import sys
 from VaporPressure import VaporPressure
 
 CtoK = 273.16  # 273.15
@@ -6,34 +7,6 @@ CtoK = 273.16  # 273.15
 
 kappa = 0.4  # NOTE: 0.41
 """ von Karman's constant """
-# ---------------------------------------------------------------------
-def get_stabco(meth="S80"):
-    """ Gives the coefficients \\alpha, \\beta, \\gamma for stability functions
-
-    Parameters
-    ----------
-    meth : str
-
-    Returns
-    -------
-    coeffs : float
-    """
-    alpha, beta, gamma = 0, 0, 0
-    if (meth == "S80" or meth == "S88" or meth == "LY04" or
-        meth == "UA" or meth == "ERA5" or meth == "C30" or meth == "C35" or
-        meth == "C40"):
-        alpha, beta, gamma = 16, 0.25, 5  # Smith 1980, from Dyer (1974)
-    elif (meth == "LP82"):
-        alpha, beta, gamma = 16, 0.25, 7
-    elif (meth == "YT96"):
-        alpha, beta, gamma = 20, 0.25, 5
-    else:
-        print("unknown method stabco: "+meth)
-    coeffs = np.zeros(3)
-    coeffs[0] = alpha
-    coeffs[1] = beta
-    coeffs[2] = gamma
-    return coeffs
 # ---------------------------------------------------------------------
 
 
@@ -293,6 +266,36 @@ def ctcq_calc(cdn, cd, ctn, cqn, ht, hq, ref_ht, psit, psiq):
 # ---------------------------------------------------------------------
 
 
+def get_stabco(meth="S80"):
+    """ Gives the coefficients \\alpha, \\beta, \\gamma for stability functions
+
+    Parameters
+    ----------
+    meth : str
+
+    Returns
+    -------
+    coeffs : float
+    """
+    alpha, beta, gamma = 0, 0, 0
+    if (meth == "S80" or meth == "S88" or meth == "LY04" or
+        meth == "UA" or meth == "ERA5" or meth == "C30" or meth == "C35" or
+        meth == "C40"):
+        alpha, beta, gamma = 16, 0.25, 5  # Smith 1980, from Dyer (1974)
+    elif (meth == "LP82"):
+        alpha, beta, gamma = 16, 0.25, 7
+    elif (meth == "YT96"):
+        alpha, beta, gamma = 20, 0.25, 5
+    else:
+        print("unknown method stabco: "+meth)
+    coeffs = np.zeros(3)
+    coeffs[0] = alpha
+    coeffs[1] = beta
+    coeffs[2] = gamma
+    return coeffs
+# ---------------------------------------------------------------------
+
+
 def psim_calc(zol, meth="S80"):
     """ Calculates momentum stability function
 
@@ -457,6 +460,49 @@ def psim_era5(zol):
 # ---------------------------------------------------------------------
 
 
+def psiu_26(zol, meth):
+    """ Computes velocity structure function C35
+
+    Parameters
+    ----------
+    zol : float
+        height over MO length
+
+    Returns
+    -------
+    psi : float
+    """
+    if (meth == "C30"):
+        dzol = np.where(0.35*zol > 50, 50, 0.35*zol) # stable
+        psi = np.where(zol > 0, -((1+zol)+0.6667*(zol-14.28)*np.exp(-dzol) +
+                                  8.525), np.nan)
+        x = np.where(zol < 0, np.power(1-15*zol, 0.25), np.nan)
+        psik = np.where(zol < 0, 2*np.log((1+x)/2)+np.log((1+np.power(x, 2)) /
+                        2)-2*np.arctan(x)+2*np.arctan(1), np.nan)
+        x = np.where(zol < 0, np.power(1-10.15*zol, 0.3333), np.nan)
+        psic = np.where(zol < 0, 1.5*np.log((1+x+np.power(x, 2))/3) -
+                        np.sqrt(3)*np.arctan((1+2*x)/np.sqrt(3)) +
+                        4*np.arctan(1)/np.sqrt(3), np.nan)
+        f = np.power(zol, 2)/(1+np.power(zol, 2))
+        psi = np.where(zol < 0, (1-f)*psik+f*psic, psi)
+    elif (meth == "C35" or meth == "C40"):
+        dzol = np.where(0.35*zol > 50, 50, 0.35*zol)  # stable
+        a, b, c, d = 0.7, 3/4, 5, 0.35
+        psi = np.where(zol > 0, -(a*zol+b*(zol-c/d)*np.exp(-dzol)+b*c/d),
+                       np.nan)
+        x = np.where(zol < 0, np.power(1-15*zol, 0.25), np.nan)
+        psik = np.where(zol < 0, 2*np.log((1+x)/2)+np.log((1+x**2)/2) -
+                        2*np.arctan(x)+2*np.arctan(1), np.nan)
+        x = np.where(zol < 0, np.power(1-10.15*zol, 0.3333), np.nan)
+        psic = np.where(zol < 0, 1.5*np.log((1+x+np.power(x, 2))/3) -
+                        np.sqrt(3)*np.arctan((1+2*x)/np.sqrt(3)) +
+                        4*np.arctan(1)/np.sqrt(3), np.nan)
+        f = np.power(zol, 2)/(1+np.power(zol, 2))
+        psi = np.where(zol < 0, (1-f)*psik+f*psic, psi)
+    return psi
+# ---------------------------------------------------------------------
+
+
 def psim_conv(zol, meth):
     """ Calculates momentum stability function for unstable conditions
 
@@ -501,46 +547,134 @@ def psim_stab(zol, meth):
 # ---------------------------------------------------------------------
 
 
-def psiu_26(zol, meth):
-    """ Computes velocity structure function C35
+def get_init(spd, T, SST, lat, P, Rl, Rs, cskin, gust, L, tol, meth, qmeth):
+    """
+    Checks initial input values and sets defaults if needed
 
     Parameters
     ----------
-    zol : float
-        height over MO length
+    spd : float
+        relative wind speed in m/s (is assumed as magnitude difference
+        between wind and surface current vectors)
+    T : float
+        air temperature in K
+    SST : float
+        sea surface temperature in K
+    lat : float
+        latitude (deg), default 45deg
+    P : float
+        air pressure (hPa), default 1013hPa
+    Rl : float
+        downward longwave radiation (W/m^2)
+    Rs : float
+        downward shortwave radiation (W/m^2)
+    cskin : int
+        0 switch cool skin adjustment off, else 1
+        default is 1
+    gust : int
+        3x1 [x, beta, zi] x=1 to include the effect of gustiness, else 0
+        beta gustiness parameter, beta=1 for UA, beta=1.2 for COARE
+        zi PBL height (m) 600 for COARE, 1000 for UA and ERA5, 800 default
+        default for COARE [1, 1.2, 600]
+        default for UA, ERA5 [1, 1, 1000]
+        default else [1, 1.2, 800]
+    L : int
+        Monin-Obukhov length definition options
+        0 : default for S80, S88, LP82, YT96 and LY04
+        1 : following UA (Zeng et al., 1998), default for UA
+        2 : following ERA5 (IFS Documentation cy46r1), default for ERA5
+        3 : COARE3.5 (Edson et al., 2013), default for C30, C35 and C40
+    tol : float
+        4x1 or 7x1 [option, lim1-3 or lim1-6]
+        option : 'flux' to set tolerance limits for fluxes only lim1-3
+        option : 'ref' to set tolerance limits for height adjustment lim-1-3
+        option : 'all' to set tolerance limits for both fluxes and height
+                 adjustment lim1-6 ['all', 0.01, 0.01, 5e-05, 0.01, 1, 1]
+    meth : str
+        "S80","S88","LP82","YT96","UA","LY04","C30","C35","C40","ERA5"
+    qmeth : str
+        is the saturation evaporation method to use amongst
+        "HylandWexler","Hardy","Preining","Wexler","GoffGratch","CIMO",
+        "MagnusTetens","Buck","Buck2","WMO","WMO2000","Sonntag","Bolton",
+        "IAPWS","MurphyKoop"]
+        default is Buck2
 
     Returns
     -------
-    psi : float
+    lat : float
+        latitude
+    P : float
+        air pressure (hPa)
+    Rl : float
+        downward longwave radiation (W/m^2)
+    Rs : float
+        downward shortwave radiation (W/m^2)
+    cskin : int
+        cool skin adjustment switch
+    gust : int
+        gustiness switch
+    tol : float
+        tolerance limits
+    L : int
+        MO length switch
+
     """
-    if (meth == "C30"):
-        dzol = np.where(0.35*zol > 50, 50, 0.35*zol) # stable
-        psi = np.where(zol > 0, -((1+zol)+0.6667*(zol-14.28)*np.exp(-dzol) +
-                                  8.525), np.nan)
-        x = np.where(zol < 0, np.power(1-15*zol, 0.25), np.nan)
-        psik = np.where(zol < 0, 2*np.log((1+x)/2)+np.log((1+np.power(x, 2)) /
-                        2)-2*np.arctan(x)+2*np.arctan(1), np.nan)
-        x = np.where(zol < 0, np.power(1-10.15*zol, 0.3333), np.nan)
-        psic = np.where(zol < 0, 1.5*np.log((1+x+np.power(x, 2))/3) -
-                        np.sqrt(3)*np.arctan((1+2*x)/np.sqrt(3)) +
-                        4*np.arctan(1)/np.sqrt(3), np.nan)
-        f = np.power(zol, 2)/(1+np.power(zol, 2))
-        psi = np.where(zol < 0, (1-f)*psik+f*psic, psi)
-    elif (meth == "C35" or meth == "C40"):
-        dzol = np.where(0.35*zol > 50, 50, 0.35*zol)  # stable
-        a, b, c, d = 0.7, 3/4, 5, 0.35
-        psi = np.where(zol > 0, -(a*zol+b*(zol-c/d)*np.exp(-dzol)+b*c/d),
-                       np.nan)
-        x = np.where(zol < 0, np.power(1-15*zol, 0.25), np.nan)
-        psik = np.where(zol < 0, 2*np.log((1+x)/2)+np.log((1+x**2)/2) -
-                        2*np.arctan(x)+2*np.arctan(1), np.nan)
-        x = np.where(zol < 0, np.power(1-10.15*zol, 0.3333), np.nan)
-        psic = np.where(zol < 0, 1.5*np.log((1+x+np.power(x, 2))/3) -
-                        np.sqrt(3)*np.arctan((1+2*x)/np.sqrt(3)) +
-                        4*np.arctan(1)/np.sqrt(3), np.nan)
-        f = np.power(zol, 2)/(1+np.power(zol, 2))
-        psi = np.where(zol < 0, (1-f)*psik+f*psic, psi)
-    return psi
+    if ((type(spd) != np.ndarray) or (type(T) != np.ndarray) or
+         (type(SST) != np.ndarray)):
+        sys.exit("input type of spd, T and SST should be numpy.ndarray")
+    # if input values are nan break
+    if meth not in ["S80", "S88", "LP82", "YT96", "UA", "LY04", "C30", "C35",
+                    "C40","ERA5"]:
+        sys.exit("unknown method")
+    if qmeth not in ["HylandWexler", "Hardy", "Preining", "Wexler", "CIMO",
+                      "GoffGratch", "MagnusTetens", "Buck", "Buck2", "WMO",
+                      "WMO2000", "Sonntag", "Bolton", "IAPWS", "MurphyKoop"]:
+        sys.exit("unknown q-method")
+    if (np.all(np.isnan(spd)) or np.all(np.isnan(T)) or np.all(np.isnan(SST))):
+        sys.exit("input wind, T or SST is empty")
+    if (np.all(lat == None)):  # set latitude to 45deg if empty
+        lat = 45*np.ones(spd.shape)
+    elif ((np.all(lat != None)) and (np.size(lat) == 1)):
+        lat = np.ones(spd.shape)*np.copy(lat)
+    if ((np.all(P == None)) or np.all(np.isnan(P))):
+        P = np.ones(spd.shape)*1013
+    elif (((np.all(P != None)) or np.all(~np.isnan(P))) and np.size(P) == 1):
+        P = np.ones(spd.shape)*np.copy(P)
+    if (np.all(Rl == None) or np.all(np.isnan(Rl))):
+        Rl = np.ones(spd.shape)*370    # set to default for COARE3.5
+    if (np.all(Rs == None) or np.all(np.isnan(Rs))):
+        Rs = np.ones(spd.shape)*150  # set to default for COARE3.5
+    if ((cskin == None) and (meth == "S80" or meth == "S88" or meth == "LP82"
+                              or meth == "YT96")):
+        cskin = 0
+    elif ((cskin == None) and (meth == "UA" or meth == "LY04" or meth == "C30"
+                                or meth == "C35" or meth == "C40"
+                                or meth == "ERA5")):
+        cskin = 1
+    if ((gust == None) and (meth == "C30" or meth == "C35" or meth == "C40")):
+        gust = [1, 1.2, 600]
+    elif ((gust == None) and (meth == "UA" or meth == "ERA5")):
+        gust = [1, 1, 1000]
+    elif (gust == None):
+        gust = [1, 1.2, 800]
+    elif (np.size(gust) < 3):
+        sys.exit("gust input must be a 3x1 array")
+    if (L not in [None, 0, 1, 2, 3]):
+        sys.exit("L input must be either None, 0, 1, 2 or 3")
+    if ((L == None) and (meth == "S80" or meth == "S88" or meth == "LP82"
+                              or meth == "YT96" or meth == "LY04")):
+        L = 0
+    elif ((L == None) and (meth == "UA")):
+        L = 1
+    elif ((L == None) and (meth == "ERA5")):
+        L = 2
+    elif ((L == None) and (meth == "C30" or meth == "C35" or meth == "C40")):
+        L = 3
+    if (tol == None):
+        tol = ['flux', 0.01, 1, 1]
+    elif (tol[0] not in ['flux', 'ref', 'all']):
+        sys.exit("unknown tolerance input")
+    return lat, P, Rl, Rs, cskin, gust, tol, L
 # ---------------------------------------------------------------------
 
 
@@ -584,8 +718,8 @@ def get_skin(sst, qsea, rho, Rl, Rs, Rnl, cp, lv, tkt, usr, tsr, qsr, lat):
     """
     # coded following Saunders (1967) with lambda = 6
     g = gc(lat, None)
-    if (np.nanmin(sst) > 200):  # if Ta in Kelvin convert to Celsius
-        sst = sst-273.16
+    if (np.nanmin(sst) > 200):  # if sst in Kelvin convert to Celsius
+        sst = sst-CtoK
     # ************  cool skin constants  *******
     # density of water, specific heat capacity of water, water viscosity,
     # thermal conductivity of water
@@ -766,12 +900,12 @@ def get_hum(hum, T, sst, P, qmeth):
         qsea = qsat_sea(sst, P, qmeth)/1000     # surface water q (g/kg)
         qair = qsat_air(T, P, RH, qmeth)/1000   # q of air (g/kg)
     elif (hum[0] not in ['rh', 'q', 'Td']):
-        print("unknown humidity input")
+        sys.exit("unknown humidity input")
         qair, qsea = np.nan, np.nan
     elif (hum[0] == 'rh'):
         RH = hum[1]
         if (np.all(RH < 1)):
-            print("input relative humidity units should be \%")
+            sys.exit("input relative humidity units should be \%")
             qair, qsea = np.nan, np.nan
         qsea = qsat_sea(sst, P, qmeth)/1000    # surface water q (g/kg)
         qair = qsat_air(T, P, RH, qmeth)/1000  # q of air (g/kg)
