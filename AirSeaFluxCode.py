@@ -1,8 +1,10 @@
 import numpy as np
 import logging
-from flux_subs import (kappa, CtoK, get_heights, get_init, get_skin, get_gust,
-                       get_L, get_hum, get_strs, psim_calc, psit_calc,
-                       cdn_calc, cd_calc, ctcq_calc, ctcqn_calc)
+from get_init import get_init
+from hum_subs import (get_hum)
+from util_subs import (kappa, CtoK, get_heights)
+from flux_subs import (get_skin, get_gust, get_L, get_strs, psim_calc,
+                       psit_calc, cdn_calc, cd_calc, ctcq_calc, ctcqn_calc)
 
 
 def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
@@ -243,8 +245,8 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
                                       qsr[ind], t10n[ind], tv10n[ind],
                                       qair[ind], h_in[:, ind], T[ind], Ta[ind],
                                       th[ind], tv[ind], sst[ind], dt[ind],
-                                      dq[ind], wind[ind], np.copy(monob[ind]),
-                                      meth)
+                                      dtv[ind], dq[ind], zo[ind], wind[ind],
+                                      np.copy(monob[ind]), meth)
         psim[ind] = psim_calc(h_in[0, ind]/monob[ind], meth)
         psit[ind] = psit_calc(h_in[1, ind]/monob[ind], meth)
         psiq[ind] = psit_calc(h_in[2, ind]/monob[ind], meth)
