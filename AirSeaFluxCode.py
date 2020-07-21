@@ -1,8 +1,7 @@
 import numpy as np
-import sys
 import logging
 from flux_subs import (kappa, CtoK, get_heights, get_init, get_skin, get_gust,
-                       get_L, get_hum, get_strs, psim_calc, psit_calc, 
+                       get_L, get_hum, get_strs, psim_calc, psit_calc,
                        cdn_calc, cd_calc, ctcq_calc, ctcqn_calc)
 
 
@@ -118,7 +117,6 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
     ref_ht, tlapse = 10, 0.0098        # reference height, lapse rate
     h_in = get_heights(hin, len(spd))  # heights of input measurements/fields
     h_out = get_heights(hout, 1)       # desired height of output variables
-
     logging.info('method %s, inputs: lat: %s | P: %s | Rl: %s |'
                  ' Rs: %s | gust: %s | cskin: %s | L : %s', meth,
                  np.nanmedian(lat), np.nanmedian(P), np.nanmedian(Rl),
@@ -300,6 +298,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
             ii = False
         else:
             ii = True
+    itera = np.where(itera > n, -1, itera)
     logging.info('method %s | # of iterations:%s', meth, it)
     logging.info('method %s | # of points that did not converge :%s', meth,
                   ind[0].size)
@@ -316,7 +315,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
     tref = tref-(273.16+tlapse*h_out[1])
     qref = (qair-qsr/kappa*(np.log(h_in[2]/h_out[2]) -
             psit+psit_calc(h_out[2]/monob, meth)))
-    res = np.zeros((28, len(spd)))
+    res = np.zeros((35, len(spd)))
     res[0][:] = tau
     res[1][:] = sensible
     res[2][:] = latent
@@ -345,9 +344,17 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
     res[25][:] = tref
     res[26][:] = qref
     res[27][:] = itera
+    res[28][:] = dter
+    res[29][:] = dqer
+    res[30][:] = qair
+    res[31][:] = qsea
+    res[32][:] = Rl
+    res[33][:] = Rs
+    res[34][:] = Rnl
+
     if (out == 0):
         res[:, ind] = np.nan
     # set missing values where data have non acceptable values
     res = np.where(spd < 0, np.nan, res)
 
-    return res, ind
+    return res
