@@ -1,12 +1,6 @@
 import numpy as np
-import sys
-from VaporPressure import VaporPressure
+from util_subs import (CtoK, kappa, gc, visc_air)
 
-CtoK = 273.16  # 273.15
-""" Conversion factor for $^\circ\,$C to K """
-
-kappa = 0.4  # NOTE: 0.41
-""" von Karman's constant """
 # ---------------------------------------------------------------------
 
 
@@ -500,7 +494,8 @@ def psiu_26(zol, meth):
         f = np.power(zol, 2)/(1+np.power(zol, 2))
         psi = np.where(zol < 0, (1-f)*psik+f*psic, psi)
     return psi
-# ---------------------------------------------------------------------
+#------------------------------------------------------------------------------
+
 
 
 def psim_conv(zol, meth):
@@ -544,137 +539,6 @@ def psim_stab(zol, meth):
     gamma = coeffs[2]
     psim = -gamma*zol
     return psim
-# ---------------------------------------------------------------------
-
-
-def get_init(spd, T, SST, lat, P, Rl, Rs, cskin, gust, L, tol, meth, qmeth):
-    """
-    Checks initial input values and sets defaults if needed
-
-    Parameters
-    ----------
-    spd : float
-        relative wind speed in m/s (is assumed as magnitude difference
-        between wind and surface current vectors)
-    T : float
-        air temperature in K
-    SST : float
-        sea surface temperature in K
-    lat : float
-        latitude (deg), default 45deg
-    P : float
-        air pressure (hPa), default 1013hPa
-    Rl : float
-        downward longwave radiation (W/m^2)
-    Rs : float
-        downward shortwave radiation (W/m^2)
-    cskin : int
-        0 switch cool skin adjustment off, else 1
-        default is 1
-    gust : int
-        3x1 [x, beta, zi] x=1 to include the effect of gustiness, else 0
-        beta gustiness parameter, beta=1 for UA, beta=1.2 for COARE
-        zi PBL height (m) 600 for COARE, 1000 for UA and ERA5, 800 default
-        default for COARE [1, 1.2, 600]
-        default for UA, ERA5 [1, 1, 1000]
-        default else [1, 1.2, 800]
-    L : int
-        Monin-Obukhov length definition options
-        0 : default for S80, S88, LP82, YT96 and LY04
-        1 : following UA (Zeng et al., 1998), default for UA
-        2 : following ERA5 (IFS Documentation cy46r1), default for ERA5
-        3 : COARE3.5 (Edson et al., 2013), default for C30, C35 and C40
-    tol : float
-        4x1 or 7x1 [option, lim1-3 or lim1-6]
-        option : 'flux' to set tolerance limits for fluxes only lim1-3
-        option : 'ref' to set tolerance limits for height adjustment lim-1-3
-        option : 'all' to set tolerance limits for both fluxes and height
-                 adjustment lim1-6 ['all', 0.01, 0.01, 5e-05, 0.01, 1, 1]
-    meth : str
-        "S80","S88","LP82","YT96","UA","LY04","C30","C35","C40","ERA5"
-    qmeth : str
-        is the saturation evaporation method to use amongst
-        "HylandWexler","Hardy","Preining","Wexler","GoffGratch","CIMO",
-        "MagnusTetens","Buck","Buck2","WMO","WMO2000","Sonntag","Bolton",
-        "IAPWS","MurphyKoop"]
-        default is Buck2
-
-    Returns
-    -------
-    lat : float
-        latitude
-    P : float
-        air pressure (hPa)
-    Rl : float
-        downward longwave radiation (W/m^2)
-    Rs : float
-        downward shortwave radiation (W/m^2)
-    cskin : int
-        cool skin adjustment switch
-    gust : int
-        gustiness switch
-    tol : float
-        tolerance limits
-    L : int
-        MO length switch
-
-    """
-    if ((type(spd) != np.ndarray) or (type(T) != np.ndarray) or
-         (type(SST) != np.ndarray)):
-        sys.exit("input type of spd, T and SST should be numpy.ndarray")
-    # if input values are nan break
-    if meth not in ["S80", "S88", "LP82", "YT96", "UA", "LY04", "C30", "C35",
-                    "C40","ERA5"]:
-        sys.exit("unknown method")
-    if qmeth not in ["HylandWexler", "Hardy", "Preining", "Wexler", "CIMO",
-                      "GoffGratch", "MagnusTetens", "Buck", "Buck2", "WMO",
-                      "WMO2000", "Sonntag", "Bolton", "IAPWS", "MurphyKoop"]:
-        sys.exit("unknown q-method")
-    if (np.all(np.isnan(spd)) or np.all(np.isnan(T)) or np.all(np.isnan(SST))):
-        sys.exit("input wind, T or SST is empty")
-    if (np.all(lat == None)):  # set latitude to 45deg if empty
-        lat = 45*np.ones(spd.shape)
-    elif ((np.all(lat != None)) and (np.size(lat) == 1)):
-        lat = np.ones(spd.shape)*np.copy(lat)
-    if ((np.all(P == None)) or np.all(np.isnan(P))):
-        P = np.ones(spd.shape)*1013
-    elif (((np.all(P != None)) or np.all(~np.isnan(P))) and np.size(P) == 1):
-        P = np.ones(spd.shape)*np.copy(P)
-    if (np.all(Rl == None) or np.all(np.isnan(Rl))):
-        Rl = np.ones(spd.shape)*370    # set to default for COARE3.5
-    if (np.all(Rs == None) or np.all(np.isnan(Rs))):
-        Rs = np.ones(spd.shape)*150  # set to default for COARE3.5
-    if ((cskin == None) and (meth == "S80" or meth == "S88" or meth == "LP82"
-                              or meth == "YT96")):
-        cskin = 0
-    elif ((cskin == None) and (meth == "UA" or meth == "LY04" or meth == "C30"
-                                or meth == "C35" or meth == "C40"
-                                or meth == "ERA5")):
-        cskin = 1
-    if ((gust == None) and (meth == "C30" or meth == "C35" or meth == "C40")):
-        gust = [1, 1.2, 600]
-    elif ((gust == None) and (meth == "UA" or meth == "ERA5")):
-        gust = [1, 1, 1000]
-    elif (gust == None):
-        gust = [1, 1.2, 800]
-    elif (np.size(gust) < 3):
-        sys.exit("gust input must be a 3x1 array")
-    if (L not in [None, 0, 1, 2, 3]):
-        sys.exit("L input must be either None, 0, 1, 2 or 3")
-    if ((L == None) and (meth == "S80" or meth == "S88" or meth == "LP82"
-                              or meth == "YT96" or meth == "LY04")):
-        L = 0
-    elif ((L == None) and (meth == "UA")):
-        L = 1
-    elif ((L == None) and (meth == "ERA5")):
-        L = 2
-    elif ((L == None) and (meth == "C30" or meth == "C35" or meth == "C40")):
-        L = 3
-    if (tol == None):
-        tol = ['flux', 0.01, 1, 1]
-    elif (tol[0] not in ['flux', 'ref', 'all']):
-        sys.exit("unknown tolerance input")
-    return lat, P, Rl, Rs, cskin, gust, tol, L
 # ---------------------------------------------------------------------
 
 
@@ -779,7 +643,7 @@ def get_gust(beta, Ta, usr, tsrv, zi, lat):
 
 
 def get_L(L, lat, usr, tsr, qsr, t10n, tv10n, qair, h_in, T, Ta, th, tv, sst,
-          dt, dq, wind, monob, meth):
+          dt, dtv, dq, zo, wind, monob, meth):
     """
     calculates Monin-Obukhov length and virtual star temperature
 
@@ -843,8 +707,13 @@ def get_L(L, lat, usr, tsr, qsr, t10n, tv10n, qair, h_in, T, Ta, th, tv, sst,
         monob = ((tv10n*np.power(usr, 2))/(g*kappa*tsrv))
         monob = np.where(np.fabs(monob) < 1, np.where(monob < 0, -1, 1), monob)
     elif (L == 1):
+        Rb = g*h_in[0]*dtv/(tv*np.power(wind, 2))
+        zol = np.where(Rb >= 0, Rb*np.log(h_in[0]/zo) /
+                        (1-5*np.where(Rb < 0.19, Rb, 0.19)),
+                        Rb*np.log(h_in[0]/zo))
+        monob = h_in[0]/zol
         tsrv = tsr*(1.+0.61*qair)+0.61*th*qsr
-        monob = ((tv*np.power(usr, 2))/(kappa*g*tsrv))
+        # monob = ((tv*np.power(usr, 2))/(kappa*g*tsrv))
     elif (L == 2):
         tsrv = tsr+0.61*t10n*qsr
         Rb = ((g*h_in[0]*((2*dt)/(Ta+sst-g*h_in[0])+0.61*dq)) /
@@ -865,64 +734,6 @@ def get_L(L, lat, usr, tsr, qsr, t10n, tv10n, qair, h_in, T, Ta, th, tv, sst,
         monob = h_in[0]/zol
     return tsrv, monob
 #------------------------------------------------------------------------------
-
-
-def get_hum(hum, T, sst, P, qmeth):
-    """
-    Get specific humidity output
-
-    Parameters
-    ----------
-    hum : array
-        humidity input switch 2x1 [x, values] default is relative humidity
-            x='rh' : relative humidity in %
-            x='q' : specific humidity (g/kg)
-            x='Td' : dew point temperature (K)
-    T : float
-        air temperature in K
-    sst : float
-        sea surface temperature in K
-    P : float
-        air pressure at sea level in hPa
-    qmeth : str
-        method to calculate specific humidity from vapor pressure
-
-    Returns
-    -------
-    qair : float
-        specific humidity of air
-    qsea : float
-        specific humidity over sea surface
-
-    """
-    if (hum == None):
-        RH = np.ones(sst.shape)*80
-        qsea = qsat_sea(sst, P, qmeth)/1000     # surface water q (g/kg)
-        qair = qsat_air(T, P, RH, qmeth)/1000   # q of air (g/kg)
-    elif (hum[0] not in ['rh', 'q', 'Td']):
-        sys.exit("unknown humidity input")
-        qair, qsea = np.nan, np.nan
-    elif (hum[0] == 'rh'):
-        RH = hum[1]
-        if (np.all(RH < 1)):
-            sys.exit("input relative humidity units should be \%")
-            qair, qsea = np.nan, np.nan
-        qsea = qsat_sea(sst, P, qmeth)/1000    # surface water q (g/kg)
-        qair = qsat_air(T, P, RH, qmeth)/1000  # q of air (g/kg)
-    elif (hum[0] == 'q'):
-        qair = hum[1]
-        qsea = qsat_sea(sst, P, qmeth)/1000  # surface water q (g/kg)
-    elif (hum[0] == 'Td'):
-        Td = hum[1] # dew point temperature (K)
-        Td = np.where(Td < 200, np.copy(Td)+CtoK, np.copy(Td))
-        T = np.where(T < 200, np.copy(T)+CtoK, np.copy(T))
-        esd = 611.21*np.exp(17.502*((Td-273.16)/(Td-32.19)))
-        es = 611.21*np.exp(17.502*((T-273.16)/(T-32.19)))
-        RH = 100*esd/es
-        qair = qsat_air(T, P, RH, qmeth)/1000  # q of air (g/kg)
-        qsea = qsat_sea(sst, P, qmeth)/1000    # surface water q (g/kg)
-    return qair, qsea
-#-------------------------------------------------------------------------
 
 
 def get_strs(h_in, monob, wind, zo, zot, zoq, dt, dq, dter, dqer, ct, cq,
@@ -951,7 +762,7 @@ def get_strs(h_in, monob, wind, zo, zot, zoq, dt, dq, dter, dqer, ct, cq,
     dter : float
         cskin temperature adjustment (K)
     dqer : float
-        cskin q adjustment (q/kg)
+        cskin q adjustment (g/kg)
     ct : float
         temperature exchange coefficient
     cq : float
@@ -1033,147 +844,4 @@ def get_strs(h_in, monob, wind, zo, zot, zoq, dt, dq, dter, dqer, ct, cq,
         tsr = ct*wind*(dt+dter*cskin)/usr
         qsr = cq*wind*(dq+dqer*cskin)/usr
     return usr, tsr, qsr
-#------------------------------------------------------------------------------
-
-
-def get_heights(h, dim_len):
-    """ Reads input heights for velocity, temperature and humidity
-
-    Parameters
-    ----------
-    h : float
-        input heights (m)
-    dim_len : int
-        length dimension
-
-    Returns
-    -------
-    hh : array
-    """
-    hh = np.zeros((3, dim_len))
-    if (type(h) == float or type(h) == int):
-        hh[0, :], hh[1, :], hh[2, :] = h, h, h
-    elif (len(h) == 2 and np.ndim(h) == 1):
-        hh[0, :], hh[1, :], hh[2, :] = h[0], h[1], h[1]
-    elif (len(h) == 3 and np.ndim(h) == 1):
-        hh[0, :], hh[1, :], hh[2, :] = h[0], h[1], h[2]
-    elif (len(h) == 1 and np.ndim(h) == 2):
-        hh = np.zeros((3, h.shape[1]))
-        hh[0, :], hh[1, :], hh[2, :] = h[0, :], h[0, :], h[0, :]
-    elif (len(h) == 2 and np.ndim(h) == 2):
-        hh = np.zeros((3, h.shape[1]))
-        hh[0, :], hh[1, :], hh[2, :] = h[0, :], h[1, :], h[1, :]
-    elif (len(h) == 3 and np.ndim(h) == 2):
-        hh = np.zeros((3, h.shape[1]))
-        hh = np.copy(h)
-    return hh
 # ---------------------------------------------------------------------
-
-
-def qsat_sea(T, P, qmeth):
-    """ Computes surface saturation specific humidity (g/kg)
-
-    Parameters
-    ----------
-    T : float
-        temperature ($^\\circ$\\,C)
-    P : float
-        pressure (mb)
-    qmeth : str
-        method to calculate vapor pressure
-
-    Returns
-    -------
-    qs : float
-    """
-    T = np.asarray(T)
-    if (np.nanmin(T) > 200):  # if Ta in Kelvin convert to Celsius
-        T = T-CtoK
-    ex = VaporPressure(T, P, 'liquid', qmeth)
-    es = 0.98*ex  # reduction at sea surface
-    qs = 622*es/(P-0.378*es)
-    return qs
-# ------------------------------------------------------------------------------
-
-
-def qsat_air(T, P, rh, qmeth):
-    """ Computes saturation specific humidity (g/kg) as in C35
-
-    Parameters
-    ----------
-    T : float
-        temperature ($^\circ$\,C)
-    P : float
-        pressure (mb)
-    rh : float
-       relative humidity (%)
-    qmeth : str
-        method to calculate vapor pressure
-
-    Returns
-    -------
-    q : float
-    em : float
-    """
-    T = np.asarray(T)
-    if (np.nanmin(T) > 200):  # if Ta in Kelvin convert to Celsius
-        T = T-CtoK
-    es = VaporPressure(T, P, 'liquid', qmeth)
-    em = 0.01*rh*es
-    q = 622*em/(P-0.378*em)
-    return q
-# ---------------------------------------------------------------------
-
-
-def gc(lat, lon=None):
-    """ Computes gravity relative to latitude
-
-    Parameters
-    ----------
-    lat : float
-        latitude ($^\circ$)
-    lon : float
-        longitude ($^\circ$, optional)
-
-    Returns
-    -------
-    gc : float
-        gravity constant (m/s^2)
-    """
-    gamma = 9.7803267715
-    c1 = 0.0052790414
-    c2 = 0.0000232718
-    c3 = 0.0000001262
-    c4 = 0.0000000007
-    if lon is not None:
-        lon_m, lat_m = np.meshgrid(lon, lat)
-    else:
-        lat_m = lat
-    phi = lat_m*np.pi/180.
-    xx = np.sin(phi)
-    gc = (gamma*(1+c1*np.power(xx, 2)+c2*np.power(xx, 4)+c3*np.power(xx, 6) +
-          c4*np.power(xx, 8)))
-    return gc
-# ---------------------------------------------------------------------
-
-
-def visc_air(T):
-    """ Computes the kinematic viscosity of dry air as a function of air temp.
-    following Andreas (1989), CRREL Report 89-11.
-
-    Parameters
-    ----------
-    Ta : float
-        air temperature ($^\circ$\,C)
-
-    Returns
-    -------
-    visa : float
-        kinematic viscosity (m^2/s)
-    """
-    T = np.asarray(T)
-    if (np.nanmin(T) > 200):  # if Ta in Kelvin convert to Celsius
-        T = T-273.16
-    visa = 1.326e-5*(1+6.542e-3*T+8.301e-6*np.power(T, 2) -
-                     4.84e-9*np.power(T, 3))
-    return visa
