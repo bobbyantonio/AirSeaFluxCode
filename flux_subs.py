@@ -651,10 +651,8 @@ def get_L(L, lat, usr, tsr, qsr, t10n, tv10n, qair, h_in, T, Ta, th, tv, sst,
     ----------
     L : int
         Monin-Obukhov length definition options
-           0 : default for S80, S88, LP82, YT96 and LY04
-           1 : following UA (Zeng et al., 1998), default for UA
-           2 : following ERA5 (IFS Documentation cy46r1), default for ERA5
-           3 : COARE3.5 (Edson et al., 2013), default for C30, C35 and C40
+           "S80"  : default for S80, S88, LP82, YT96 and LY04
+           "ERA5" : following ERA5 (IFS Documentation cy46r1), default for ERA5
     lat : float
         latitude
     usr : float
@@ -702,19 +700,11 @@ def get_L(L, lat, usr, tsr, qsr, t10n, tv10n, qair, h_in, T, Ta, th, tv, sst,
 
     """
     g = gc(lat)
-    if (L == 0):
+    if (L == "S80"):
         tsrv = tsr+0.61*t10n*qsr
         monob = ((tv10n*np.power(usr, 2))/(g*kappa*tsrv))
         monob = np.where(np.fabs(monob) < 1, np.where(monob < 0, -1, 1), monob)
-    elif (L == 1):
-        Rb = g*h_in[0]*dtv/(tv*np.power(wind, 2))
-        zol = np.where(Rb >= 0, Rb*np.log(h_in[0]/zo) /
-                        (1-5*np.where(Rb < 0.19, Rb, 0.19)),
-                        Rb*np.log(h_in[0]/zo))
-        monob = h_in[0]/zol
-        tsrv = tsr*(1.+0.61*qair)+0.61*th*qsr
-        # monob = ((tv*np.power(usr, 2))/(kappa*g*tsrv))
-    elif (L == 2):
+     elif (L == "ERA5"):
         tsrv = tsr+0.61*t10n*qsr
         Rb = ((g*h_in[0]*((2*dt)/(Ta+sst-g*h_in[0])+0.61*dq)) /
               np.power(wind, 2))
@@ -726,11 +716,6 @@ def get_L(L, lat, usr, tsr, qsr, t10n, tv10n, qair, h_in, T, Ta, th, tv, sst,
                    (np.log((h_in[0]+zo)/zot) -
                     psit_calc((h_in[0]+zo)/monob, meth) +
                     psit_calc(zot/monob, meth))))
-        monob = h_in[0]/zol
-    elif (L == 3):
-        tsrv = tsr+0.61*(T+CtoK)*qsr
-        zol = (kappa*g*h_in[0]/(T+CtoK)*(tsr+0.61*(T+CtoK)*qsr) /
-               np.power(usr, 2))
         monob = h_in[0]/zol
     return tsrv, monob
 #------------------------------------------------------------------------------
@@ -784,48 +769,50 @@ def get_strs(h_in, monob, wind, zo, zot, zoq, dt, dq, dter, dqer, ct, cq,
 
     """
     if (meth == "UA"):
-        usr = np.where(h_in[0]/monob < -1.574, kappa*wind /
+        usr = np.where(h_in[0]/monob <= -1.574, kappa*wind /
                        (np.log(-1.574*monob/zo)-psim_calc(-1.574, meth) +
                         psim_calc(zo/monob, meth) +
                         1.14*(np.power(-h_in[0]/monob, 1/3) -
                         np.power(1.574, 1/3))),
-                       np.where((h_in[0]/monob > -1.574) & (h_in[0]/monob < 0),
-                                kappa*wind/(np.log(h_in[0]/zo) -
-                                psim_calc(h_in[0]/monob, meth) +
-                                psim_calc(zo/monob, meth)),
-                                np.where((h_in[0]/monob > 0) &
-                                (h_in[0]/monob < 1),
-                                kappa*wind/(np.log(h_in[0]/zo) +
-                                5*h_in[0]/monob-5*zo/monob),
-                                kappa*wind/(np.log(monob/zo)+5-5*zo/monob +
-                                5*np.log(h_in[0]/monob)+h_in[0]/monob-1))))
+                       np.where(h_in[0]/monob < 0, kappa*wind /
+                                (np.log(h_in[0]/zo) -
+                                 psim_calc(h_in[0]/monob, meth) +
+                                 psim_calc(zo/monob, meth)),
+                                np.where(h_in[0]/monob <= 1, kappa*wind /
+                                         (np.log(h_in[0]/zo) +
+                                          5*h_in[0]/monob-5*zo/monob),
+                                         kappa*wind/(np.log(monob/zo)+5 -
+                                                     5*zo/monob +
+                                                     5*np.log(h_in[0]/monob) +
+                                                     h_in[0]/monob-1))))
                                 # Zeng et al. 1998 (7-10)
         tsr = np.where(h_in[1]/monob < -0.465, kappa*(dt+dter*cskin) /
                        (np.log((-0.465*monob)/zot) -
                         psit_calc(-0.465, meth)+0.8*(np.power(0.465, -1/3) -
                         np.power(-h_in[1]/monob, -1/3))),
-                       np.where((h_in[1]/monob > -0.465) & (h_in[1]/monob < 0),
-                                kappa*(dt+dter*cskin)/(np.log(h_in[1]/zot) -
-                       psit_calc(h_in[1]/monob, meth) +
-                       psit_calc(zot/monob, meth)),
-                        np.where((h_in[1]/monob > 0) & (h_in[1]/monob < 1),
-                                 kappa*(dt+dter*cskin)/(np.log(h_in[1]/zot) +
-                                 5*h_in[1]/monob-5*zot/monob),
-                                 kappa*(dt+dter*cskin)/(np.log(monob/zot)+5 -
-                                 5*zot/monob+5*np.log(h_in[1]/monob) +
-                                 h_in[1]/monob-1))))
+                       np.where(h_in[1]/monob < 0, kappa*(dt+dter*cskin) /
+                                (np.log(h_in[1]/zot) -
+                                 psit_calc(h_in[1]/monob, meth) +
+                                 psit_calc(zot/monob, meth)),
+                                np.where(h_in[1]/monob <= 1,
+                                         kappa*(dt+dter*cskin) /
+                                         (np.log(h_in[1]/zot) +
+                                          5*h_in[1]/monob-5*zot/monob),
+                                         kappa*(dt+dter*cskin) /
+                                         (np.log(monob/zot)+5 -
+                                          5*zot/monob+5*np.log(h_in[1]/monob) +
+                                          h_in[1]/monob-1))))
                                 # Zeng et al. 1998 (11-14)
         qsr = np.where(h_in[2]/monob < -0.465, kappa*(dq+dqer*cskin) /
                        (np.log((-0.465*monob)/zoq) -
                         psit_calc(-0.465, meth)+psit_calc(zoq/monob, meth) +
                         0.8*(np.power(0.465, -1/3) -
                              np.power(-h_in[2]/monob, -1/3))),
-                       np.where((h_in[2]/monob > -0.465) & (h_in[2]/monob < 0),
+                       np.where(h_in[2]/monob < 0,
                                 kappa*(dq+dqer*cskin)/(np.log(h_in[1]/zot) -
                                 psit_calc(h_in[2]/monob, meth) +
                                 psit_calc(zoq/monob, meth)),
-                                np.where((h_in[2]/monob > 0) &
-                                         (h_in[2]/monob<1),
+                                np.where(h_in[2]/monob <= 1,
                                          kappa*(dq+dqer*cskin) /
                                          (np.log(h_in[1]/zoq)+5*h_in[2]/monob -
                                           5*zoq/monob),

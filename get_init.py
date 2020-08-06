@@ -99,11 +99,11 @@ def get_init(spd, T, SST, lat, P, Rl, Rs, cskin, gust, L, tol, meth, qmeth):
     if (np.all(Rs == None) or np.all(np.isnan(Rs))):
         Rs = np.ones(spd.shape)*150  # set to default for COARE3.5
     if ((cskin == None) and (meth == "S80" or meth == "S88" or meth == "LP82"
-                              or meth == "YT96" or meth == "LY04")):
+                             or meth == "YT96" or meth == "UA" or
+                             meth == "LY04")):
         cskin = 0
-    elif ((cskin == None) and (meth == "UA" or meth == "C30"
-                                or meth == "C35" or meth == "C40"
-                                or meth == "ERA5")):
+    elif ((cskin == None) and (meth == "C30" or meth == "C35" or meth == "C40"
+                               or meth == "ERA5")):
         cskin = 1
     if ((gust == None) and (meth == "C30" or meth == "C35" or meth == "C40")):
         gust = [1, 1.2, 600]
@@ -113,17 +113,15 @@ def get_init(spd, T, SST, lat, P, Rl, Rs, cskin, gust, L, tol, meth, qmeth):
         gust = [1, 1.2, 800]
     elif (np.size(gust) < 3):
         sys.exit("gust input must be a 3x1 array")
-    if (L not in [None, 0, 1, 2, 3]):
+    if (L not in [None, "S80", "ERA5"]):
         sys.exit("L input must be either None, 0, 1, 2 or 3")
     if ((L == None) and (meth == "S80" or meth == "S88" or meth == "LP82"
-                              or meth == "YT96" or meth == "LY04")):
-        L = 0
-    elif ((L == None) and (meth == "UA")):
-        L = 1
+                              or meth == "YT96" or meth == "LY04" or
+                              meth == "UA" or meth == "C30" or meth == "C35"
+                              or meth == "C40")):
+        L = "S80"
     elif ((L == None) and (meth == "ERA5")):
-        L = 2
-    elif ((L == None) and (meth == "C30" or meth == "C35" or meth == "C40")):
-        L = 3
+        L = "ERA5"
     if (tol == None):
         tol = ['flux', 0.01, 1, 1]
     elif (tol[0] not in ['flux', 'ref', 'all']):

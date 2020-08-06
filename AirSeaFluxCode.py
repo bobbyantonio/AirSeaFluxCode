@@ -71,10 +71,8 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
             set 1 to keep points
         L : int
            Monin-Obukhov length definition options
-           0 : default for S80, S88, LP82, YT96 and LY04
-           1 : following UA (Zeng et al., 1998), default for UA
-           2 : following ERA5 (IFS Documentation cy46r1), default for ERA5
-           3 : COARE3.5 (Edson et al., 2013), default for C30, C35 and C40
+           "S80"  : default for S80, S88, LP82, YT96 and LY04
+           "ERA5" : following ERA5 (IFS Documentation cy46r1), default for ERA5
     Returns
     -------
         res : array that contains
@@ -113,6 +111,8 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
     """
     logging.basicConfig(filename='flux_calc.log',
                         format='%(asctime)s %(message)s',level=logging.INFO)
+    logging.captureWarnings(True)
+    #  check input values and set defaults where appropriate
     lat, P, Rl, Rs, cskin, gust, tol, L = get_init(spd, T, SST, lat, P, Rl, Rs,
                                                    cskin, gust, L, tol, meth,
                                                    qmeth)
@@ -123,7 +123,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
                  ' Rs: %s | gust: %s | cskin: %s | L : %s', meth,
                  np.nanmedian(lat), np.nanmedian(P), np.nanmedian(Rl),
                  np.nanmedian(Rs), gust, cskin, L)
-    ####
+    #  set up/calculate temperatures and specific humidities
     th = np.where(T < 200, (np.copy(T)+CtoK) *
                   np.power(1000/P,287.1/1004.67),
                   np.copy(T)*np.power(1000/P,287.1/1004.67))  # potential T
@@ -135,9 +135,9 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
                   np.nanmedian(qsea), np.nanmedian(qair))
     if (np.all(np.isnan(qsea)) or np.all(np.isnan(qair))):
         print("qsea and qair cannot be nan")
-    # first guesses
     dt = Ta - sst
     dq = qair - qsea
+    #  first guesses
     t10n, q10n = np.copy(Ta), np.copy(qair)
     tv10n = t10n*(1 + 0.61*q10n)
     #  Zeng et al. 1998
@@ -162,6 +162,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
     Rnl = 0.97*(5.67e-8*np.power(sst-0.3*cskin+CtoK, 4)-Rl)
     dter = np.ones(T.shape)*0.3
     dqer = dter*0.622*lv*qsea/(287.1*np.power(sst, 2))
+    # gustiness adjustment
     if (gust[0] == 1 and meth == "UA"):
         wind = np.where(dtv >= 0, np.where(spd > 0.1, spd, 0.1),
                         np.sqrt(np.power(np.copy(spd), 2)+np.power(0.5, 2)))
@@ -169,6 +170,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
         wind = np.sqrt(np.power(np.copy(spd), 2)+np.power(0.5, 2))
     elif (gust[0] == 0):
         wind = np.copy(spd)
+    # stars and roughness lengths
     usr = np.sqrt(cd*np.power(wind, 2))
     zo = 0.0001*np.ones(spd.shape)
     zot, zoq = 0.0001*np.ones(spd.shape), 0.0001*np.ones(spd.shape)
@@ -177,11 +179,13 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
                                  psit_calc(h_in[1]/monob, meth))
     qsr = (dq+dqer*cskin)*kappa/(np.log(h_in[2]/zoq) -
                                  psit_calc(h_in[2]/monob, meth))
+    # set-up to feed into iteration loop
     it, ind = 0, np.where(spd > 0)
     ii, itera = True, np.zeros(spd.shape)*np.nan
     tau = 0.05*np.ones(spd.shape)
     sensible = 5*np.ones(spd.shape)
     latent = 65*np.ones(spd.shape)
+    #  iteration loop
     while np.any(ii):
         it += 1
         if it > n:
@@ -288,14 +292,14 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
         d = np.fabs(new-old)
         if (tol[0] == 'flux'):
             ind = np.where((d[0, :] > tol[1])+(d[1, :] > tol[2]) +
-                           (d[2, :] > tol[3]))
+                            (d[2, :] > tol[3]))
         elif (tol[0] == 'ref'):
             ind = np.where((d[0, :] > tol[1])+(d[1, :] > tol[2]) +
-                           (d[2, :] > tol[3]))
+                            (d[2, :] > tol[3]))
         elif (tol[0] == 'all'):
             ind = np.where((d[0, :] > tol[1])+(d[1, :] > tol[2]) +
-                           (d[2, :] > tol[3])+(d[3, :] > tol[4]) +
-                           (d[4, :] > tol[5])+(d[5, :] > tol[6]))
+                            (d[2, :] > tol[3])+(d[3, :] > tol[4]) +
+                            (d[4, :] > tol[5])+(d[5, :] > tol[6]))
         if (ind[0].size == 0):
             ii = False
         else:
