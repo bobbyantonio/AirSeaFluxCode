@@ -105,11 +105,11 @@ def get_init(spd, T, SST, lat, P, Rl, Rs, cskin, gust, L, tol, meth, qmeth):
     elif ((cskin == None) and (meth == "C30" or meth == "C35" or meth == "C40"
                                or meth == "ERA5")):
         cskin = 1
-    if ((gust == None) and (meth == "C30" or meth == "C35" or meth == "C40")):
+    if (np.all(gust == None) and (meth == "C30" or meth == "C35" or meth == "C40")):
         gust = [1, 1.2, 600]
-    elif ((gust == None) and (meth == "UA" or meth == "ERA5")):
+    elif (np.all(gust == None) and (meth == "UA" or meth == "ERA5")):
         gust = [1, 1, 1000]
-    elif (gust == None):
+    elif np.all(gust == None):
         gust = [1, 1.2, 800]
     elif (np.size(gust) < 3):
         sys.exit("gust input must be a 3x1 array")
