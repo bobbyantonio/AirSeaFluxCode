@@ -76,6 +76,10 @@ def get_init(spd, T, SST, lat, P, Rl, Rs, cskin, gust, L, tol, meth, qmeth):
     if ((type(spd) != np.ndarray) or (type(T) != np.ndarray) or
          (type(SST) != np.ndarray)):
         sys.exit("input type of spd, T and SST should be numpy.ndarray")
+    elif ((spd.dtype not in ['float64', 'float32']) or
+          (T.dtype not in ['float64', 'float32']) or
+          (SST.dtype not in ['float64', 'float32'])):
+        sys.exit("input dtype of spd, T and SST should be float")
     # if input values are nan break
     if meth not in ["S80", "S88", "LP82", "YT96", "UA", "LY04", "C30", "C35",
                     "C40","ERA5"]:
@@ -111,14 +115,16 @@ def get_init(spd, T, SST, lat, P, Rl, Rs, cskin, gust, L, tol, meth, qmeth):
         gust = [1, 1, 1000]
     elif np.all(gust == None):
         gust = [1, 1.2, 800]
+    elif ((np.size(gust) < 3) and (gust == 0)):
+        gust = [0, 0, 0]
     elif (np.size(gust) < 3):
         sys.exit("gust input must be a 3x1 array")
     if (L not in [None, "S80", "ERA5"]):
         sys.exit("L input must be either None, 0, 1, 2 or 3")
     if ((L == None) and (meth == "S80" or meth == "S88" or meth == "LP82"
-                              or meth == "YT96" or meth == "LY04" or
-                              meth == "UA" or meth == "C30" or meth == "C35"
-                              or meth == "C40")):
+                         or meth == "YT96" or meth == "LY04" or
+                         meth == "UA" or meth == "C30" or meth == "C35"
+                         or meth == "C40")):
         L = "S80"
     elif ((L == None) and (meth == "ERA5")):
         L = "ERA5"

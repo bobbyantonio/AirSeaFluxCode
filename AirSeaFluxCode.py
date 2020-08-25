@@ -304,7 +304,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
             ii = False
         else:
             ii = True
-    itera = np.where(itera > n, -1, itera)
+    itera[ind] = -1
     logging.info('method %s | # of iterations:%s', meth, it)
     logging.info('method %s | # of points that did not converge :%s', meth,
                   ind[0].size)

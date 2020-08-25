@@ -42,7 +42,8 @@ def cdn_calc(u10n, Ta, Tp, lat, meth="S80"):
                        (0.60 + 0.070*u10n)*0.001, (0.61+0.567/u10n)*0.001))
     elif (meth == "LY04"):
         cdn = np.where(u10n >= 0.5,
-                       (0.142+(2.7/u10n)+(u10n/13.09))*0.001, np.nan)
+                       (0.142+(2.7/u10n)+(u10n/13.09))*0.001,
+                       (0.142+(2.7/0.5)+(0.5/13.09))*0.001)
     else:
         print("unknown method cdn: "+meth)
     return cdn
@@ -86,7 +87,7 @@ def cdn_from_roughness(u10n, Ta, Tp, lat, meth="S88"):
             zo = 0.013*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr
         elif (meth == "C30"):
             a = 0.011*np.ones(Ta.shape)
-            a = np.where(u10n > 10, 0.011+(u10n-10)/(18-10)*(0.018-0.011),
+            a = np.where(u10n > 10, 0.011+(u10n-10)*(0.018-0.011)/(18-10),
                          np.where(u10n > 18, 0.018, a))
             zo = a*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr
         elif (meth == "C35"):
@@ -688,8 +689,8 @@ def get_L(L, lat, usr, tsr, qsr, t10n, tv10n, qair, h_in, T, Ta, th, tv, sst,
     monob : float
         Monin-Obukhov length from previous iteration step (m)
     meth : str
-        bulk parameterisation method option: "S80", "S88", "LP82", "YT96", "UA",
-        "LY04", "C30", "C35", "C40", "ERA5"
+        bulk parameterisation method option: "S80", "S88", "LP82", "YT96",
+        "UA", "LY04", "C30", "C35", "C40", "ERA5"
 
     Returns
     -------
@@ -704,7 +705,7 @@ def get_L(L, lat, usr, tsr, qsr, t10n, tv10n, qair, h_in, T, Ta, th, tv, sst,
         tsrv = tsr+0.61*t10n*qsr
         monob = ((tv10n*np.power(usr, 2))/(g*kappa*tsrv))
         monob = np.where(np.fabs(monob) < 1, np.where(monob < 0, -1, 1), monob)
-     elif (L == "ERA5"):
+    elif (L == "ERA5"):
         tsrv = tsr+0.61*t10n*qsr
         Rb = ((g*h_in[0]*((2*dt)/(Ta+sst-g*h_in[0])+0.61*dq)) /
               np.power(wind, 2))
