@@ -53,8 +53,8 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
             "S80","S88","LP82","YT96","UA","LY04","C30","C35","C40","ERA5"
         qmeth : str
             is the saturation evaporation method to use amongst
-            "HylandWexler","Hardy","Preining","Wexler","GoffGratch","CIMO",
-            "MagnusTetens","Buck","Buck2","WMO","WMO2000","Sonntag","Bolton",
+            "HylandWexler","Hardy","Preining","Wexler","GoffGratch","WMO",
+            "MagnusTetens","Buck","Buck2","WMO2018","Sonntag","Bolton",
             "IAPWS","MurphyKoop"]
             default is Buck2
         tol : float
@@ -76,10 +76,10 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
     Returns
     -------
         res : array that contains
-                       1. momentum flux (W/m^2)
+                       1. momentum flux (N/m^2)
                        2. sensible heat (W/m^2)
                        3. latent heat (W/m^2)
-                       4. Monin-Obhukov length (mb)
+                       4. Monin-Obhukov length (m)
                        5. drag coefficient (cd)
                        6. neutral drag coefficient (cdn)
                        7. heat exhange coefficient (ct)
@@ -104,10 +104,15 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
                        26. temperature at reference height (tref)
                        27. specific humidity at reference height (qref)
                        28. number of iterations until convergence
-        ind : int
-            the indices in the matrix for the points that did not converge
-            after the maximum number of iterations
-    The code is based on bform.f and flux_calc.R modified by S. Biri
+                       29. cool-skin temperature depression (dter)
+                       30. cool-skin humidity depression (dqer)
+                       31. specific humidity of air (qair)
+                       32. specific humidity at sea surface (qsea)
+                       33. downward longwave radiation (Rl)
+                       34. downward shortwave radiation (Rs)
+                       35. downward net longwave radiation (Rnl)
+
+    2020 / Author S. Biri
     """
     logging.basicConfig(filename='flux_calc.log',
                         format='%(asctime)s %(message)s',level=logging.INFO)
@@ -135,6 +140,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
                   np.nanmedian(qsea), np.nanmedian(qair))
     if (np.all(np.isnan(qsea)) or np.all(np.isnan(qair))):
         print("qsea and qair cannot be nan")
+    # tlapse = gamma_moist(SST, T, qair/1000) lapse rate can be computed like this
     dt = Ta - sst
     dq = qair - qsea
     #  first guesses
@@ -289,7 +295,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
         elif (tol[0] == 'all'):
             new = np.array([np.copy(u10n), np.copy(t10n), np.copy(q10n),
                             np.copy(tau), np.copy(sensible), np.copy(latent)])
-        d = np.fabs(new-old)
+        d = np.abs(new-old)
         if (tol[0] == 'flux'):
             ind = np.where((d[0, :] > tol[1])+(d[1, :] > tol[2]) +
                             (d[2, :] > tol[3]))
@@ -305,6 +311,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
         else:
             ii = True
     itera[ind] = -1
+    # itera = np.where(itera > n, -1, itera)
     logging.info('method %s | # of iterations:%s', meth, it)
     logging.info('method %s | # of points that did not converge :%s', meth,
                   ind[0].size)

@@ -73,6 +73,7 @@ def get_init(spd, T, SST, lat, P, Rl, Rs, cskin, gust, L, tol, meth, qmeth):
         MO length switch
 
     """
+    # check if input is correct (type, size, value) and set defaults
     if ((type(spd) != np.ndarray) or (type(T) != np.ndarray) or
          (type(SST) != np.ndarray)):
         sys.exit("input type of spd, T and SST should be numpy.ndarray")
@@ -82,11 +83,11 @@ def get_init(spd, T, SST, lat, P, Rl, Rs, cskin, gust, L, tol, meth, qmeth):
         sys.exit("input dtype of spd, T and SST should be float")
     # if input values are nan break
     if meth not in ["S80", "S88", "LP82", "YT96", "UA", "LY04", "C30", "C35",
-                    "C40","ERA5"]:
+                    "C40", "ERA5", "Beljaars"]:
         sys.exit("unknown method")
-    if qmeth not in ["HylandWexler", "Hardy", "Preining", "Wexler", "CIMO",
-                      "GoffGratch", "MagnusTetens", "Buck", "Buck2", "WMO",
-                      "WMO2000", "Sonntag", "Bolton", "IAPWS", "MurphyKoop"]:
+    if qmeth not in ["HylandWexler", "Hardy", "Preining", "Wexler",
+                     "GoffGratch", "WMO", "MagnusTetens", "Buck", "Buck2",
+                     "WMO2018", "Sonntag", "Bolton", "IAPWS", "MurphyKoop"]:
         sys.exit("unknown q-method")
     if (np.all(np.isnan(spd)) or np.all(np.isnan(T)) or np.all(np.isnan(SST))):
         sys.exit("input wind, T or SST is empty")
@@ -107,11 +108,13 @@ def get_init(spd, T, SST, lat, P, Rl, Rs, cskin, gust, L, tol, meth, qmeth):
                              meth == "LY04")):
         cskin = 0
     elif ((cskin == None) and (meth == "C30" or meth == "C35" or meth == "C40"
-                               or meth == "ERA5")):
+                               or meth == "ERA5" or meth == "Beljaars")):
         cskin = 1
-    if (np.all(gust == None) and (meth == "C30" or meth == "C35" or meth == "C40")):
+    if (np.all(gust == None) and (meth == "C30" or meth == "C35" or
+                                  meth == "C40")):
         gust = [1, 1.2, 600]
-    elif (np.all(gust == None) and (meth == "UA" or meth == "ERA5")):
+    elif (np.all(gust == None) and (meth == "UA" or meth == "ERA5" or
+                                    meth == "Beljaars")):
         gust = [1, 1, 1000]
     elif np.all(gust == None):
         gust = [1, 1.2, 800]
@@ -124,7 +127,7 @@ def get_init(spd, T, SST, lat, P, Rl, Rs, cskin, gust, L, tol, meth, qmeth):
     if ((L == None) and (meth == "S80" or meth == "S88" or meth == "LP82"
                          or meth == "YT96" or meth == "LY04" or
                          meth == "UA" or meth == "C30" or meth == "C35"
-                         or meth == "C40")):
+                         or meth == "C40" or meth == "Beljaars")):
         L = "S80"
     elif ((L == None) and (meth == "ERA5")):
         L = "ERA5"

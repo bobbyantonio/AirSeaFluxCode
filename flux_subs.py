@@ -32,7 +32,7 @@ def cdn_calc(u10n, Ta, Tp, lat, meth="S80"):
                        np.where((u10n <= 25) & (u10n >= 11),
                        (0.49+0.065*u10n)*0.001, 1.14*0.001))
     elif (meth == "S88" or meth == "UA" or meth == "ERA5" or meth == "C30" or
-          meth == "C35" or meth == "C40"):
+          meth == "C35" or meth == "C40" or meth == "Beljaars"):
         cdn = cdn_from_roughness(u10n, Ta, None, lat, meth)
     elif (meth == "YT96"):
         # for u<3 same as S80
@@ -101,7 +101,7 @@ def cdn_from_roughness(u10n, Ta, Tp, lat, meth="S88"):
             a = 0.011*np.ones(Ta.shape)
             a = np.where(u10n > 22, 0.0016*22-0.0035, 0.0016*u10n-0.0035)
             zo = a*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr # surface roughness
-        elif (meth == "ERA5"):
+        elif ((meth == "ERA5" or meth == "Beljaars")):
             # eq. (3.26) p.38 over sea IFS Documentation cy46r1
             zo = 0.018*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr
         else:
@@ -209,7 +209,7 @@ def ctcqn_calc(zol, cdn, u10n, zo, Ta, meth="S80"):
 #                       5e-5/np.power(rr, 0.6))  # moisture roughness as in C30
         cqn = kappa**2/np.log(10/zo)/np.log(10/zoq)
         ctn = kappa**2/np.log(10/zo)/np.log(10/zot)
-    elif (meth == "ERA5"):
+    elif (meth == "ERA5" or meth == "Beljaars"):
         # eq. (3.26) p.38 over sea IFS Documentation cy46r1
         usr = np.sqrt(cdn*np.power(u10n, 2))
         zot = 0.40*visc_air(Ta)/usr
@@ -274,8 +274,8 @@ def get_stabco(meth="S80"):
     """
     alpha, beta, gamma = 0, 0, 0
     if (meth == "S80" or meth == "S88" or meth == "LY04" or
-        meth == "UA" or meth == "ERA5" or meth == "C30" or meth == "C35" or
-        meth == "C40"):
+        meth == "UA" or meth == "ERA5" or meth == "C30" or
+        meth == "C35" or meth == "C40" or meth == "Beljaars"):
         alpha, beta, gamma = 16, 0.25, 5  # Smith 1980, from Dyer (1974)
     elif (meth == "LP82"):
         alpha, beta, gamma = 16, 0.25, 7
@@ -308,6 +308,8 @@ def psim_calc(zol, meth="S80"):
         psim = psim_era5(zol)
     elif (meth == "C30" or meth == "C35" or meth == "C40"):
         psim = psiu_26(zol, meth)
+    elif (meth == "Beljaars"): # Beljaars (1997) eq. 16, 17
+        psim = np.where(zol < 0, psim_conv(zol, meth), psi_Bel(zol))
     else:
         psim = np.where(zol < 0, psim_conv(zol, meth),
                         psim_stab(zol, meth))
@@ -334,10 +336,32 @@ def psit_calc(zol, meth="S80"):
                         psi_era5(zol))
     elif (meth == "C30" or meth == "C35" or meth == "C40"):
         psit = psit_26(zol)
+    elif (meth == "Beljaars"): # Beljaars (1997) eq. 16, 17
+        psit = np.where(zol < 0, psi_conv(zol, meth), psi_Bel(zol))
     else:
         psit = np.where(zol < 0, psi_conv(zol, meth),
                         psi_stab(zol, meth))
     return psit
+# ---------------------------------------------------------------------
+
+
+def psi_Bel(zol):
+    """ Calculates momentum/heat stability function
+
+    Parameters
+    ----------
+    zol : float
+        height over MO length
+    meth : str
+        parameterisation method
+
+    Returns
+    -------
+    psit : float
+    """
+    a, b, c, d = 0.7, 0.75, 5, 0.35
+    psi = -(a*zol+b*(zol-c/d)*np.exp(-d*zol)+b*c/d)
+    return psi
 # ---------------------------------------------------------------------
 
 
@@ -578,8 +602,11 @@ def get_skin(sst, qsea, rho, Rl, Rs, Rnl, cp, lv, tkt, usr, tsr, qsr, lat):
     Returns
     -------
     dter : float
+       cool-skin temperature depression
     dqer : float
-
+       cool-skin humidity depression
+    tkt  : float
+       cool skin thickness
     """
     # coded following Saunders (1967) with lambda = 6
     g = gc(lat, None)
@@ -717,7 +744,7 @@ def get_L(L, lat, usr, tsr, qsr, t10n, tv10n, qair, h_in, T, Ta, th, tv, sst,
                    (np.log((h_in[0]+zo)/zot) -
                     psit_calc((h_in[0]+zo)/monob, meth) +
                     psit_calc(zot/monob, meth))))
-        monob = h_in[0]/zol
+        monob = h_in[0]/zol        
     return tsrv, monob
 #------------------------------------------------------------------------------
 

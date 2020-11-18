@@ -24,19 +24,16 @@ def VaporPressure(temp, P, phase, meth):
         'ice' : Calculate vapor pressure over ice
     meth : str
         formula to be used
-        MartiMauersberger   : vaporpressure formula from Marti Mauersberger
+        Hardy               : vaporpressure formula from Hardy (1998)
         MagnusTetens        : vaporpressure formula from Magnus Tetens
         GoffGratch          : vaporpressure formula from Goff Gratch
-        Buck_original       : vaporpressure formula from Buck (original)
-        Buck_manual         : vaporpressure formula from the Buck manual
-        CIMO                : vaporpressure formula recommended by CIMO
-        Vaisala             : vaporpressure formula from Vaisala
-        WMO_Goff            : vaporpressure formula from WMO, which should have been Goff
-        WMO2000             : vaporpressure formula from WMO (2000) containing a typo
+        Buck                : vaporpressure formula from Buck (1981)
+        Buck2               : vaporpressure formula from the Buck (2012)
+        WMO                 : vaporpressure formula from WMO (1988)
+        WMO2018             : vaporpressure formula from WMO (2018)
         Wexler              : vaporpressure formula from Wexler (1976)
         Sonntag             : vaporpressure formula from Sonntag (1994)
         Bolton              : vaporpressure formula from Bolton (1980)
-        Fukuta              : vaporpressure formula from Fukuta (2003)
         HylandWexler        : vaporpressure formula from Hyland and Wexler (1983)
         IAPWS               : vaporpressure formula from IAPWS (2002)
         Preining            : vaporpressure formula from Preining (2002)
@@ -111,12 +108,6 @@ def VaporPressure(temp, P, phase, meth):
                             1.3816e-7*(np.power(10, 11.344*(1-T/Ts))-1) +
                             8.1328e-3*(np.power(10, -3.49149*(Ts/T-1))-1) +
                             np.log10(ews))
-        if (meth == 'CIMO'):
-            """Source: Annex 4B, Guide to Meteorological Instruments and
-            Methods of Observation, WMO Publication No 8, 7th edition, Geneva,
-            2008. (CIMO Guide)"""
-            Psat = (6.112*np.exp(17.62*temp/(243.12+temp)) *
-                    (1.0016+3.15e-6*P-0.074/P))
         if (meth == 'MagnusTetens'):
             """Source: Murray, F. W., On the computation of \
                          saturation vapor pressure, J. Appl. Meteorol., \
@@ -134,7 +125,7 @@ def VaporPressure(temp, P, phase, meth):
         if (meth == 'Buck2'):
             """Bucks vapor pressure formulation based on Tetens formula.
             Source: Buck Research, Model CR-1A Hygrometer Operating Manual,
-            Sep 2001"""
+            May 2012"""
             Psat = (6.1121*np.exp((18.678-(temp)/234.5)*(temp)/(257.14+temp)) *
                     (1+1e-4*(7.2+P*(0.0320)+5.9e-6*np.power(T, 2))))
         if (meth == 'WMO'):
@@ -147,18 +138,12 @@ def VaporPressure(temp, P, phase, meth):
             Ts = 273.16  # triple point temperature in K
             Psat = np.power(10, 10.79574*(1-Ts/T)-5.028*np.log10(T/Ts) +
                             1.50475e-4*(1-np.power(10, -8.2969*(T/Ts-1))) +
-                            0.42873e-3*(np.power(10, -4.76955*(1-Ts/T))-1) +
+                            0.42873e-3*(np.power(10, 4.76955*(1-Ts/T))-1) +  # in eq. 13 is -4.76955; in aerobulk is like this
                             0.78614)
-        if (meth == 'WMO2000'):
-            """WMO formulation, which is very similar to Goff & Gratch.
-            Source : WMO technical regulations, WMO-NO 49, Vol I, General
-            Meteorological Standards and Recommended Practices, App. A,
-            Corrigendum Aug 2000."""
-            Ts = 273.16  # triple point temperature in K
-            Psat = np.power(10, 10.79574*(1-Ts/T)-5.028*np.log10(T/Ts) +
-                            1.50475e-4*(1-np.power(10, -8.2969*(T/Ts-1))) +
-                            0.42873e-3*(np.power(10, -4.76955*(1.-Ts/T))-1) +
-                            0.78614)
+        if (meth == 'WMO2018'):
+            """WMO 2018 edition. Annex 4.B, eq. 4.B.1, 4.B.2, 4.B.5 """
+            Psat = 6.112*np.exp(17.62*temp/(243.12+temp))*(1.0016+3.15e-6*P -
+                                                           0.074/P)
         if (meth == 'Sonntag'):
             """Source: Sonntag, D., Advancements in the field of hygrometry,
             Meteorol. Z., N. F., 3, 51-66, 1994."""
@@ -412,4 +397,39 @@ def get_hum(hum, T, sst, P, qmeth):
         qair = qsat_air(T, P, RH, qmeth)/1000  # q of air (g/kg)
         qsea = qsat_sea(sst, P, qmeth)/1000    # surface water q (g/kg)
     return qair, qsea
+#------------------------------------------------------------------------------
+
+
+def gamma_moist(sst, t, q):
+    """
+    Computes the moist adiabatic lapse-rate
+
+    Parameters
+    ----------
+    sst : float
+        sea surface temperature [K]
+    t : float
+        air temperature [K]
+    q : float
+        specific humidity of air [kg/kg]
+
+    Returns
+    -------
+    gamma : float
+        lapse rate [K/m]
+
+    """
+    if (np.nanmin(sst) < 200):  # if sst in Celsius convert to Kelvin
+        sst = sst+CtoK
+    if (np.nanmin(t) < 200):  # if sst in Celsius convert to Kelvin
+        t = t+CtoK
+
+    t = np.maximum(t, 180)
+    q = np.maximum(q,  1e-6)
+    w = q/(1-q) # mixing ratio w = q/(1-q)
+    iRT = 1/(287.05*t)
+    # latent heat of vaporization of water as a function of temperature
+    lv = (2.501-0.00237*(sst-CtoK))*1e6
+    gamma = 9.8*(1+lv*w*iRT)/(1005+np.power(lv, 2)*w*(287.05/461.495)*iRT/t)
+    return gamma
 #------------------------------------------------------------------------------
