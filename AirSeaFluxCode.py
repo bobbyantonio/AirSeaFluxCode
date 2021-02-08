@@ -1,17 +1,20 @@
 import numpy as np
 import logging
 from get_init import get_init
-from hum_subs import (get_hum)
+from hum_subs import (get_hum, gamma_moist)
 from util_subs import (kappa, CtoK, get_heights)
-from flux_subs import (get_skin, get_gust, get_L, get_strs, psim_calc,
+from flux_subs import (cs_C35, cs_Beljaars, cs_ecmwf, wl_ecmwf,
+                       get_gust, get_L, get_strs, psim_calc,
                        psit_calc, cdn_calc, cd_calc, ctcq_calc, ctcqn_calc)
 
 
-def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
-                   hin=18, hout=10, Rl=None, Rs=None, cskin=None,
-                   gust=None, meth="S80", qmeth="Buck2", tol=None, n=10,
-                   out=0, L=None):
-    """ Calculates momentum and heat fluxes using different parameterizations
+
+def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
+                   Rl=None, Rs=None, cskin=None, skin="C35", wl=0, gust=None,
+                   meth="S80", qmeth="Buck2", tol=None, n=10, out=0, L=None):
+    """
+    Calculates turbulent surface fluxes using different parameterizations
+    Calculates height adjusted values for spd, T, q
 
     Parameters
     ----------
@@ -42,15 +45,20 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
         cskin : int
             0 switch cool skin adjustment off, else 1
             default is 1
+        skin : str
+            cool skin method option "C35", "ecmwf" or "Beljaars"
+        wl : int
+            warm layer correction default is 0, to switch on set to 1
         gust : int
             3x1 [x, beta, zi] x=1 to include the effect of gustiness, else 0
             beta gustiness parameter, beta=1 for UA, beta=1.2 for COARE
-            zi PBL height (m) 600 for COARE, 1000 for UA and ERA5, 800 default
+            zi PBL height (m) 600 for COARE, 1000 for UA and ecmwf, 800 default
             default for COARE [1, 1.2, 600]
-            default for UA, ERA5 [1, 1, 1000]
+            default for UA, ecmwf [1, 1, 1000]
             default else [1, 1.2, 800]
         meth : str
-            "S80","S88","LP82","YT96","UA","LY04","C30","C35","C40","ERA5"
+            "S80", "S88", "LP82", "YT96", "UA", "LY04", "C30", "C35", "C40",
+            "ecmwf", "Beljaars"
         qmeth : str
             is the saturation evaporation method to use amongst
             "HylandWexler","Hardy","Preining","Wexler","GoffGratch","WMO",
@@ -62,24 +70,25 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
            option : 'flux' to set tolerance limits for fluxes only lim1-3
            option : 'ref' to set tolerance limits for height adjustment lim-1-3
            option : 'all' to set tolerance limits for both fluxes and height
-                    adjustment lim1-6 ['all', 0.01, 0.01, 5e-05, 0.01, 1, 1]
-           default is tol=['flux', 0.01, 1, 1]
+                    adjustment lim1-6 ['all', 0.01, 0.01, 5e-05, 1e-3, 0.1, 0.1]
+           default is tol=['flux', 1e-3, 0.1, 0.1]
         n : int
             number of iterations (defautl = 10)
         out : int
             set 0 to set points that have not converged to missing (default)
             set 1 to keep points
-        L : int
+        L : str
            Monin-Obukhov length definition options
            "S80"  : default for S80, S88, LP82, YT96 and LY04
-           "ERA5" : following ERA5 (IFS Documentation cy46r1), default for ERA5
+           "ecmwf" : following ecmwf (IFS Documentation cy46r1), default for
+           ecmwf
     Returns
     -------
         res : array that contains
                        1. momentum flux (N/m^2)
                        2. sensible heat (W/m^2)
                        3. latent heat (W/m^2)
-                       4. Monin-Obhukov length (m)
+                       4. Monin-Obhukov length (mb)
                        5. drag coefficient (cd)
                        6. neutral drag coefficient (cdn)
                        7. heat exhange coefficient (ct)
@@ -106,22 +115,24 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
                        28. number of iterations until convergence
                        29. cool-skin temperature depression (dter)
                        30. cool-skin humidity depression (dqer)
-                       31. specific humidity of air (qair)
-                       32. specific humidity at sea surface (qsea)
-                       33. downward longwave radiation (Rl)
-                       34. downward shortwave radiation (Rs)
-                       35. downward net longwave radiation (Rnl)
+                       31. warm layer correction (dtwl)
+                       32. specific humidity of air (qair)
+                       33. specific humidity at sea surface (qsea)
+                       34. downward longwave radiation (Rl)
+                       35. downward shortwave radiation (Rs)
+                       36. downward net longwave radiation (Rnl)
 
-    2020 / Author S. Biri
+    2021 / Author S. Biri
     """
     logging.basicConfig(filename='flux_calc.log',
                         format='%(asctime)s %(message)s',level=logging.INFO)
     logging.captureWarnings(True)
     #  check input values and set defaults where appropriate
-    lat, P, Rl, Rs, cskin, gust, tol, L = get_init(spd, T, SST, lat, P, Rl, Rs,
-                                                   cskin, gust, L, tol, meth,
-                                                   qmeth)
-    ref_ht, tlapse = 10, 0.0098        # reference height, lapse rate
+    lat, P, Rl, Rs, cskin, skin, wl, gust, tol, L = get_init(spd, T, SST, lat,
+                                                              P, Rl, Rs, cskin,
+                                                              skin, wl, gust, L,
+                                                              tol, meth, qmeth)
+    ref_ht = 10        # reference height
     h_in = get_heights(hin, len(spd))  # heights of input measurements/fields
     h_out = get_heights(hout, 1)       # desired height of output variables
     logging.info('method %s, inputs: lat: %s | P: %s | Rl: %s |'
@@ -132,20 +143,22 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
     th = np.where(T < 200, (np.copy(T)+CtoK) *
                   np.power(1000/P,287.1/1004.67),
                   np.copy(T)*np.power(1000/P,287.1/1004.67))  # potential T
-    Ta = np.where(T < 200, np.copy(T)+CtoK+tlapse*h_in[1],
-                  np.copy(T)+tlapse*h_in[1])  # convert to Kelvin if needed
     sst = np.where(SST < 200, np.copy(SST)+CtoK, np.copy(SST))
     qair, qsea = get_hum(hum, T, sst, P, qmeth)
+    #lapse rate
+    tlapse = gamma_moist(SST, T, qair/1000)
+    Ta = np.where(T < 200, np.copy(T)+CtoK+tlapse*h_in[1],
+                  np.copy(T)+tlapse*h_in[1])  # convert to Kelvin if needed
     logging.info('method %s and q method %s | qsea:%s, qair:%s', meth, qmeth,
                   np.nanmedian(qsea), np.nanmedian(qair))
     if (np.all(np.isnan(qsea)) or np.all(np.isnan(qair))):
         print("qsea and qair cannot be nan")
-    # tlapse = gamma_moist(SST, T, qair/1000) lapse rate can be computed like this
+
     dt = Ta - sst
     dq = qair - qsea
     #  first guesses
     t10n, q10n = np.copy(Ta), np.copy(qair)
-    tv10n = t10n*(1 + 0.61*q10n)
+    tv10n = t10n*(1+0.61*q10n)
     #  Zeng et al. 1998
     tv=th*(1.+0.61*qair)   # virtual potential T
     dtv=dt*(1.+0.61*qair)+0.61*th*dq
@@ -154,7 +167,6 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
     lv = (2.501-0.00237*(sst-CtoK))*1e6
     cp = 1004.67*(1 + 0.00084*qsea)
     u10n = np.copy(spd)
-    monob = -100*np.ones(spd.shape)
     cdn = cdn_calc(u10n, Ta, None, lat, meth)
     ctn, ct, cqn, cq = (np.zeros(spd.shape)*np.nan, np.zeros(spd.shape)*np.nan,
                         np.zeros(spd.shape)*np.nan, np.zeros(spd.shape)*np.nan)
@@ -165,9 +177,12 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
     qsr = np.zeros(spd.shape)
     # cskin parameters
     tkt = 0.001*np.ones(T.shape)
-    Rnl = 0.97*(5.67e-8*np.power(sst-0.3*cskin+CtoK, 4)-Rl)
     dter = np.ones(T.shape)*0.3
     dqer = dter*0.622*lv*qsea/(287.1*np.power(sst, 2))
+    Rnl = 0.97*(5.67e-8*np.power(sst-0.3*cskin, 4)-Rl)
+    Qs = 0.945*Rs
+    dtwl = np.ones(T.shape)*0.3
+    skt = np.copy(sst)
     # gustiness adjustment
     if (gust[0] == 1 and meth == "UA"):
         wind = np.where(dtv >= 0, np.where(spd > 0.1, spd, 0.1),
@@ -181,8 +196,8 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
     zo = 0.0001*np.ones(spd.shape)
     zot, zoq = 0.0001*np.ones(spd.shape), 0.0001*np.ones(spd.shape)
     monob = -100*np.ones(spd.shape)  # Monin-Obukhov length
-    tsr = (dt+dter*cskin)*kappa/(np.log(h_in[1]/zot) -
-                                 psit_calc(h_in[1]/monob, meth))
+    tsr = (dt+dter*cskin-dtwl*wl)*kappa/(np.log(h_in[1]/zot) -
+                                         psit_calc(h_in[1]/monob, meth))
     qsr = (dq+dqer*cskin)*kappa/(np.log(h_in[2]/zoq) -
                                  psit_calc(h_in[2]/monob, meth))
     # set-up to feed into iteration loop
@@ -224,16 +239,66 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
         usr[ind], tsr[ind], qsr[ind] = get_strs(h_in[:, ind], monob[ind],
                                                 wind[ind], zo[ind], zot[ind],
                                                 zoq[ind], dt[ind], dq[ind],
-                                                dter[ind], dqer[ind], ct[ind],
-                                                cq[ind], cskin, meth)
-        if (cskin == 1):
-            dter[ind], dqer[ind], tkt[ind] = get_skin(sst[ind], qsea[ind],
-                                                      rho[ind], Rl[ind],
-                                                      Rs[ind], Rnl[ind],
-                                                      cp[ind], lv[ind],
-                                                      np.copy(tkt[ind]),
-                                                      usr[ind], tsr[ind],
-                                                      qsr[ind], lat[ind])
+                                                dter[ind], dqer[ind], dtwl[ind],
+                                                ct[ind], cq[ind], cskin, wl,
+                                                meth)
+        if ((cskin == 1) and (wl == 0)):
+            if (skin == "C35"):
+                dter[ind], dqer[ind], tkt[ind] = cs_C35(sst[ind], qsea[ind],
+                                                        rho[ind], Rs[ind],
+                                                        Rnl[ind],
+                                                        cp[ind], lv[ind],
+                                                        np.copy(tkt[ind]),
+                                                        usr[ind], tsr[ind],
+                                                        qsr[ind], lat[ind])
+            elif (skin == "ecmwf"):
+                dter[ind] = cs_ecmwf(rho[ind], Rs[ind], Rnl[ind], cp[ind],
+                                     lv[ind], usr[ind], tsr[ind], qsr[ind],
+                                     sst[ind], lat[ind])
+                dqer[ind] = (dter[ind]*0.622*lv[ind]*qsea[ind] /
+                             (287.1*np.power(sst[ind], 2)))
+            elif (skin == "Beljaars"):
+                Qs[ind], dter[ind] = cs_Beljaars(rho[ind], Rs[ind], Rnl[ind],
+                                                 cp[ind], lv[ind], usr[ind],
+                                                 tsr[ind], qsr[ind], lat[ind],
+                                                 np.copy(Qs[ind]))
+                dqer = dter*0.622*lv*qsea/(287.1*np.power(sst, 2))
+        elif ((cskin == 1) and (wl == 1)):
+            if (skin == "C35"):
+                dter[ind], dqer[ind], tkt[ind] = cs_C35(sst[ind], qsea[ind],
+                                                        rho[ind], Rs[ind],
+                                                        Rnl[ind],
+                                                        cp[ind], lv[ind],
+                                                        np.copy(tkt[ind]),
+                                                        usr[ind], tsr[ind],
+                                                        qsr[ind], lat[ind])
+                dtwl[ind] = wl_ecmwf(rho[ind], Rs[ind], Rnl[ind], cp[ind],
+                                     lv[ind], usr[ind], tsr[ind], qsr[ind],
+                                     np.copy(sst[ind]), np.copy(skt[ind]),
+                                     np.copy(dter[ind]), lat[ind])
+                skt = np.copy(sst)-dter+dtwl
+            elif (skin == "ecmwf"):
+                dter[ind] = cs_ecmwf(rho[ind], Rs[ind], Rnl[ind], cp[ind],
+                                     lv[ind], usr[ind], tsr[ind], qsr[ind],
+                                     sst[ind], lat[ind])
+                dtwl[ind] = wl_ecmwf(rho[ind], Rs[ind], Rnl[ind], cp[ind],
+                                     lv[ind], usr[ind], tsr[ind], qsr[ind],
+                                     np.copy(sst[ind]), np.copy(skt[ind]),
+                                     np.copy(dter[ind]), lat[ind])
+                skt = np.copy(sst)-dter+dtwl
+                dqer[ind] = (dter[ind]*0.622*lv[ind]*qsea[ind] /
+                             (287.1*np.power(skt[ind], 2)))
+            elif (skin == "Beljaars"):
+                Qs[ind], dter[ind] = cs_Beljaars(rho[ind], Rs[ind], Rnl[ind],
+                                                 cp[ind], lv[ind], usr[ind],
+                                                 tsr[ind], qsr[ind], lat[ind],
+                                                 np.copy(Qs[ind]))
+                dtwl[ind] = wl_ecmwf(rho[ind], Rs[ind], Rnl[ind], cp[ind],
+                                     lv[ind], usr[ind], tsr[ind], qsr[ind],
+                                     np.copy(sst[ind]), np.copy(skt[ind]),
+                                     np.copy(dter[ind]), lat[ind])
+                skt = np.copy(sst)-dter+dtwl
+                dqer = dter*0.622*lv*qsea/(287.1*np.power(skt, 2))
         else:
            dter[ind] = np.zeros(sst[ind].shape)
            dqer[ind] = np.zeros(sst[ind].shape)
@@ -244,19 +309,18 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
                      np.nanmedian(tkt), np.nanmedian(Rnl),
                      np.nanmedian(usr), np.nanmedian(tsr),
                      np.nanmedian(qsr))
-        Rnl[ind] = 0.97*(5.67e-8*np.power(sst[ind]-CtoK -
-                          dter[ind]*cskin+CtoK, 4)-Rl[ind])
+        Rnl[ind] = 0.97*(5.67e-8*np.power(sst[ind] -
+                          dter[ind]*cskin, 4)-Rl[ind])
         t10n[ind] = (Ta[ind] -
                      tsr[ind]/kappa*(np.log(h_in[1, ind]/ref_ht)-psit[ind]))
         q10n[ind] = (qair[ind] -
                      qsr[ind]/kappa*(np.log(h_in[2, ind]/ref_ht)-psiq[ind]))
         tv10n[ind] = t10n[ind]*(1+0.61*q10n[ind])
         tsrv[ind], monob[ind] = get_L(L, lat[ind], usr[ind], tsr[ind],
-                                      qsr[ind], t10n[ind], tv10n[ind],
-                                      qair[ind], h_in[:, ind], T[ind], Ta[ind],
-                                      th[ind], tv[ind], sst[ind], dt[ind],
-                                      dtv[ind], dq[ind], zo[ind], wind[ind],
-                                      np.copy(monob[ind]), meth)
+                                      qsr[ind], t10n[ind], h_in[:, ind],
+                                      Ta[ind], sst[ind],
+                                      qair[ind], qsea[ind], q10n[ind],
+                                      wind[ind], np.copy(monob[ind]), meth)
         psim[ind] = psim_calc(h_in[0, ind]/monob[ind], meth)
         psit[ind] = psit_calc(h_in[1, ind]/monob[ind], meth)
         psiq[ind] = psit_calc(h_in[2, ind]/monob[ind], meth)
@@ -328,7 +392,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
     tref = tref-(273.16+tlapse*h_out[1])
     qref = (qair-qsr/kappa*(np.log(h_in[2]/h_out[2]) -
             psit+psit_calc(h_out[2]/monob, meth)))
-    res = np.zeros((35, len(spd)))
+    res = np.zeros((36, len(spd)))
     res[0][:] = tau
     res[1][:] = sensible
     res[2][:] = latent
@@ -359,11 +423,12 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None,
     res[27][:] = itera
     res[28][:] = dter
     res[29][:] = dqer
-    res[30][:] = qair
-    res[31][:] = qsea
-    res[32][:] = Rl
-    res[33][:] = Rs
-    res[34][:] = Rnl
+    res[30][:] = dtwl
+    res[31][:] = qair
+    res[32][:] = qsea
+    res[33][:] = Rl
+    res[34][:] = Rs
+    res[35][:] = Rnl
 
     if (out == 0):
         res[:, ind] = np.nan
