@@ -2,8 +2,8 @@
 example of running AirSeaFluxCode with
 1. R/V data (data_all.nc) or
 2. one day era5 hourly data (era5_r360x180.nc)
-computes fluxes
-outputs NetCDF4
+compute fluxes
+output NetCDF4
 and statistics in stats.txt
 
 @author: sbiri
@@ -24,6 +24,34 @@ def reject_outliers(data, m=2):
 
 
 def run_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
+    """
+
+
+    Parameters
+    ----------
+    inF : str
+        input filename either data_all.nc or era5_r360x180.nc
+    outF : str
+        output filename
+    gustIn : float
+        gustiness option e.g. [1, 1.2, 800]
+    cskinIn : int
+        cool skin option input 0 or 1
+    tolIn : float
+        tolerance input option e.g. ['all', 0.01, 0.01, 5e-05, 0.01, 1, 1]
+    meth : str
+        parametrisation method option
+
+    Returns
+    -------
+    res : float
+        AirSeaFluxCode output
+    lon : float
+        longitude from input netCDF file
+    lat : float
+        latitude from input netCDF file
+
+    """
     if (inF == "data_all.nc"):
         #%% load data_all
         fid=nc.Dataset('data_all.nc')
@@ -33,7 +61,6 @@ def run_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
         spd = np.array(fid.variables["spd"])
         t = np.array(fid.variables["t"])
         sst = np.array(fid.variables["sst"])
-        lat = np.array(fid.variables["lat"])
         rh = np.array(fid.variables["rh"])
         p = np.array(fid.variables["p"])
         sw = np.array(fid.variables["sw"])
@@ -46,7 +73,7 @@ def run_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
         #%% run AirSeaFluxCode
         res = AirSeaFluxCode(spd, t, sst, lat=lat, hum=['rh', rh], P=p,
                              hin=hin, Rs=sw, tol=tolIn, gust=gustIn,
-                             cskin=cskinIn, meth=meth, out=1, L="ERA5", n=30)
+                             cskin=cskinIn, meth=meth, out=1, L="ecmwf", n=30)
         #%% save NetCDF4
         fid = nc.Dataset(outF,'w', format='NETCDF4')
         fid.createDimension('lon', len(lon))
@@ -85,6 +112,7 @@ def run_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
         itera = fid.createVariable('iter', 'i4', 'time')
         dter = fid.createVariable('dter', 'f4', 'time')
         dqer = fid.createVariable('dqer', 'f4', 'time')
+        dtwl = fid.createVariable('dter', 'f4', 'time')
         qair = fid.createVariable('qair', 'f4', 'time')
         qsea = fid.createVariable('qsea', 'f4', 'time')
         Rl = fid.createVariable('Rl', 'f4', 'time')
@@ -124,11 +152,12 @@ def run_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
         itera[:] = res[27]
         dter[:] = res[28]
         dqer[:] = res[29]
-        qair[:] = res[30]
-        qsea[:] = res[31]
-        Rl = res[32]
-        Rs = res[33]
-        Rnl = res[34]
+        dtwl[:] = res[30]
+        qair[:] = res[31]
+        qsea[:] = res[32]
+        Rl = res[33]
+        Rs = res[34]
+        Rnl = res[35]
         longitude.long_name = 'Longitude'
         longitude.units = 'degrees East'
         latitude.long_name = 'Latitude'
@@ -221,7 +250,7 @@ def run_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
         hin = np.array([10, 2, 2])
         latIn = np.tile(lat, (len(lon), 1)).T.reshape(len(lon)*len(lat))
         #%% run AirSeaFluxCode
-        res = np.zeros((len(tim),len(lon)*len(lat), 35))
+        res = np.zeros((len(tim),len(lon)*len(lat), 36))
         # reshape input and run code
         for x in range(len(tim)):
             a = AirSeaFluxCode(spd.reshape(len(tim), len(lon)*len(lat))[x, :],
@@ -234,7 +263,7 @@ def run_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
                                Rs=sw.reshape(len(tim), len(lon)*len(lat))[x, :],
                                Rl=lw.reshape(len(tim), len(lon)*len(lat))[x, :],
                                gust=gustIn, cskin=cskinIn, tol=tolIn, qmeth='WMO',
-                               meth=meth, n=30, L="ERA5")
+                               meth=meth, n=30, L="ecmwf")
             res[x, :, :] = a.T
             del a
         #%% save NetCDF4
@@ -275,6 +304,7 @@ def run_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
         itera = fid.createVariable('iter', 'i4', ('time','lat','lon'))
         dter = fid.createVariable('dter', 'f4', ('time','lat','lon'))
         dqer = fid.createVariable('dqer', 'f4', ('time','lat','lon'))
+        dtwl = fid.createVariable('dtwl', 'f4', ('time','lat','lon'))
         qair = fid.createVariable('qair', 'f4', ('time','lat','lon'))
         qsea = fid.createVariable('qsea', 'f4', ('time','lat','lon'))
         Rl = fid.createVariable('Rl', 'f4', ('time','lat','lon'))
@@ -313,12 +343,13 @@ def run_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
         qrefs[:] = res[:, :, 26].reshape((len(tim), len(lat), len(lon)))*lsm
         itera[:] = res[:, :, 27].reshape((len(tim), len(lat), len(lon)))*lsm
         dter[:] = res[:, :, 28].reshape((len(tim), len(lat), len(lon)))*lsm
-        dqer[:] = res[:, :, 29].reshape((len(tim), len(lat), len(lon)))*lsm
-        qair[:] = res[:, :, 30].reshape((len(tim), len(lat), len(lon)))*lsm
-        qsea[:] = res[:, :, 31].reshape((len(tim), len(lat), len(lon)))*lsm
-        Rl = res[:, :, 32].reshape((len(tim), len(lat), len(lon)))
-        Rs = res[:, :, 33].reshape((len(tim), len(lat), len(lon)))
-        Rnl = res[:, :, 34].reshape((len(tim), len(lat), len(lon)))
+        dtwl[:] = res[:, :, 29].reshape((len(tim), len(lat), len(lon)))*lsm
+        dqer[:] = res[:, :, 30].reshape((len(tim), len(lat), len(lon)))*lsm
+        qair[:] = res[:, :, 31].reshape((len(tim), len(lat), len(lon)))*lsm
+        qsea[:] = res[:, :, 32].reshape((len(tim), len(lat), len(lon)))*lsm
+        Rl = res[:, :, 33].reshape((len(tim), len(lat), len(lon)))
+        Rs = res[:, :, 34].reshape((len(tim), len(lat), len(lon)))
+        Rnl = res[:, :, 35].reshape((len(tim), len(lat), len(lon)))
         longitude.long_name = 'Longitude'
         longitude.units = 'degrees East'
         latitude.long_name = 'Latitude'
@@ -385,40 +416,67 @@ def run_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
         del longitude, latitude, Date, tau, sensible, latent, monob, cd, cdn
         del ct, ctn, cq, cqn, tsrv, tsr, qsr, usr, psim, psit, psiq, u10n, t10n
         del tv10n, q10n, zo, zot, zoq, urefs, trefs, qrefs, itera, dter, dqer
-        del qair, qsea, Rl, Rs, Rnl
+        del qair, qsea, Rl, Rs, Rnl, dtwl
         del T, Td, tim, p, lw, sw, lsm, spd, hin, latIn
     return res, lon, lat
 #%% run function
 start_time = time.perf_counter()
+#------------------------------------------------------------------------------
 inF = input("Give input file name (data_all.nc or era5_r360x180.nc): \n")
-gustIn = input("Give gustiness option (to use default press enter): \n")
-if (gustIn == ''):
-    gustIn = None
-else:
-    gustIn = np.asarray(eval(gustIn), dtype=float)
-cskinIn = input("Give cool skin option (to use default press enter): \n")
-if (cskinIn == ''):
-    cskinIn = None
-else:
-    cskinIn = int(cskinIn)
-tolIn = input("Give tolerance option (to use default press enter): \n")
-if (tolIn == ''):
-    tolIn = None
-else:
-    tolIn = eval(tolIn)
 meth = input("Give prefered method: \n")
 while meth not in ["S80", "S88", "LP82", "YT96", "UA", "LY04", "C30", "C35",
-                   "C40", "ERA5","Beljaars"]:
+                   "C40", "ecmwf","Beljaars"]:
     print("method unknown")
     meth = input("Give prefered method: \n")
 else:
     meth = meth #[meth]
+ext = meth+"_"
+#------------------------------------------------------------------------------
+gustIn = input("Give gustiness option (to use default press enter): \n")
+if (gustIn == ''):
+    gustIn = None
+    ext = ext+'gust_'
+else:
+    gustIn = np.asarray(eval(gustIn), dtype=float)
+    if ((np.all(gustIn) == 0)):
+        ext = ext+'nogust_'
+    else:
+        ext = ext+'gust_'
+#------------------------------------------------------------------------------
+cskinIn = input("Give cool skin option (to use default press enter): \n")
+if (cskinIn == ''):
+    cskinIn = None
+    if ((cskinIn == None) and (meth == "S80" or meth == "S88" or meth == "LP82"
+                             or meth == "YT96" or meth == "UA" or
+                             meth == "LY04")):
+        cskinIn = 0
+        ext = ext+'noskin_'
+    elif ((cskinIn == None) and (meth == "C30" or meth == "C35" or meth == "C40"
+                               or meth == "ecmwf" or meth == "Beljaars")):
+        cskinIn = 1
+        ext = ext+'skin_'
+else:
+    cskinIn = int(cskinIn)
+    if (cskinIn == 0):
+        ext = ext+'noskin_'
+    elif (cskinIn == 1):
+        ext = ext+'skin_'
+#------------------------------------------------------------------------------
+tolIn = input("Give tolerance option (to use default press enter): \n")
+if (tolIn == ''):
+    tolIn = ['flux', 0.01, 1, 1]
+else:
+    tolIn = eval(tolIn)
+ext = ext+'tol'+tolIn[0]
+#------------------------------------------------------------------------------
 outF = input("Give path and output file name: \n")
 if (outF == ''):
-    outF = inF[:-3]+"_"+meth+".nc"
+    outF = "out_"+inF[:-3]+"_"+ext+".nc"
+elif (outF[-3:] != '.nc'):
+    outF = outF+".nc"
 else:
     outF = outF
-
+#------------------------------------------------------------------------------
 print("\n run_ASFC.py, started for method "+meth)
 
 res, lon, lat = run_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth)
@@ -440,14 +498,16 @@ if (inF == 'era5_r360x180.nc'):
         plt.xlabel("Longitude")
         plt.ylabel("Latitude")
         plt.title(meth+', '+ttl[i])
-        plt.savefig('./'+ttl[i][:3]+'_'+meth+'.png', dpi=300, bbox_inches='tight')
+        plt.savefig('./'+ttl[i][:3]+'_'+ext+'.png', dpi=300, bbox_inches='tight')
 elif (inF == "data_all.nc"):
     ttl = ["tau (Nm$^{-2}$)", "shf (Wm$^{-2}$)", "lhf (Wm$^{-2}$)"]
     for i in range(3):
         plt.figure()
         plt.plot(res[i],'.c', markersize=1)
-        plt.title(meth+', '+ttl[i])
-        plt.savefig('./'+ttl[i][:3]+'_'+meth+'.png', dpi=300, bbox_inches='tight')
+        plt.title(meth)
+        plt.xlabel("points")
+        plt.ylabel(ttl[i])
+        plt.savefig('./'+ttl[i][:3]+'_'+ext+'.png', dpi=300, bbox_inches='tight')
 
 #%% generate txt file with statistic
 if ((cskinIn == None) and (meth == "S80" or meth == "S88" or meth == "LP82"
@@ -455,11 +515,11 @@ if ((cskinIn == None) and (meth == "S80" or meth == "S88" or meth == "LP82"
                            meth == "LY04")):
    cskinIn = 0
 elif ((cskinIn == None) and (meth == "C30" or meth == "C35" or meth == "C40"
-                             or meth == "ERA5" or meth == "Beljaars")):
+                             or meth == "ecmwf" or meth == "Beljaars")):
    cskinIn = 1
 if (np.all(gustIn == None) and (meth == "C30" or meth == "C35" or meth == "C40")):
     gustIn = [1, 1.2, 600]
-elif (np.all(gustIn == None) and (meth == "UA" or meth == "ERA5")):
+elif (np.all(gustIn == None) and (meth == "UA" or meth == "ecmwf")):
     gustIn = [1, 1, 1000]
 elif np.all(gustIn == None):
     gustIn = [1, 1.2, 800]
@@ -477,7 +537,7 @@ ttl = np.asarray(["tau  ", "shf  ", "lhf  ", "L    ", "cd   ", "cdn  ",
                   "qsr  ", "usr  ", "psim ", "psit ", "psiq ", "u10n ",
                   "t10n ", "tv10n", "q10n ", "zo   ", "zot  ", "zoq  ",
                   "urefs", "trefs", "qrefs", "itera", "dter ", "dqer ",
-                  "qair ", "qsea ", "Rl   ", "Rs   ", "Rnl  "])
+                  "dtwl ", "qair ", "qsea ", "Rl   ", "Rs   ", "Rnl  "])
 header = ["var", "mean", "median", "min", "max", "5%", "95%"]
 n = np.shape(res)
 stats = np.copy(ttl)
@@ -493,6 +553,7 @@ if (inF == 'era5_r360x180.nc'):
     print(tabulate(stats, headers=header, tablefmt="github", numalign="left",
                    floatfmt=("s", "2.2e", "2.2e", "2.2e", "2.2e", "2.2e",
                                "2.2e")), file=open('./stats.txt', 'a'))
+    print('-'*79+'\n', file=open('./stats.txt', 'a'))
 elif (inF == "data_all.nc"):
     stats = np.c_[stats, np.nanmean(res, axis=1)]
     stats = np.c_[stats, np.nanmedian(res, axis=1)]
@@ -505,3 +566,8 @@ elif (inF == "data_all.nc"):
                                "2.2e")), file=open('./stats.txt', 'a'))
     print('-'*79+'\n', file=open('./stats.txt', 'a'))
 
+print('input file name: {}, \n method: {}, \n gustiness: {}, \n cskin: {},'
+      ' \n tolerance: {}, \n output is written in: {}'.format(inF, meth,
+                                                              gustIn, cskinIn,
+                                                              tolIn, outF),
+      file=open('./readme.txt', 'w'))
