@@ -1,7 +1,8 @@
 import numpy as np
 import sys
 
-def get_init(spd, T, SST, lat, P, Rl, Rs, cskin, gust, L, tol, meth, qmeth):
+def get_init(spd, T, SST, lat, P, Rl, Rs, cskin, skin, wl, gust, L, tol, meth,
+             qmeth):
     """
     Checks initial input values and sets defaults if needed
 
@@ -23,29 +24,29 @@ def get_init(spd, T, SST, lat, P, Rl, Rs, cskin, gust, L, tol, meth, qmeth):
     Rs : float
         downward shortwave radiation (W/m^2)
     cskin : int
-        0 switch cool skin adjustment off, else 1
-        default is 1
+        cool skin correction (0: off, 1: on)
+    skin : str
+        cool skin adjustment method "C35" (default), "ecmwf" or "Beljaars"
+    wl : int
+        warm layer correction (0: off default, 1: on)
     gust : int
         3x1 [x, beta, zi] x=1 to include the effect of gustiness, else 0
         beta gustiness parameter, beta=1 for UA, beta=1.2 for COARE
-        zi PBL height (m) 600 for COARE, 1000 for UA and ERA5, 800 default
+        zi PBL height (m) 600 for COARE, 1000 for UA and ecmwf, 800 default
         default for COARE [1, 1.2, 600]
-        default for UA, ERA5 [1, 1, 1000]
+        default for UA, ecmwf [1, 1, 1000]
         default else [1, 1.2, 800]
     L : int
         Monin-Obukhov length definition options
-        0 : default for S80, S88, LP82, YT96 and LY04
-        1 : following UA (Zeng et al., 1998), default for UA
-        2 : following ERA5 (IFS Documentation cy46r1), default for ERA5
-        3 : COARE3.5 (Edson et al., 2013), default for C30, C35 and C40
     tol : float
         4x1 or 7x1 [option, lim1-3 or lim1-6]
         option : 'flux' to set tolerance limits for fluxes only lim1-3
         option : 'ref' to set tolerance limits for height adjustment lim-1-3
         option : 'all' to set tolerance limits for both fluxes and height
-                 adjustment lim1-6 ['all', 0.01, 0.01, 5e-05, 0.01, 1, 1]
+                 adjustment lim1-6 ['all', 0.01, 0.01, 5e-05, 1e-3, 0.1, 0.1]
     meth : str
-        "S80","S88","LP82","YT96","UA","LY04","C30","C35","C40","ERA5"
+        "S80","S88","LP82","YT96","UA","LY04","C30","C35","C40","ecmwf",
+        "Beljaars"
     qmeth : str
         is the saturation evaporation method to use amongst
         "HylandWexler","Hardy","Preining","Wexler","GoffGratch","CIMO",
@@ -65,6 +66,10 @@ def get_init(spd, T, SST, lat, P, Rl, Rs, cskin, gust, L, tol, meth, qmeth):
         downward shortwave radiation (W/m^2)
     cskin : int
         cool skin adjustment switch
+    skin : str
+        cool skin adjustment method
+    wl : int
+        warm layer correction switch
     gust : int
         gustiness switch
     tol : float
@@ -83,7 +88,7 @@ def get_init(spd, T, SST, lat, P, Rl, Rs, cskin, gust, L, tol, meth, qmeth):
         sys.exit("input dtype of spd, T and SST should be float")
     # if input values are nan break
     if meth not in ["S80", "S88", "LP82", "YT96", "UA", "LY04", "C30", "C35",
-                    "C40", "ERA5", "Beljaars"]:
+                    "C40", "ecmwf", "Beljaars"]:
         sys.exit("unknown method")
     if qmeth not in ["HylandWexler", "Hardy", "Preining", "Wexler",
                      "GoffGratch", "WMO", "MagnusTetens", "Buck", "Buck2",
@@ -108,12 +113,21 @@ def get_init(spd, T, SST, lat, P, Rl, Rs, cskin, gust, L, tol, meth, qmeth):
                              meth == "LY04")):
         cskin = 0
     elif ((cskin == None) and (meth == "C30" or meth == "C35" or meth == "C40"
-                               or meth == "ERA5" or meth == "Beljaars")):
+                               or meth == "ecmwf" or meth == "Beljaars")):
         cskin = 1
+        if ((skin == None) and (meth == "C30" or meth == "C35"
+                                or meth == "C40")):
+            skin = "C35"
+        elif ((skin == None) and (meth == "ecmwf")):
+            skin = "ecmwf"
+        elif ((skin == None) and (meth == "Beljaars")):
+            skin = "Beljaars"
+    if (wl == None):
+        wl = 0
     if (np.all(gust == None) and (meth == "C30" or meth == "C35" or
                                   meth == "C40")):
         gust = [1, 1.2, 600]
-    elif (np.all(gust == None) and (meth == "UA" or meth == "ERA5" or
+    elif (np.all(gust == None) and (meth == "UA" or meth == "ecmwf" or
                                     meth == "Beljaars")):
         gust = [1, 1, 1000]
     elif np.all(gust == None):
@@ -122,17 +136,17 @@ def get_init(spd, T, SST, lat, P, Rl, Rs, cskin, gust, L, tol, meth, qmeth):
         gust = [0, 0, 0]
     elif (np.size(gust) < 3):
         sys.exit("gust input must be a 3x1 array")
-    if (L not in [None, "S80", "ERA5"]):
+    if (L not in [None, "S80", "ecmwf"]):
         sys.exit("L input must be either None, 0, 1, 2 or 3")
     if ((L == None) and (meth == "S80" or meth == "S88" or meth == "LP82"
                          or meth == "YT96" or meth == "LY04" or
                          meth == "UA" or meth == "C30" or meth == "C35"
                          or meth == "C40" or meth == "Beljaars")):
         L = "S80"
-    elif ((L == None) and (meth == "ERA5")):
-        L = "ERA5"
+    elif ((L == None) and (meth == "ecmwf")):
+        L = "ecmwf"
     if (tol == None):
-        tol = ['flux', 0.01, 1, 1]
+        tol = ['flux', 1e-3, 0.1, 0.1]
     elif (tol[0] not in ['flux', 'ref', 'all']):
         sys.exit("unknown tolerance input")
-    return lat, P, Rl, Rs, cskin, gust, tol, L
+    return lat, P, Rl, Rs, cskin, skin, wl, gust, tol, L
