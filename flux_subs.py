@@ -5,18 +5,19 @@ from util_subs import (CtoK, kappa, gc, visc_air)
 
 
 def cdn_calc(u10n, Ta, Tp, lat, meth="S80"):
-    """ Calculates neutral drag coefficient
+    """
+    Calculates neutral drag coefficient
 
     Parameters
     ----------
     u10n : float
-        neutral 10m wind speed (m/s)
+        neutral 10m wind speed [m/s]
     Ta   : float
-        air temperature (K)
+        air temperature        [K]
     Tp   : float
         wave period
     lat : float
-        latitude
+        latitude               [degE]
     meth : str
 
     Returns
@@ -28,17 +29,17 @@ def cdn_calc(u10n, Ta, Tp, lat, meth="S80"):
         cdn = np.where(u10n <= 3, (0.61+0.567/u10n)*0.001,
                        (0.61+0.063*u10n)*0.001)
     elif (meth == "LP82"):
-        cdn = np.where((u10n < 11) & (u10n >= 4), 1.2*0.001,
-                       np.where((u10n <= 25) & (u10n >= 11),
-                       (0.49+0.065*u10n)*0.001, 1.14*0.001))
-    elif (meth == "S88" or meth == "UA" or meth == "ERA5" or meth == "C30" or
+       cdn = np.where(u10n < 4, 1.14*0.001,
+                       np.where((u10n < 11) & (u10n >= 4), 1.2*0.001,
+                                (0.49+0.065*u10n)*0.001))
+    elif (meth == "S88" or meth == "UA" or meth == "ecmwf" or meth == "C30" or
           meth == "C35" or meth == "C40" or meth == "Beljaars"):
         cdn = cdn_from_roughness(u10n, Ta, None, lat, meth)
     elif (meth == "YT96"):
         # for u<3 same as S80
         cdn = np.where((u10n < 6) & (u10n >= 3),
                        (0.29+3.1/u10n+7.7/u10n**2)*0.001,
-                       np.where((u10n <= 26) & (u10n >= 6),
+                       np.where((u10n >= 6),
                        (0.60 + 0.070*u10n)*0.001, (0.61+0.567/u10n)*0.001))
     elif (meth == "LY04"):
         cdn = np.where(u10n >= 0.5,
@@ -51,17 +52,18 @@ def cdn_calc(u10n, Ta, Tp, lat, meth="S80"):
 
 
 def cdn_from_roughness(u10n, Ta, Tp, lat, meth="S88"):
-    """ Calculates neutral drag coefficient from roughness length
+    """
+    Calculates neutral drag coefficient from roughness length
 
     Parameters
     ----------
     u10n : float
-        neutral 10m wind speed (m/s)
+        neutral 10m wind speed [m/s]
     Ta   : float
-        air temperature (K)
+        air temperature        [K]
     Tp   : float
         wave period
-    lat : float
+    lat : float                [degE]
         latitude
     meth : str
 
@@ -92,16 +94,13 @@ def cdn_from_roughness(u10n, Ta, Tp, lat, meth="S88"):
             zo = a*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr
         elif (meth == "C35"):
             a = 0.011*np.ones(Ta.shape)
-            # a = np.where(u10n > 19, 0.0017*19-0.0050,
-            #             np.where((u10n > 7) & (u10n <= 18),
-            #                       0.0017*u10n-0.0050, a))
             a = np.where(u10n > 19, 0.0017*19-0.0050, 0.0017*u10n-0.0050)
             zo = 0.11*visc_air(Ta)/usr+a*np.power(usr, 2)/g
         elif (meth == "C40"):
             a = 0.011*np.ones(Ta.shape)
             a = np.where(u10n > 22, 0.0016*22-0.0035, 0.0016*u10n-0.0035)
             zo = a*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr # surface roughness
-        elif ((meth == "ERA5" or meth == "Beljaars")):
+        elif ((meth == "ecmwf" or meth == "Beljaars")):
             # eq. (3.26) p.38 over sea IFS Documentation cy46r1
             zo = 0.018*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr
         else:
@@ -113,16 +112,17 @@ def cdn_from_roughness(u10n, Ta, Tp, lat, meth="S88"):
 
 
 def cd_calc(cdn, height, ref_ht, psim):
-    """ Calculates drag coefficient at reference height
+    """
+    Calculates drag coefficient at reference height
 
     Parameters
     ----------
     cdn : float
         neutral drag coefficient
     height : float
-        original sensor height (m)
+        original sensor height  [m]
     ref_ht : float
-        reference height (m)
+        reference height        [m]
     psim : float
         momentum stability function
 
@@ -136,7 +136,8 @@ def cd_calc(cdn, height, ref_ht, psim):
 
 
 def ctcqn_calc(zol, cdn, u10n, zo, Ta, meth="S80"):
-    """ Calculates neutral heat and moisture exchange coefficients
+    """
+    Calculates neutral heat and moisture exchange coefficients
 
     Parameters
     ----------
@@ -145,11 +146,11 @@ def ctcqn_calc(zol, cdn, u10n, zo, Ta, meth="S80"):
     cdn  : float
         neutral drag coefficient
     u10n : float
-        neutral 10m wind speed (m/s)
+        neutral 10m wind speed  [m/s]
     zo   : float
-        surface roughness (m)
+        surface roughness       [m]
     Ta   : float
-        air temperature (K)
+        air temperature         [K]
     meth : str
 
     Returns
@@ -163,10 +164,8 @@ def ctcqn_calc(zol, cdn, u10n, zo, Ta, meth="S80"):
         cqn = np.ones(Ta.shape)*1.20*0.001  # from S88
         ctn = np.ones(Ta.shape)*1.00*0.001
     elif (meth == "LP82"):
-        cqn = np.where((zol <= 0) & (u10n > 4) & (u10n < 14), 1.15*0.001,
-                       1*0.001)
-        ctn = np.where((zol <= 0) & (u10n > 4) & (u10n < 25), 1.13*0.001,
-                       0.66*0.001)
+        cqn = np.where((zol <= 0), 1.15*0.001, 1*0.001)
+        ctn = np.where((zol <= 0), 1.13*0.001, 0.66*0.001)
     elif (meth == "LY04"):
         cqn = 34.6*0.001*np.sqrt(cdn)
         ctn = np.where(zol <= 0, 32.7*0.001*np.sqrt(cdn), 18*0.001*np.sqrt(cdn))
@@ -183,6 +182,7 @@ def ctcqn_calc(zol, cdn, u10n, zo, Ta, meth="S80"):
     elif (meth == "C30"):
         usr = np.sqrt(cdn*np.power(u10n, 2))
         rr = zo*usr/visc_air(Ta)
+        # moisture roughness determined by the CLIMODE, GASEX and CBLAST data
         zoq = np.where(5e-5/np.power(rr, 0.6) > 1.15e-4, 1.15e-4,
                        5e-5/np.power(rr, 0.6))  # moisture roughness
         zot=zoq  # temperature roughness
@@ -204,12 +204,9 @@ def ctcqn_calc(zol, cdn, u10n, zo, Ta, meth="S80"):
                        1.0e-4/np.power(rr, 0.55)) # temperature roughness
         zoq = np.where(2.0e-5/np.power(rr,0.22) > 1.1e-4/np.power(rr,0.9),
                        1.1e-4/np.power(rr,0.9), 2.0e-5/np.power(rr,0.22))
-        # moisture roughness determined by the CLIMODE, GASEX and CBLAST data
-#        zoq = np.where(5e-5/np.power(rr, 0.6) > 1.15e-4, 1.15e-4,
-#                       5e-5/np.power(rr, 0.6))  # moisture roughness as in C30
         cqn = kappa**2/np.log(10/zo)/np.log(10/zoq)
         ctn = kappa**2/np.log(10/zo)/np.log(10/zot)
-    elif (meth == "ERA5" or meth == "Beljaars"):
+    elif (meth == "ecmwf" or meth == "Beljaars"):
         # eq. (3.26) p.38 over sea IFS Documentation cy46r1
         usr = np.sqrt(cdn*np.power(u10n, 2))
         zot = 0.40*visc_air(Ta)/usr
@@ -223,7 +220,8 @@ def ctcqn_calc(zol, cdn, u10n, zo, Ta, meth="S80"):
 
 
 def ctcq_calc(cdn, cd, ctn, cqn, ht, hq, ref_ht, psit, psiq):
-    """ Calculates heat and moisture exchange coefficients at reference height
+    """
+    Calculates heat and moisture exchange coefficients at reference height
 
     Parameters
     ----------
@@ -235,12 +233,12 @@ def ctcq_calc(cdn, cd, ctn, cqn, ht, hq, ref_ht, psit, psiq):
         neutral heat exchange coefficient
     cqn : float
         neutral moisture exchange coefficient
-    h_t : float
-        original temperature sensor height (m)
-    h_q : float
-        original moisture sensor height (m)
+    ht : float
+        original temperature sensor height [m]
+    hq : float
+        original moisture sensor height    [m]
     ref_ht : float
-        reference height (m)
+        reference height                   [m]
     psit : float
         heat stability function
     psiq : float
@@ -262,7 +260,8 @@ def ctcq_calc(cdn, cd, ctn, cqn, ht, hq, ref_ht, psit, psiq):
 
 
 def get_stabco(meth="S80"):
-    """ Gives the coefficients \\alpha, \\beta, \\gamma for stability functions
+    """
+    Gives the coefficients \\alpha, \\beta, \\gamma for stability functions
 
     Parameters
     ----------
@@ -274,7 +273,7 @@ def get_stabco(meth="S80"):
     """
     alpha, beta, gamma = 0, 0, 0
     if (meth == "S80" or meth == "S88" or meth == "LY04" or
-        meth == "UA" or meth == "ERA5" or meth == "C30" or
+        meth == "UA" or meth == "ecmwf" or meth == "C30" or
         meth == "C35" or meth == "C40" or meth == "Beljaars"):
         alpha, beta, gamma = 16, 0.25, 5  # Smith 1980, from Dyer (1974)
     elif (meth == "LP82"):
@@ -292,7 +291,8 @@ def get_stabco(meth="S80"):
 
 
 def psim_calc(zol, meth="S80"):
-    """ Calculates momentum stability function
+    """
+    Calculates momentum stability function
 
     Parameters
     ----------
@@ -304,8 +304,8 @@ def psim_calc(zol, meth="S80"):
     -------
     psim : float
     """
-    if (meth == "ERA5"):
-        psim = psim_era5(zol)
+    if (meth == "ecmwf"):
+        psim = psim_ecmwf(zol)
     elif (meth == "C30" or meth == "C35" or meth == "C40"):
         psim = psiu_26(zol, meth)
     elif (meth == "Beljaars"): # Beljaars (1997) eq. 16, 17
@@ -318,7 +318,8 @@ def psim_calc(zol, meth="S80"):
 
 
 def psit_calc(zol, meth="S80"):
-    """ Calculates heat stability function
+    """
+    Calculates heat stability function
 
     Parameters
     ----------
@@ -331,9 +332,9 @@ def psit_calc(zol, meth="S80"):
     -------
     psit : float
     """
-    if (meth == "ERA5"):
+    if (meth == "ecmwf"):
         psit = np.where(zol < 0, psi_conv(zol, meth),
-                        psi_era5(zol))
+                        psi_ecmwf(zol))
     elif (meth == "C30" or meth == "C35" or meth == "C40"):
         psit = psit_26(zol)
     elif (meth == "Beljaars"): # Beljaars (1997) eq. 16, 17
@@ -346,7 +347,8 @@ def psit_calc(zol, meth="S80"):
 
 
 def psi_Bel(zol):
-    """ Calculates momentum/heat stability function
+    """
+    Calculates momentum/heat stability function
 
     Parameters
     ----------
@@ -365,9 +367,10 @@ def psi_Bel(zol):
 # ---------------------------------------------------------------------
 
 
-def psi_era5(zol):
-    """ Calculates heat stability function for stable conditions
-        for method ERA5
+def psi_ecmwf(zol):
+    """
+    Calculates heat stability function for stable conditions
+    for method ecmwf
 
     Parameters
     ----------
@@ -386,7 +389,8 @@ def psi_era5(zol):
 
 
 def psit_26(zol):
-    """ Computes temperature structure function as in C35
+    """
+    Computes temperature structure function as in C35
 
     Parameters
     ----------
@@ -413,7 +417,8 @@ def psit_26(zol):
 
 
 def psi_conv(zol, meth):
-    """ Calculates heat stability function for unstable conditions
+    """
+    Calculates heat stability function for unstable conditions
 
     Parameters
     ----------
@@ -435,7 +440,8 @@ def psi_conv(zol, meth):
 
 
 def psi_stab(zol, meth):
-    """ Calculates heat stability function for stable conditions
+    """
+    Calculates heat stability function for stable conditions
 
     Parameters
     ----------
@@ -455,8 +461,9 @@ def psi_stab(zol, meth):
 # ---------------------------------------------------------------------
 
 
-def psim_era5(zol):
-    """ Calculates momentum stability function for method ERA5
+def psim_ecmwf(zol):
+    """
+    Calculates momentum stability function for method ecmwf
 
     Parameters
     ----------
@@ -468,7 +475,7 @@ def psim_era5(zol):
     psim : float
     """
     # eq (3.20, 3.22) p. 37 IFS Documentation cy46r1
-    coeffs = get_stabco("ERA5")
+    coeffs = get_stabco("ecmwf")
     alpha, beta = coeffs[0], coeffs[1]
     xtmp = np.power(1-alpha*zol, beta)
     a, b, c, d = 1, 2/3, 5, 0.35
@@ -480,7 +487,8 @@ def psim_era5(zol):
 
 
 def psiu_26(zol, meth):
-    """ Computes velocity structure function C35
+    """
+    Computes velocity structure function C35
 
     Parameters
     ----------
@@ -524,7 +532,8 @@ def psiu_26(zol, meth):
 
 
 def psim_conv(zol, meth):
-    """ Calculates momentum stability function for unstable conditions
+    """
+    Calculates momentum stability function for unstable conditions
 
     Parameters
     ----------
@@ -547,7 +556,8 @@ def psim_conv(zol, meth):
 
 
 def psim_stab(zol, meth):
-    """ Calculates momentum stability function for stable conditions
+    """
+    Calculates momentum stability function for stable conditions
 
     Parameters
     ----------
@@ -567,46 +577,46 @@ def psim_stab(zol, meth):
 # ---------------------------------------------------------------------
 
 
-def get_skin(sst, qsea, rho, Rl, Rs, Rnl, cp, lv, tkt, usr, tsr, qsr, lat):
-    """ Computes cool skin
+def cs_C35(sst, qsea, rho, Rs, Rnl, cp, lv, delta, usr, tsr, qsr, lat):
+    """
+    Computes cool skin
+    following COARE3.5 (Fairall et al. 1996, Edson et al. 2013)
 
     Parameters
     ----------
     sst : float
-        sea surface temperature ($^\circ$\,C)
+        sea surface temperature      [K]
     qsea : float
-        specific humidity over sea (g/kg)
+        specific humidity over sea   [g/kg]
     rho : float
-        density of air (kg/m^3)
-    Rl : float
-        downward longwave radiation (W/m^2)
+        density of air               [kg/m^3]
     Rs : float
-        downward shortwave radiation (W/m^2)
+        downward shortwave radiation [Wm-2]
     Rnl : float
-        upwelling IR radiation (W/m^2)
+        upwelling IR radiation       [Wm-2]
     cp : float
-       specific heat of air at constant pressure
+       specific heat of air at constant pressure [J/K/kg]
     lv : float
-       latent heat of vaporization
-    tkt : float
-       cool skin thickness
+       latent heat of vaporization   [J/kg]
+    delta : float
+       cool skin thickness           [m]
     usr : float
-       friction velocity
+       friction velocity             [m/s]
     tsr : float
-       star temperature
+       star temperature              [K]
     qsr : float
-       star humidity
+       star humidity                 [g/kg]
     lat : float
-       latitude
+       latitude                      [degE]
 
     Returns
     -------
     dter : float
-       cool-skin temperature depression
+        cool skin correction         [K]
     dqer : float
-       cool-skin humidity depression
-    tkt  : float
-       cool skin thickness
+       humidity corrction            [g/kg]
+    delta : float
+       cool skin thickness           [m]
     """
     # coded following Saunders (1967) with lambda = 6
     g = gc(lat, None)
@@ -615,50 +625,280 @@ def get_skin(sst, qsea, rho, Rl, Rs, Rnl, cp, lv, tkt, usr, tsr, qsr, lat):
     # ************  cool skin constants  *******
     # density of water, specific heat capacity of water, water viscosity,
     # thermal conductivity of water
+    # rhow, cpw, visw, tcw = 1025, 4190, 1e-6, 0.6
     rhow, cpw, visw, tcw = 1022, 4000, 1e-6, 0.6
-    Al = 2.1e-5*np.power(sst+3.2, 0.79)
-    be = 0.026
+    aw = 2.1e-5*np.power(np.maximum(sst+3.2, 0), 0.79)
     bigc = 16*g*cpw*np.power(rhow*visw, 3)/(np.power(tcw, 2)*np.power(rho, 2))
     wetc = 0.622*lv*qsea/(287.1*np.power(sst+273.16, 2))
     Rns = 0.945*Rs  # albedo correction
-    hsb = -rho*cp*usr*tsr
-    hlb = -rho*lv*usr*qsr
-    qout = Rnl+hsb+hlb
-    dels = Rns*(0.065+11*tkt-6.6e-5/tkt*(1-np.exp(-tkt/8.0e-4)))
-    qcol = qout-dels
-    alq = Al*qcol+be*hlb*cpw/lv
+    shf = -rho*cp*usr*tsr
+    lhf = -rho*lv*usr*qsr
+    Qnsol = Rnl+shf+lhf
+    fs = 0.065+11*delta-6.6e-5/delta*(1-np.exp(-delta/8.0e-4))
+    qcol = Qnsol-Rns*fs
+    alq = aw*qcol+0.026*lhf*cpw/lv
     xlamx = 6*np.ones(sst.shape)
     xlamx = np.where(alq > 0, 6/(1+(bigc*alq/usr**4)**0.75)**0.333, 6)
-    tkt = np.where(alq > 0, xlamx*visw/(np.sqrt(rho/rhow)*usr),
+    delta = np.where(alq > 0, xlamx*visw/(np.sqrt(rho/rhow)*usr),
                    np.where(xlamx*visw/(np.sqrt(rho/rhow)*usr) > 0.01, 0.01,
                    xlamx*visw/(np.sqrt(rho/rhow)*usr)))
-    dter = qcol*tkt/tcw
+    dter = qcol*delta/tcw
     dqer = wetc*dter
-    return dter, dqer, tkt
+    return dter, dqer, delta
 # ---------------------------------------------------------------------
 
 
+def delta(aw, Qnsol, usr, lat):
+    """
+    Computes the thickness (m) of the viscous skin layer.
+    Based on Fairall et al., 1996 and cited in IFS Documentation Cy46r1
+    eq. 8.155 p. 164
+
+    Parameters
+    ----------
+    aw : float
+        thermal expansion coefficient of sea-water  [1/K]
+    Qnsol : float
+        part of the net heat flux actually absorbed in the warm layer [W/m^2]
+    usr : float
+        friction velocity in the air (u*) [m/s]
+    lat : float
+       latitude                      [degE]
+
+    Returns
+    -------
+    delta : float
+        the thickness (m) of the viscous skin layer
+
+    """
+    rhow, visw, tcw = 1025, 1e-6, 0.6
+    # u* in the water
+    usr_w = np.maximum(usr, 1e-4)*np.sqrt(1.2/rhow) # rhoa=1.2
+    rcst_cs = 16*gc(lat)*np.power(visw, 3)/np.power(tcw, 2)
+    lm = 6/np.power(1+np.power(np.maximum(Qnsol*aw*rcst_cs /
+                                          np.power(usr_w, 4), 0), 3/4),
+                    1/3)
+    ztmp = visw/usr_w
+    delta = np.where(Qnsol > 0, np.minimum(6*ztmp, 0.007), lm*ztmp)
+    return delta
+# ---------------------------------------------------------------------
+
+
+def cs_ecmwf(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, sst, lat):
+    """
+    cool skin adjustment based on IFS Documentation cy46r1
+
+    Parameters
+    ----------
+    rho : float
+        density of air               [kg/m^3]
+    Rs : float
+        downward solar radiation [Wm-2]
+    Rnl : float
+        net thermal radiaion     [Wm-2]
+    cp : float
+       specific heat of air at constant pressure [J/K/kg]
+    lv : float
+       latent heat of vaporization   [J/kg]
+    usr : float
+       friction velocity         [m/s]
+    tsr : float
+       star temperature              [K]
+    qsr : float
+       star humidity                 [g/kg]
+    sst : float
+        sea surface temperature  [K]
+    lat : float
+       latitude                  [degE]
+
+    Returns
+    -------
+    dtc : float
+        cool skin temperature correction [K]
+
+    """
+    if (np.nanmin(sst) < 200):  # if sst in Celsius convert to Kelvin
+        sst = sst+CtoK
+    aw = np.maximum(1e-5, 1e-5*(sst-CtoK))
+    Rns = 0.945*Rs  # (1-0.066)*Rs net solar radiation (albedo correction)
+    shf = -rho*cp*usr*tsr
+    lhf = -rho*lv*usr*qsr
+    Qnsol = shf+lhf+Rnl  # eq. 8.152
+    d = delta(aw, Qnsol, usr, lat)
+    for jc in range(10): # because implicit in terms of delta...
+        # # fraction of the solar radiation absorbed in layer delta eq. 8.153
+        # and Eq.(5) Zeng & Beljaars, 2005
+        fs = 0.065+11*d-6.6e-5/d*(1-np.exp(-d/8e-4))
+        Q = Qnsol-fs*Rns
+        d = delta(aw, Q, usr, lat)
+    dtc = Q*d/0.6  # (rhow*cw*kw)eq. 8.151
+    return dtc
+# ---------------------------------------------------------------------
+
+
+def wl_ecmwf(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, sst, skt, dtc, lat):
+    """
+    warm layer correction following IFS Documentation cy46r1
+    and aerobulk (Brodeau et al., 2016)
+
+    Parameters
+    ----------
+    rho : float
+        density of air               [kg/m^3]
+    Rs : float
+        downward solar radiation    [Wm-2]
+    Rnl : TYPE
+        net thermal radiation  [Wm-2]
+    cp : float
+       specific heat of air at constant pressure [J/K/kg]
+    lv : float
+       latent heat of vaporization   [J/kg]
+    usr : float
+        friction velocity           [m/s]
+    tsr : float
+       star temperature              [K]
+    qsr : float
+       star humidity                 [g/kg]
+    sst : float
+        bulk sst                    [K]
+    skt : float
+        skin sst from previous step [K]
+    dtc : float
+        cool skin correction        [K]
+    lat : float
+        latitude                    [degE]
+
+    Returns
+    -------
+    dtwl : float
+        warm layer correction       [K]
+
+    """
+    if (np.nanmin(sst) < 200):  # if sst in Celsius convert to Kelvin
+        sst = sst+CtoK
+    rhow, cpw, visw, rd0 = 1025, 4190, 1e-6, 3
+    Rns = 0.945*Rs
+    ## Previous value of dT / warm-layer, adapted to depth:
+    aw = 2.1e-5*np.power(np.maximum(sst-CtoK+3.2, 0), 0.79) 
+    # thermal expansion coefficient of sea-water (SST accurate enough#)
+    # *** Rd = Fraction of solar radiation absorbed in warm layer (-)
+    a1, a2, a3 = 0.28, 0.27, 0.45
+    b1, b2, b3 = -71.5, -2.8, -0.06 # [m-1]
+    Rd = 1-(a1*np.exp(b1*rd0)+a2*np.exp(b2*rd0)+a3*np.exp(b3*rd0))
+    shf = -rho*cp*usr*tsr
+    lhf = -rho*lv*usr*qsr
+    Qnsol = shf+lhf+Rnl
+    usrw  = np.maximum(usr, 1e-4 )*np.sqrt(1.2/rhow)   # u* in the water
+    zc3 = rd0*kappa*gc(lat)/np.power(1.2/rhow, 3/2)
+    zc4 = (0.3+1)*kappa/rd0
+    zc5 = (0.3+1)/(0.3*rd0)
+    for jwl in range(10): # itteration to solve implicitely eq. for warm layer
+        dsst = skt-sst+dtc
+        ## Buoyancy flux and stability parameter (zdl = -z/L) in water
+        ZSRD = (Qnsol-Rns*Rd)/(rhow*cpw)
+        ztmp = np.maximum(dsst, 0)
+        zdl = np.where(ZSRD > 0, 2*(np.power(usrw, 2) *
+                                    np.sqrt(ztmp/(5*rd0*gc(lat)*aw/visw)))+ZSRD,
+                       np.power(usrw, 2)*np.sqrt(ztmp/(5*rd0*gc(lat)*aw/visw)))
+        usr = np.maximum(usr, 1e-4 )
+        zdL = zc3*aw*zdl/np.power(usr, 3)
+        ## Stability function Phi_t(-z/L) (zdL is -z/L) :
+        zphi = np.where(zdL > 0, (1+(5*zdL+4*np.power(zdL, 2)) /
+                                  (1+3*zdL+0.25*np.power(zdL, 2)) +
+                                  2/np.sqrt(1-16*(-np.abs(zdL)))),
+                        1/np.sqrt(1-16*(-np.abs(zdL))))
+        zz = zc4*(usrw)/zphi
+        zz = np.maximum(np.abs(zz) , 1e-4)*np.sign(zz)
+        dtwl = np.maximum(0, (zc5*ZSRD)/zz)
+    return dtwl
+#----------------------------------------------------------------------
+
+
+def cs_Beljaars(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, lat, Qs):
+    """
+    cool skin adjustment based on Beljaars (1997)
+    air-sea interaction in the ECMWF model
+
+    Parameters
+    ----------
+    rho : float
+        density of air           [kg/m^3]
+    Rs : float
+        downward solar radiation [Wm-2]
+    Rnl : float
+        net thermal radiaion     [Wm-2]
+    cp : float
+       specific heat of air at constant pressure [J/K/kg]
+    lv : float
+       latent heat of vaporization   [J/kg]
+    usr : float
+       friction velocity         [m/s]
+    tsr : float
+       star temperature              [K]
+    qsr : float
+       star humidity                 [g/kg]
+    lat : float
+       latitude                  [degE]
+    Qs : float
+      radiation balance
+
+    Returns
+    -------
+    Qs : float
+      radiation balance
+    dtc : float
+        cool skin temperature correction [K]
+
+    """
+    g = gc(lat, None)
+    tcw = 0.6       # thermal conductivity of water (at 20C) [W/m/K]
+    visw = 1e-6     # kinetic viscosity of water [m^2/s]
+    rhow = 1025     # Density of sea-water [kg/m^3]
+    cpw = 4190      # specific heat capacity of water
+    aw = 3e-4       # thermal expansion coefficient [K-1]
+    Rns = 0.945*Rs  # net solar radiation (albedo correction)
+    shf = -rho*cp*usr*tsr
+    lhf = -rho*lv*usr*qsr
+    Q = Rnl+shf+lhf+Qs
+    xt = (16*Q*g*aw*cpw*np.power(rhow*visw, 3))/(np.power(usr, 4) *
+                                                np.power(rho*tcw, 2))
+    xt1 = 1+np.power(xt, 3/4)
+    # Saunders const  eq. 22
+    ls = np.where(Q > 0, 6/np.power(xt1, 1/3), 6)
+    delta = np.where(Q > 0 , (ls*visw)/(np.sqrt(rho/rhow)*usr),
+                     np.where((ls*visw)/(np.sqrt(rho/rhow)*usr) > 0.01, 0.01,
+                              (ls*visw)/(np.sqrt(rho/rhow)*usr)))  # eq. 21
+    # fraction of the solar radiation absorbed in layer delta
+    fc = 0.065+11*delta-6.6e-5*(1-np.exp(-delta/0.0008))/delta
+    Qs = fc*Rns
+    Q = Rnl+shf+lhf+Qs
+    dtc = Q*delta/tcw
+    return Qs, dtc
+#----------------------------------------------------------------------
+
+
 def get_gust(beta, Ta, usr, tsrv, zi, lat):
-    """ Computes gustiness
+    """
+    Computes gustiness
 
     Parameters
     ----------
     beta : float
         constant
     Ta : float
-        air temperature (K)
+        air temperature   [K]
     usr : float
-        friction velocity (m/s)
+        friction velocity [m/s]
     tsrv : float
-        star virtual temperature of air (K)
+        star virtual temperature of air [K]
     zi : int
-        scale height of the boundary layer depth (m)
+        scale height of the boundary layer depth [m]
     lat : float
         latitude
 
     Returns
     -------
-    ug : float
+    ug : float        [m/s]
     """
     if (np.nanmax(Ta) < 200):  # convert to K if in Celsius
         Ta = Ta+273.16
@@ -670,8 +910,8 @@ def get_gust(beta, Ta, usr, tsrv, zi, lat):
 # ---------------------------------------------------------------------
 
 
-def get_L(L, lat, usr, tsr, qsr, t10n, tv10n, qair, h_in, T, Ta, th, tv, sst,
-          dt, dtv, dq, zo, wind, monob, meth):
+def get_L(L, lat, usr, tsr, qsr, t10n, h_in, Ta, sst, qair, qsea, q10n,
+          wind, monob, meth):
     """
     calculates Monin-Obukhov length and virtual star temperature
 
@@ -679,8 +919,8 @@ def get_L(L, lat, usr, tsr, qsr, t10n, tv10n, qair, h_in, T, Ta, th, tv, sst,
     ----------
     L : int
         Monin-Obukhov length definition options
-           "S80"  : default for S80, S88, LP82, YT96 and LY04
-           "ERA5" : following ERA5 (IFS Documentation cy46r1), default for ERA5
+        "S80"  : default for S80, S88, LP82, YT96 and LY04
+        "ecmwf" : following ecmwf (IFS Documentation cy46r1), default for ecmwf
     lat : float
         latitude
     usr : float
@@ -691,33 +931,25 @@ def get_L(L, lat, usr, tsr, qsr, t10n, tv10n, qair, h_in, T, Ta, th, tv, sst,
         star specific humidity (g/kg)
     t10n : float
         neutral temperature at 10m (K)
-    tv10n : float
-        neutral virtual temperature at 10m (K)
-    qair : float
-        air specific humidity (g/kg)
     h_in : float
         sensor heights (m)
-    T : float
-        air temperature (K)
     Ta : float
         air temperature (K)
-    th : float
-        potential temperature (K)
-    tv : float
-        virtual temperature (K)
     sst : float
         sea surface temperature (K)
-    dt : float
-        temperature difference (K)
-    dq : float
-        specific humidity difference (g/kg)
+    qair : float
+        air specific humidity (g/kg)
+    qsea : float
+        specific humidity at sea surface(g/kg)
+    q10n : float
+        neutral specific humidity at 10m (g/kg)
     wind : float
         wind speed (m/s)
     monob : float
         Monin-Obukhov length from previous iteration step (m)
     meth : str
         bulk parameterisation method option: "S80", "S88", "LP82", "YT96",
-        "UA", "LY04", "C30", "C35", "C40", "ERA5"
+        "UA", "LY04", "C30", "C35", "C40", "ecmwf", "Beljaars"
 
     Returns
     -------
@@ -729,13 +961,17 @@ def get_L(L, lat, usr, tsr, qsr, t10n, tv10n, qair, h_in, T, Ta, th, tv, sst,
     """
     g = gc(lat)
     if (L == "S80"):
-        tsrv = tsr+0.61*t10n*qsr
-        monob = ((tv10n*np.power(usr, 2))/(g*kappa*tsrv))
-        monob = np.where(np.fabs(monob) < 1, np.where(monob < 0, -1, 1), monob)
-    elif (L == "ERA5"):
-        tsrv = tsr+0.61*t10n*qsr
-        Rb = ((g*h_in[0]*((2*dt)/(Ta+sst-g*h_in[0])+0.61*dq)) /
-              np.power(wind, 2))
+        # as in NCAR, LY04
+        tsrv = tsr*(1+0.6077*qair)+0.6077*Ta*qsr
+        temp = (g*kappa*tsrv /
+                np.maximum(np.power(usr, 2)*Ta*(1+0.6077*qair), 1e-9))
+        temp = np.minimum(np.abs(temp), 200)*np.sign(temp)
+        temp = np.minimum(np.abs(temp), 10/h_in[0])*np.sign(temp)
+        monob = 1/np.copy(temp)
+    elif (L == "ecmwf"):
+        tsrv = tsr*(1+0.6077*qair)+0.6077*Ta*qsr
+        Rb = ((g*h_in[0]/(Ta*(1+0.61*qair))) *
+              ((t10n*(1+0.61*q10n)-sst*(1+0.61*qsea))/np.power(wind, 2)))
         zo = (0.11*visc_air(Ta)/usr+0.018*np.power(usr, 2)/g)
         zot = 0.40*visc_air(Ta)/usr
         zol = (Rb*(np.power(np.log((h_in[0]+zo)/zo)-psim_calc((h_in[0]+zo) /
@@ -744,56 +980,60 @@ def get_L(L, lat, usr, tsr, qsr, t10n, tv10n, qair, h_in, T, Ta, th, tv, sst,
                    (np.log((h_in[0]+zo)/zot) -
                     psit_calc((h_in[0]+zo)/monob, meth) +
                     psit_calc(zot/monob, meth))))
-        monob = h_in[0]/zol        
+        monob = h_in[0]/zol
     return tsrv, monob
 #------------------------------------------------------------------------------
 
 
-def get_strs(h_in, monob, wind, zo, zot, zoq, dt, dq, dter, dqer, ct, cq,
-             cskin, meth):
+def get_strs(h_in, monob, wind, zo, zot, zoq, dt, dq, dter, dqer, dtwl, ct, cq,
+             cskin, wl, meth):
     """
     calculates star wind speed, temperature and specific humidity
 
     Parameters
     ----------
     h_in : float
-        sensor heights (m)
+        sensor heights [m]
     monob : float
-        M-O length (m)
+        M-O length     [m]
     wind : float
-        wind speed (m/s)
+        wind speed     [m/s]
     zo : float
-        momentum roughness length (m)
+        momentum roughness length    [m]
     zot : float
-        temperature roughness length (m)
+        temperature roughness length [m]
     zoq : float
-        moisture roughness length (m)
+        moisture roughness length    [m]
     dt : float
-        temperature difference (K)
+        temperature difference       [K]
     dq : float
-        specific humidity difference (g/kg)
+        specific humidity difference [g/kg]
     dter : float
-        cskin temperature adjustment (K)
+        cskin temperature adjustment [K]
     dqer : float
-        cskin q adjustment (g/kg)
+        cskin q adjustment           [g/kg]
+    dtwl : float
+        warm layer temperature adjustment [K]
     ct : float
         temperature exchange coefficient
     cq : float
         moisture exchange coefficient
     cskin : int
         cool skin adjustment switch
+    wl : int
+        warm layer correction switch
     meth : str
         bulk parameterisation method option: "S80", "S88", "LP82", "YT96", "UA",
-        "LY04", "C30", "C35", "C40", "ERA5"
+        "LY04", "C30", "C35", "C40", "ecmwf", "Beljaars"
 
     Returns
     -------
     usr : float
-        friction wind speed (m/s)
+        friction wind speed [m/s]
     tsr : float
-        star temperature (K)
+        star temperature    [K]
     qsr : float
-        star specific humidity (g/kg)
+        star specific humidity [g/kg]
 
     """
     if (meth == "UA"):
@@ -814,19 +1054,19 @@ def get_strs(h_in, monob, wind, zo, zot, zoq, dt, dq, dter, dqer, ct, cq,
                                                      5*np.log(h_in[0]/monob) +
                                                      h_in[0]/monob-1))))
                                 # Zeng et al. 1998 (7-10)
-        tsr = np.where(h_in[1]/monob < -0.465, kappa*(dt+dter*cskin) /
+        tsr = np.where(h_in[1]/monob < -0.465, kappa*(dt+dter*cskin-dtwl*wl) /
                        (np.log((-0.465*monob)/zot) -
                         psit_calc(-0.465, meth)+0.8*(np.power(0.465, -1/3) -
                         np.power(-h_in[1]/monob, -1/3))),
-                       np.where(h_in[1]/monob < 0, kappa*(dt+dter*cskin) /
+                       np.where(h_in[1]/monob < 0, kappa*(dt+dter*cskin-dtwl*wl) /
                                 (np.log(h_in[1]/zot) -
                                  psit_calc(h_in[1]/monob, meth) +
                                  psit_calc(zot/monob, meth)),
                                 np.where(h_in[1]/monob <= 1,
-                                         kappa*(dt+dter*cskin) /
+                                         kappa*(dt+dter*cskin-dtwl*wl) /
                                          (np.log(h_in[1]/zot) +
                                           5*h_in[1]/monob-5*zot/monob),
-                                         kappa*(dt+dter*cskin) /
+                                         kappa*(dt+dter*cskin-dtwl*wl) /
                                          (np.log(monob/zot)+5 -
                                           5*zot/monob+5*np.log(h_in[1]/monob) +
                                           h_in[1]/monob-1))))
@@ -850,13 +1090,13 @@ def get_strs(h_in, monob, wind, zo, zot, zoq, dt, dq, dter, dqer, ct, cq,
                                           h_in[2]/monob-1))))
     elif (meth == "C30" or meth == "C35" or meth == "C40"):
         usr = (wind*kappa/(np.log(h_in[0]/zo)-psiu_26(h_in[0]/monob, meth)))
-        tsr = ((dt+dter*cskin)*(kappa/(np.log(h_in[1]/zot) -
+        tsr = ((dt+dter*cskin-dtwl*wl)*(kappa/(np.log(h_in[1]/zot) -
                                        psit_26(h_in[1]/monob))))
         qsr = ((dq+dqer*cskin)*(kappa/(np.log(h_in[2]/zoq) -
                                        psit_26(h_in[2]/monob))))
     else:
         usr = (wind*kappa/(np.log(h_in[0]/zo)-psim_calc(h_in[0]/monob, meth)))
-        tsr = ct*wind*(dt+dter*cskin)/usr
+        tsr = ct*wind*(dt+dter*cskin-dtwl*wl)/usr
         qsr = cq*wind*(dq+dqer*cskin)/usr
     return usr, tsr, qsr
 # ---------------------------------------------------------------------
