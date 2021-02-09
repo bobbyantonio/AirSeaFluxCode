@@ -288,7 +288,8 @@ def VaporPressure(temp, P, phase, meth):
 
 
 def qsat_sea(T, P, qmeth):
-    """ Computes surface saturation specific humidity (g/kg)
+    """
+    computes surface saturation specific humidity [g/kg]
 
     Parameters
     ----------
@@ -314,7 +315,8 @@ def qsat_sea(T, P, qmeth):
 
 
 def qsat_air(T, P, rh, qmeth):
-    """ Computes saturation specific humidity (g/kg) as in C35
+    """
+    computes saturation specific humidity [g/kg]
 
     Parameters
     ----------
@@ -351,7 +353,7 @@ def get_hum(hum, T, sst, P, qmeth):
     hum : array
         humidity input switch 2x1 [x, values] default is relative humidity
             x='rh' : relative humidity in %
-            x='q' : specific humidity (g/kg)
+            x='q' : specific humidity (kg/kg)
             x='Td' : dew point temperature (K)
     T : float
         air temperature in K
@@ -372,8 +374,8 @@ def get_hum(hum, T, sst, P, qmeth):
     """
     if (hum == None):
         RH = np.ones(sst.shape)*80
-        qsea = qsat_sea(sst, P, qmeth)/1000     # surface water q (g/kg)
-        qair = qsat_air(T, P, RH, qmeth)/1000   # q of air (g/kg)
+        qsea = qsat_sea(sst, P, qmeth)/1000     # surface water q (kg/kg)
+        qair = qsat_air(T, P, RH, qmeth)/1000   # q of air (kg/kg)
     elif (hum[0] not in ['rh', 'q', 'Td']):
         sys.exit("unknown humidity input")
         qair, qsea = np.nan, np.nan
@@ -382,11 +384,11 @@ def get_hum(hum, T, sst, P, qmeth):
         if (np.all(RH < 1)):
             sys.exit("input relative humidity units should be \%")
             qair, qsea = np.nan, np.nan
-        qsea = qsat_sea(sst, P, qmeth)/1000    # surface water q (g/kg)
-        qair = qsat_air(T, P, RH, qmeth)/1000  # q of air (g/kg)
+        qsea = qsat_sea(sst, P, qmeth)/1000    # surface water q (kg/kg)
+        qair = qsat_air(T, P, RH, qmeth)/1000  # q of air (kg/kg)
     elif (hum[0] == 'q'):
         qair = hum[1]
-        qsea = qsat_sea(sst, P, qmeth)/1000  # surface water q (g/kg)
+        qsea = qsat_sea(sst, P, qmeth)/1000  # surface water q (kg/kg)
     elif (hum[0] == 'Td'):
         Td = hum[1] # dew point temperature (K)
         Td = np.where(Td < 200, np.copy(Td)+CtoK, np.copy(Td))
@@ -394,8 +396,8 @@ def get_hum(hum, T, sst, P, qmeth):
         esd = 611.21*np.exp(17.502*((Td-273.16)/(Td-32.19)))
         es = 611.21*np.exp(17.502*((T-273.16)/(T-32.19)))
         RH = 100*esd/es
-        qair = qsat_air(T, P, RH, qmeth)/1000  # q of air (g/kg)
-        qsea = qsat_sea(sst, P, qmeth)/1000    # surface water q (g/kg)
+        qair = qsat_air(T, P, RH, qmeth)/1000  # q of air (kg/kg)
+        qsea = qsat_sea(sst, P, qmeth)/1000    # surface water q (kg/kg)
     return qair, qsea
 #------------------------------------------------------------------------------
 
@@ -423,7 +425,6 @@ def gamma_moist(sst, t, q):
         sst = sst+CtoK
     if (np.nanmin(t) < 200):  # if sst in Celsius convert to Kelvin
         t = t+CtoK
-
     t = np.maximum(t, 180)
     q = np.maximum(q,  1e-6)
     w = q/(1-q) # mixing ratio w = q/(1-q)
