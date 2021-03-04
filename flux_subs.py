@@ -94,6 +94,9 @@ def cdn_from_roughness(u10n, Ta, Tp, lat, meth="S88"):
             zo = a*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr
         elif (meth == "C35"):
             a = 0.011*np.ones(Ta.shape)
+            # a = np.where(u10n > 19, 0.0017*19-0.0050,
+            #             np.where((u10n > 7) & (u10n <= 18),
+            #                       0.0017*u10n-0.0050, a))
             a = np.where(u10n > 19, 0.0017*19-0.0050, 0.0017*u10n-0.0050)
             zo = 0.11*visc_air(Ta)/usr+a*np.power(usr, 2)/g
         elif (meth == "C40"):
@@ -182,7 +185,6 @@ def ctcqn_calc(zol, cdn, u10n, zo, Ta, meth="S80"):
     elif (meth == "C30"):
         usr = np.sqrt(cdn*np.power(u10n, 2))
         rr = zo*usr/visc_air(Ta)
-        # moisture roughness determined by the CLIMODE, GASEX and CBLAST data
         zoq = np.where(5e-5/np.power(rr, 0.6) > 1.15e-4, 1.15e-4,
                        5e-5/np.power(rr, 0.6))  # moisture roughness
         zot=zoq  # temperature roughness
@@ -204,6 +206,9 @@ def ctcqn_calc(zol, cdn, u10n, zo, Ta, meth="S80"):
                        1.0e-4/np.power(rr, 0.55)) # temperature roughness
         zoq = np.where(2.0e-5/np.power(rr,0.22) > 1.1e-4/np.power(rr,0.9),
                        1.1e-4/np.power(rr,0.9), 2.0e-5/np.power(rr,0.22))
+        # moisture roughness determined by the CLIMODE, GASEX and CBLAST data
+#        zoq = np.where(5e-5/np.power(rr, 0.6) > 1.15e-4, 1.15e-4,
+#                       5e-5/np.power(rr, 0.6))  # moisture roughness as in C30
         cqn = kappa**2/np.log(10/zo)/np.log(10/zoq)
         ctn = kappa**2/np.log(10/zo)/np.log(10/zot)
     elif (meth == "ecmwf" or meth == "Beljaars"):
@@ -625,7 +630,6 @@ def cs_C35(sst, qsea, rho, Rs, Rnl, cp, lv, delta, usr, tsr, qsr, lat):
     # ************  cool skin constants  *******
     # density of water, specific heat capacity of water, water viscosity,
     # thermal conductivity of water
-    # rhow, cpw, visw, tcw = 1025, 4190, 1e-6, 0.6
     rhow, cpw, visw, tcw = 1022, 4000, 1e-6, 0.6
     aw = 2.1e-5*np.power(np.maximum(sst+3.2, 0), 0.79)
     bigc = 16*g*cpw*np.power(rhow*visw, 3)/(np.power(tcw, 2)*np.power(rho, 2))
@@ -729,6 +733,8 @@ def cs_ecmwf(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, sst, lat):
         # # fraction of the solar radiation absorbed in layer delta eq. 8.153
         # and Eq.(5) Zeng & Beljaars, 2005
         fs = 0.065+11*d-6.6e-5/d*(1-np.exp(-d/8e-4))
+        # fs = np.maximum(0.065+11*delta-(6.6e-5/delta)*(1-np.exp(-delta/8e-4)),
+        #                 0.01)
         Q = Qnsol-fs*Rns
         d = delta(aw, Q, usr, lat)
     dtc = Q*d/0.6  # (rhow*cw*kw)eq. 8.151
@@ -747,7 +753,7 @@ def wl_ecmwf(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, sst, skt, dtc, lat):
         density of air               [kg/m^3]
     Rs : float
         downward solar radiation    [Wm-2]
-    Rnl : TYPE
+    Rnl : float
         net thermal radiation  [Wm-2]
     cp : float
        specific heat of air at constant pressure [J/K/kg]
@@ -779,8 +785,7 @@ def wl_ecmwf(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, sst, skt, dtc, lat):
     rhow, cpw, visw, rd0 = 1025, 4190, 1e-6, 3
     Rns = 0.945*Rs
     ## Previous value of dT / warm-layer, adapted to depth:
-    aw = 2.1e-5*np.power(np.maximum(sst-CtoK+3.2, 0), 0.79) 
-    # thermal expansion coefficient of sea-water (SST accurate enough#)
+    aw = 2.1e-5*np.power(np.maximum(sst-CtoK+3.2, 0), 0.79) # thermal expansion coefficient of sea-water (SST accurate enough#)
     # *** Rd = Fraction of solar radiation absorbed in warm layer (-)
     a1, a2, a3 = 0.28, 0.27, 0.45
     b1, b2, b3 = -71.5, -2.8, -0.06 # [m-1]
@@ -792,7 +797,7 @@ def wl_ecmwf(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, sst, skt, dtc, lat):
     zc3 = rd0*kappa*gc(lat)/np.power(1.2/rhow, 3/2)
     zc4 = (0.3+1)*kappa/rd0
     zc5 = (0.3+1)/(0.3*rd0)
-    for jwl in range(10): # itteration to solve implicitely eq. for warm layer
+    for jwl in range(10): # itteration to solve implicitely equation for warm layer
         dsst = skt-sst+dtc
         ## Buoyancy flux and stability parameter (zdl = -z/L) in water
         ZSRD = (Qnsol-Rns*Rd)/(rhow*cpw)
@@ -910,7 +915,7 @@ def get_gust(beta, Ta, usr, tsrv, zi, lat):
 # ---------------------------------------------------------------------
 
 
-def get_L(L, lat, usr, tsr, qsr, t10n, h_in, Ta, sst, qair, qsea, q10n,
+def get_L(L, lat, usr, tsr, qsr, t10n, hin, Ta, sst, qair, qsea, q10n,
           wind, monob, meth):
     """
     calculates Monin-Obukhov length and virtual star temperature
@@ -931,7 +936,7 @@ def get_L(L, lat, usr, tsr, qsr, t10n, h_in, Ta, sst, qair, qsea, q10n,
         star specific humidity (g/kg)
     t10n : float
         neutral temperature at 10m (K)
-    h_in : float
+    hin : float
         sensor heights (m)
     Ta : float
         air temperature (K)
@@ -940,7 +945,7 @@ def get_L(L, lat, usr, tsr, qsr, t10n, h_in, Ta, sst, qair, qsea, q10n,
     qair : float
         air specific humidity (g/kg)
     qsea : float
-        specific humidity at sea surface(g/kg)
+        specific humidity at sea surface (g/kg)
     q10n : float
         neutral specific humidity at 10m (g/kg)
     wind : float
@@ -966,33 +971,33 @@ def get_L(L, lat, usr, tsr, qsr, t10n, h_in, Ta, sst, qair, qsea, q10n,
         temp = (g*kappa*tsrv /
                 np.maximum(np.power(usr, 2)*Ta*(1+0.6077*qair), 1e-9))
         temp = np.minimum(np.abs(temp), 200)*np.sign(temp)
-        temp = np.minimum(np.abs(temp), 10/h_in[0])*np.sign(temp)
+        temp = np.minimum(np.abs(temp), 10/hin[0])*np.sign(temp)
         monob = 1/np.copy(temp)
     elif (L == "ecmwf"):
         tsrv = tsr*(1+0.6077*qair)+0.6077*Ta*qsr
-        Rb = ((g*h_in[0]/(Ta*(1+0.61*qair))) *
+        Rb = ((g*hin[0]/(Ta*(1+0.61*qair))) *
               ((t10n*(1+0.61*q10n)-sst*(1+0.61*qsea))/np.power(wind, 2)))
         zo = (0.11*visc_air(Ta)/usr+0.018*np.power(usr, 2)/g)
         zot = 0.40*visc_air(Ta)/usr
-        zol = (Rb*(np.power(np.log((h_in[0]+zo)/zo)-psim_calc((h_in[0]+zo) /
+        zol = (Rb*(np.power(np.log((hin[0]+zo)/zo)-psim_calc((hin[0]+zo) /
                                                               monob, meth) +
                             psim_calc(zo/monob, meth), 2) /
-                   (np.log((h_in[0]+zo)/zot) -
-                    psit_calc((h_in[0]+zo)/monob, meth) +
+                   (np.log((hin[0]+zo)/zot) -
+                    psit_calc((hin[0]+zo)/monob, meth) +
                     psit_calc(zot/monob, meth))))
-        monob = h_in[0]/zol
+        monob = hin[0]/zol
     return tsrv, monob
 #------------------------------------------------------------------------------
 
 
-def get_strs(h_in, monob, wind, zo, zot, zoq, dt, dq, dter, dqer, dtwl, ct, cq,
+def get_strs(hin, monob, wind, zo, zot, zoq, dt, dq, dter, dqer, dtwl, ct, cq,
              cskin, wl, meth):
     """
     calculates star wind speed, temperature and specific humidity
 
     Parameters
     ----------
-    h_in : float
+    hin : float
         sensor heights [m]
     monob : float
         M-O length     [m]
@@ -1037,65 +1042,65 @@ def get_strs(h_in, monob, wind, zo, zot, zoq, dt, dq, dter, dqer, dtwl, ct, cq,
 
     """
     if (meth == "UA"):
-        usr = np.where(h_in[0]/monob <= -1.574, kappa*wind /
+        usr = np.where(hin[0]/monob <= -1.574, kappa*wind /
                        (np.log(-1.574*monob/zo)-psim_calc(-1.574, meth) +
                         psim_calc(zo/monob, meth) +
-                        1.14*(np.power(-h_in[0]/monob, 1/3) -
+                        1.14*(np.power(-hin[0]/monob, 1/3) -
                         np.power(1.574, 1/3))),
-                       np.where(h_in[0]/monob < 0, kappa*wind /
-                                (np.log(h_in[0]/zo) -
-                                 psim_calc(h_in[0]/monob, meth) +
+                       np.where(hin[0]/monob < 0, kappa*wind /
+                                (np.log(hin[0]/zo) -
+                                 psim_calc(hin[0]/monob, meth) +
                                  psim_calc(zo/monob, meth)),
-                                np.where(h_in[0]/monob <= 1, kappa*wind /
-                                         (np.log(h_in[0]/zo) +
-                                          5*h_in[0]/monob-5*zo/monob),
+                                np.where(hin[0]/monob <= 1, kappa*wind /
+                                         (np.log(hin[0]/zo) +
+                                          5*hin[0]/monob-5*zo/monob),
                                          kappa*wind/(np.log(monob/zo)+5 -
                                                      5*zo/monob +
-                                                     5*np.log(h_in[0]/monob) +
-                                                     h_in[0]/monob-1))))
+                                                     5*np.log(hin[0]/monob) +
+                                                     hin[0]/monob-1))))
                                 # Zeng et al. 1998 (7-10)
-        tsr = np.where(h_in[1]/monob < -0.465, kappa*(dt+dter*cskin-dtwl*wl) /
+        tsr = np.where(hin[1]/monob < -0.465, kappa*(dt+dter*cskin-dtwl*wl) /
                        (np.log((-0.465*monob)/zot) -
                         psit_calc(-0.465, meth)+0.8*(np.power(0.465, -1/3) -
-                        np.power(-h_in[1]/monob, -1/3))),
-                       np.where(h_in[1]/monob < 0, kappa*(dt+dter*cskin-dtwl*wl) /
-                                (np.log(h_in[1]/zot) -
-                                 psit_calc(h_in[1]/monob, meth) +
+                        np.power(-hin[1]/monob, -1/3))),
+                       np.where(hin[1]/monob < 0, kappa*(dt+dter*cskin-dtwl*wl) /
+                                (np.log(hin[1]/zot) -
+                                 psit_calc(hin[1]/monob, meth) +
                                  psit_calc(zot/monob, meth)),
-                                np.where(h_in[1]/monob <= 1,
+                                np.where(hin[1]/monob <= 1,
                                          kappa*(dt+dter*cskin-dtwl*wl) /
-                                         (np.log(h_in[1]/zot) +
-                                          5*h_in[1]/monob-5*zot/monob),
+                                         (np.log(hin[1]/zot) +
+                                          5*hin[1]/monob-5*zot/monob),
                                          kappa*(dt+dter*cskin-dtwl*wl) /
                                          (np.log(monob/zot)+5 -
-                                          5*zot/monob+5*np.log(h_in[1]/monob) +
-                                          h_in[1]/monob-1))))
+                                          5*zot/monob+5*np.log(hin[1]/monob) +
+                                          hin[1]/monob-1))))
                                 # Zeng et al. 1998 (11-14)
-        qsr = np.where(h_in[2]/monob < -0.465, kappa*(dq+dqer*cskin) /
+        qsr = np.where(hin[2]/monob < -0.465, kappa*(dq+dqer*cskin) /
                        (np.log((-0.465*monob)/zoq) -
                         psit_calc(-0.465, meth)+psit_calc(zoq/monob, meth) +
                         0.8*(np.power(0.465, -1/3) -
-                             np.power(-h_in[2]/monob, -1/3))),
-                       np.where(h_in[2]/monob < 0,
-                                kappa*(dq+dqer*cskin)/(np.log(h_in[1]/zot) -
-                                psit_calc(h_in[2]/monob, meth) +
+                             np.power(-hin[2]/monob, -1/3))),
+                       np.where(hin[2]/monob < 0,
+                                kappa*(dq+dqer*cskin)/(np.log(hin[1]/zot) -
+                                psit_calc(hin[2]/monob, meth) +
                                 psit_calc(zoq/monob, meth)),
-                                np.where(h_in[2]/monob <= 1,
+                                np.where(hin[2]/monob <= 1,
                                          kappa*(dq+dqer*cskin) /
-                                         (np.log(h_in[1]/zoq)+5*h_in[2]/monob -
+                                         (np.log(hin[1]/zoq)+5*hin[2]/monob -
                                           5*zoq/monob),
                                          kappa*(dq+dqer*cskin)/
                                          (np.log(monob/zoq)+5-5*zoq/monob +
-                                          5*np.log(h_in[2]/monob) +
-                                          h_in[2]/monob-1))))
+                                          5*np.log(hin[2]/monob) +
+                                          hin[2]/monob-1))))
     elif (meth == "C30" or meth == "C35" or meth == "C40"):
-        usr = (wind*kappa/(np.log(h_in[0]/zo)-psiu_26(h_in[0]/monob, meth)))
-        tsr = ((dt+dter*cskin-dtwl*wl)*(kappa/(np.log(h_in[1]/zot) -
-                                       psit_26(h_in[1]/monob))))
-        qsr = ((dq+dqer*cskin)*(kappa/(np.log(h_in[2]/zoq) -
-                                       psit_26(h_in[2]/monob))))
+        usr = (wind*kappa/(np.log(hin[0]/zo)-psiu_26(hin[0]/monob, meth)))
+        tsr = ((dt+dter*cskin-dtwl*wl)*(kappa/(np.log(hin[1]/zot) -
+                                       psit_26(hin[1]/monob))))
+        qsr = ((dq+dqer*cskin)*(kappa/(np.log(hin[2]/zoq) -
+                                       psit_26(hin[2]/monob))))
     else:
-        usr = (wind*kappa/(np.log(h_in[0]/zo)-psim_calc(h_in[0]/monob, meth)))
+        usr = (wind*kappa/(np.log(hin[0]/zo)-psim_calc(hin[0]/monob, meth)))
         tsr = ct*wind*(dt+dter*cskin-dtwl*wl)/usr
         qsr = cq*wind*(dq+dqer*cskin)/usr
     return usr, tsr, qsr
