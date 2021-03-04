@@ -70,9 +70,12 @@ def toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
         hin = np.array([hu, ht, ht])
         del hu, ht, inDt
         #%% run AirSeaFluxCode
-        res = AirSeaFluxCode(spd, t, sst, lat=lat, hum=['rh', rh], P=p,
+        temp = AirSeaFluxCode(spd, t, sst, lat=lat, hum=['rh', rh], P=p,
                              hin=hin, Rs=sw, tol=tolIn, gust=gustIn,
                              cskin=cskinIn, meth=meth, L="ecmwf", n=30)
+        res = temp.loc[:,"tau":"Rnl"]
+        res = res.to_numpy().T
+        del temp
         #%% delete variables
         del spd, t, sst, rh, p, sw, hin
 
@@ -103,7 +106,7 @@ def toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
         res = np.zeros((len(tim),len(lon)*len(lat), 36))
         # reshape input and run code
         for x in range(len(tim)):
-            a = AirSeaFluxCode(spd.reshape(len(tim), len(lon)*len(lat))[x, :],
+            temp = AirSeaFluxCode(spd.reshape(len(tim), len(lon)*len(lat))[x, :],
                                T.reshape(len(tim), len(lon)*len(lat))[x, :],
                                sst.reshape(len(tim), len(lon)*len(lat))[x, :],
                                lat=latIn,
@@ -114,7 +117,10 @@ def toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
                                Rl=lw.reshape(len(tim), len(lon)*len(lat))[x, :],
                                gust=gustIn, cskin=cskinIn, tol=tolIn, qmeth='WMO',
                                meth=meth, n=30, L="ecmwf")
-            res[x, :, :] = a.T
+            a = temp.loc[:,"tau":"Rnl"]
+            a = a.to_numpy()
+            del temp
+            res[x, :, :] = a
             del a
 
     if (outF[-3:] == '.nc'):
@@ -353,9 +359,9 @@ def toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
             dtwl[:] = res[30]
             qair[:] = res[31]
             qsea[:] = res[32]
-            Rl = res[33]
-            Rs = res[34]
-            Rnl = res[35]
+            Rl[:] = res[33]
+            Rs[:] = res[34]
+            Rnl[:] = res[35]
             longitude.long_name = 'Longitude'
             longitude.units = 'degrees East'
             latitude.long_name = 'Latitude'
@@ -429,9 +435,9 @@ def toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
         np.savetxt(outF, np.vstack((date, lon, lat, res)).T,
                    delimiter=',',
                    header="date, lon, lat, tau, shf, lhf, L, cd, cdn, ct, ctn,"
-                   " cq, cqn, tsrv, tsr, qsr, usr, psim, psit, u10n, t10n,"
-                   " tv10n, q10n, zo, zot, zoq, uref, tref, qref, iter, dter,"
-                   " dqer, dtwl, qair, qsea, Rl, Rs, Rnl")
+                   " cq, cqn, tsrv, tsr, qsr, usr, psim, psit, psiq, u10n,"
+                   " t10n, tv10n, q10n, zo, zot, zoq, uref, tref, qref, iter,"
+                   " dter, dqer, dtwl, qair, qsea, Rl, Rs, Rnl")
     return res, lon, lat
 #%% run function
 start_time = time.perf_counter()

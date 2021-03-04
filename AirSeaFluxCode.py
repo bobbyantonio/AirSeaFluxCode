@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import logging
 from get_init import get_init
 from hum_subs import (get_hum, gamma_moist)
@@ -70,7 +71,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
            option : 'flux' to set tolerance limits for fluxes only lim1-3
            option : 'ref' to set tolerance limits for height adjustment lim-1-3
            option : 'all' to set tolerance limits for both fluxes and height
-                    adjustment lim1-6 ['all', 0.01, 0.01, 5e-05, 1e-3, 0.1, 0.1]
+                    adjustment lim1-6 ['all', 0.01, 0.01, 1e-05, 1e-3, 0.1, 0.1]
            default is tol=['flux', 1e-3, 0.1, 0.1]
         n : int
             number of iterations (defautl = 10)
@@ -121,6 +122,10 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                        34. downward longwave radiation (Rl)
                        35. downward shortwave radiation (Rs)
                        36. downward net longwave radiation (Rnl)
+                       37. flag ("n": normal, "ul": spd<2m/s,
+                                 "u": u10n<0, "q":q10n<0
+                                 "t": DT>10, "l": z/L<0.01,
+                                 "i": convergence fail at n)
 
     2021 / Author S. Biri
     """
@@ -132,6 +137,8 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                                                               P, Rl, Rs, cskin,
                                                               skin, wl, gust, L,
                                                               tol, meth, qmeth)
+    flag = np.ones(spd.shape, dtype="object")*"n"
+    flag = np.where(spd < 2, "ul", flag)
     ref_ht = 10        # reference height
     h_in = get_heights(hin, len(spd))  # heights of input measurements/fields
     h_out = get_heights(hout, 1)       # desired height of output variables
@@ -156,6 +163,9 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
 
     dt = Ta - sst
     dq = qair - qsea
+    flag = np.where((dt > 10) & (flag == "n"), "t",
+                    np.where((dt > 10) & (flag != "n"), flag+[","]+["t"],
+                             flag))
     #  first guesses
     t10n, q10n = np.copy(Ta), np.copy(qair)
     tv10n = t10n*(1+0.61*q10n)
@@ -344,6 +354,9 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
             wind[ind] = np.copy(spd[ind])
         u10n[ind] = wind[ind]-usr[ind]/kappa*(np.log(h_in[0, ind]/10) -
                                               psim[ind])
+        flag = np.where((u10n < 0) & (flag == "n"), "u",
+                        np.where((u10n < 0) & (flag != "n"), flag+[","]+["u"],
+                                 flag))
         u10n = np.where(u10n < 0, np.nan, u10n)
         itera[ind] = np.ones(1)*it
         sensible = -rho*cp*usr*tsr
@@ -392,6 +405,15 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     tref = tref-(273.16+tlapse*h_out[1])
     qref = (qair-qsr/kappa*(np.log(h_in[2]/h_out[2]) -
             psit+psit_calc(h_out[2]/monob, meth)))
+    flag = np.where((q10n < 0) & (flag == "n"), "q",
+                    np.where((q10n < 0) & (flag != "n"), flag+[","]+["q"],
+                             flag))
+    flag = np.where((np.abs(hin[0]/monob) < 0.01) & (flag == "n"), "l",
+                    np.where((np.abs(hin[0]/monob) < 0.01) & (flag != "n"),
+                             flag+[","]+["l"], flag))
+    flag = np.where((itera == -1) & (flag == "n"), "i",
+                    np.where((itera == -1) & (flag != "n"), flag+[","]+["i"],
+                             flag))
     res = np.zeros((36, len(spd)))
     res[0][:] = tau
     res[1][:] = sensible
@@ -433,6 +455,17 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     if (out == 0):
         res[:, ind] = np.nan
     # set missing values where data have non acceptable values
-    res = np.where(spd < 0, np.nan, res)
-
-    return res
+    res = [np.where(spd < 0, np.nan, res[i][:]) for i in range(36)]
+    res = [np.where(q10n < 0, np.nan, res[i][:]) for i in range(36)]
+    res = np.asarray(res)
+    # output with pandas
+    resAll = pd.DataFrame(data=res.T, index=range(len(spd)),
+                        columns=["tau", "shf", "lhf", "L", "cd", "cdn", "ct",
+                                "ctn", "cq", "cqn", "tsrv", "tsr", "qsr",
+                                "usr", "psim", "psit","psiq", "u10n", "t10n",
+                                "tv10n", "q10n", "zo", "zot", "zoq", "uref",
+                                "tref", "qref", "iteration", "dter", "dqer",
+                                "dtwl", "qair", "qsea", "Rl", "Rs", "Rnl"])
+    resAll["flag"] = flag
+    return resAll
+    
