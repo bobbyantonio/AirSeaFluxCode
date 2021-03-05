@@ -43,7 +43,7 @@ def cdn_calc(u10n, Ta, Tp, lat, meth="S80"):
                         (0.60 + 0.070*u10n)*0.001,
                         np.power((0.10038+u10n*2.17e-3 +
                                   np.power(u10n, 2)*2.78e-3 -
-                                  np.power(u10n, 3)*4e-5)/u10n, 2)))
+                                  np.power(u10n, 3)*4.4e-5)/u10n, 2)))
     elif (meth == "LY04"):
         cdn = np.where(u10n >= 0.5,
                        (0.142+(2.7/u10n)+(u10n/13.09))*0.001,
