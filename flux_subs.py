@@ -36,11 +36,14 @@ def cdn_calc(u10n, Ta, Tp, lat, meth="S80"):
           meth == "C35" or meth == "C40" or meth == "Beljaars"):
         cdn = cdn_from_roughness(u10n, Ta, None, lat, meth)
     elif (meth == "YT96"):
-        # for u<3 same as S80
+        # for u<3 YT96 convert usr in eq. 21 to cdn
         cdn = np.where((u10n < 6) & (u10n >= 3),
-                       (0.29+3.1/u10n+7.7/u10n**2)*0.001,
-                       np.where((u10n >= 6),
-                       (0.60 + 0.070*u10n)*0.001, (0.61+0.567/u10n)*0.001))
+                        (0.29+3.1/u10n+7.7/np.power(u10n, 2))*0.001,
+                        np.where((u10n >= 6),
+                        (0.60 + 0.070*u10n)*0.001,
+                        np.power((0.10038+u10n*2.17e-3 +
+                                  np.power(u10n, 2)*2.78e-3 -
+                                  np.power(u10n, 3)*4e-5)/u10n, 2)))
     elif (meth == "LY04"):
         cdn = np.where(u10n >= 0.5,
                        (0.142+(2.7/u10n)+(u10n/13.09))*0.001,
