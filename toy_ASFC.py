@@ -213,8 +213,8 @@ def toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
             longitude.units = 'degrees East'
             latitude.long_name = 'Latitude'
             latitude.units = 'degrees North'
-            Date.long_name = "calendar date"
-            Date.units = "YYYYMMDD UTC"
+            Date.long_name = "gregorian"
+            Date.units = "hours since 1900-01-01 00:00:00.0"
             tau.long_name = 'Wind stress'
             tau.units = 'N/m^2'
             sensible.long_name = 'Sensible heat fluxe'
