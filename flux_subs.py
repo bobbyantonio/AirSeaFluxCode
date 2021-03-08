@@ -978,8 +978,8 @@ def get_L(L, lat, usr, tsr, qsr, t10n, hin, Ta, sst, qair, qsea, q10n,
         monob = 1/np.copy(temp)
     elif (L == "ecmwf"):
         tsrv = tsr*(1+0.6077*qair)+0.6077*Ta*qsr
-        Rb = ((g*hin[0]/(Ta*(1+0.61*qair))) *
-              ((t10n*(1+0.61*q10n)-sst*(1+0.61*qsea))/np.power(wind, 2)))
+        Rb = ((g*hin[1])/np.power(wind, 2))*(2*(Ta-sst)/(Ta+sst-g*hin[1]) +
+                                             0.6077*(qair-qsea))
         zo = (0.11*visc_air(Ta)/usr+0.018*np.power(usr, 2)/g)
         zot = 0.40*visc_air(Ta)/usr
         zol = (Rb*(np.power(np.log((hin[0]+zo)/zo)-psim_calc((hin[0]+zo) /
