@@ -137,7 +137,7 @@ def get_init(spd, T, SST, lat, P, Rl, Rs, cskin, skin, wl, gust, L, tol, meth,
     elif (np.size(gust) < 3):
         sys.exit("gust input must be a 3x1 array")
     if (L not in [None, "S80", "ecmwf"]):
-        sys.exit("L input must be either None, 0, 1, 2 or 3")
+        sys.exit("L input must be either None, S80 or ecmwf")
     if ((L == None) and (meth == "S80" or meth == "S88" or meth == "LP82"
                          or meth == "YT96" or meth == "LY04" or
                          meth == "UA" or meth == "C30" or meth == "C35"

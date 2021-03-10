@@ -6,7 +6,7 @@ from util_subs import (CtoK, kappa, gc, visc_air)
 
 def cdn_calc(u10n, Ta, Tp, lat, meth="S80"):
     """
-    Calculates neutral drag coefficient
+    Calculates 10m neutral drag coefficient
 
     Parameters
     ----------
@@ -56,7 +56,7 @@ def cdn_calc(u10n, Ta, Tp, lat, meth="S80"):
 
 def cdn_from_roughness(u10n, Ta, Tp, lat, meth="S88"):
     """
-    Calculates neutral drag coefficient from roughness length
+    Calculates 10m neutral drag coefficient from roughness length
 
     Parameters
     ----------
@@ -97,9 +97,6 @@ def cdn_from_roughness(u10n, Ta, Tp, lat, meth="S88"):
             zo = a*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr
         elif (meth == "C35"):
             a = 0.011*np.ones(Ta.shape)
-            # a = np.where(u10n > 19, 0.0017*19-0.0050,
-            #             np.where((u10n > 7) & (u10n <= 18),
-            #                       0.0017*u10n-0.0050, a))
             a = np.where(u10n > 19, 0.0017*19-0.0050, 0.0017*u10n-0.0050)
             zo = 0.11*visc_air(Ta)/usr+a*np.power(usr, 2)/g
         elif (meth == "C40"):
@@ -117,7 +114,7 @@ def cdn_from_roughness(u10n, Ta, Tp, lat, meth="S88"):
 # ---------------------------------------------------------------------
 
 
-def cd_calc(cdn, height, ref_ht, psim):
+def cd_calc(cdn, hin, hout, psim):
     """
     Calculates drag coefficient at reference height
 
@@ -125,9 +122,9 @@ def cd_calc(cdn, height, ref_ht, psim):
     ----------
     cdn : float
         neutral drag coefficient
-    height : float
+    hin : float
         original sensor height  [m]
-    ref_ht : float
+    hout : float
         reference height        [m]
     psim : float
         momentum stability function
@@ -136,14 +133,14 @@ def cd_calc(cdn, height, ref_ht, psim):
     -------
     cd : float
     """
-    cd = (cdn/np.power(1+(np.sqrt(cdn)*(np.log(height/ref_ht)-psim))/kappa, 2))
+    cd = (cdn/np.power(1+(np.sqrt(cdn)*(np.log(hin/hout)-psim))/kappa, 2))
     return cd
 # ---------------------------------------------------------------------
 
 
 def ctcqn_calc(zol, cdn, u10n, zo, Ta, meth="S80"):
     """
-    Calculates neutral heat and moisture exchange coefficients
+    Calculates 10m neutral heat and moisture exchange coefficients
 
     Parameters
     ----------
@@ -209,9 +206,6 @@ def ctcqn_calc(zol, cdn, u10n, zo, Ta, meth="S80"):
                        1.0e-4/np.power(rr, 0.55)) # temperature roughness
         zoq = np.where(2.0e-5/np.power(rr,0.22) > 1.1e-4/np.power(rr,0.9),
                        1.1e-4/np.power(rr,0.9), 2.0e-5/np.power(rr,0.22))
-        # moisture roughness determined by the CLIMODE, GASEX and CBLAST data
-#        zoq = np.where(5e-5/np.power(rr, 0.6) > 1.15e-4, 1.15e-4,
-#                       5e-5/np.power(rr, 0.6))  # moisture roughness as in C30
         cqn = kappa**2/np.log(10/zo)/np.log(10/zoq)
         ctn = kappa**2/np.log(10/zo)/np.log(10/zot)
     elif (meth == "ecmwf" or meth == "Beljaars"):
@@ -227,7 +221,7 @@ def ctcqn_calc(zol, cdn, u10n, zo, Ta, meth="S80"):
 # ---------------------------------------------------------------------
 
 
-def ctcq_calc(cdn, cd, ctn, cqn, ht, hq, ref_ht, psit, psiq):
+def ctcq_calc(cdn, cd, ctn, cqn, ht, hq, hout, psit, psiq):
     """
     Calculates heat and moisture exchange coefficients at reference height
 
@@ -245,8 +239,8 @@ def ctcq_calc(cdn, cd, ctn, cqn, ht, hq, ref_ht, psit, psiq):
         original temperature sensor height [m]
     hq : float
         original moisture sensor height    [m]
-    ref_ht : float
-        reference height                   [m]
+    hout : float
+        output height                   [m]
     psit : float
         heat stability function
     psiq : float
@@ -260,9 +254,9 @@ def ctcq_calc(cdn, cd, ctn, cqn, ht, hq, ref_ht, psit, psiq):
        moisture exchange coefficient
     """
     ct = (ctn*np.sqrt(cd/cdn) /
-          (1+ctn*((np.log(ht/ref_ht)-psit)/(kappa*np.sqrt(cdn)))))
+          (1+ctn*((np.log(ht/hout)-psit)/(kappa*np.sqrt(cdn)))))
     cq = (cqn*np.sqrt(cd/cdn) /
-          (1+cqn*((np.log(hq/ref_ht)-psiq)/(kappa*np.sqrt(cdn)))))
+          (1+cqn*((np.log(hq/hout)-psiq)/(kappa*np.sqrt(cdn)))))
     return ct, cq
 # ---------------------------------------------------------------------
 
@@ -736,8 +730,6 @@ def cs_ecmwf(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, sst, lat):
         # # fraction of the solar radiation absorbed in layer delta eq. 8.153
         # and Eq.(5) Zeng & Beljaars, 2005
         fs = 0.065+11*d-6.6e-5/d*(1-np.exp(-d/8e-4))
-        # fs = np.maximum(0.065+11*delta-(6.6e-5/delta)*(1-np.exp(-delta/8e-4)),
-        #                 0.01)
         Q = Qnsol-fs*Rns
         d = delta(aw, Q, usr, lat)
     dtc = Q*d/0.6  # (rhow*cw*kw)eq. 8.151
@@ -918,8 +910,8 @@ def get_gust(beta, Ta, usr, tsrv, zi, lat):
 # ---------------------------------------------------------------------
 
 
-def get_L(L, lat, usr, tsr, qsr, t10n, hin, Ta, sst, qair, qsea, q10n,
-          wind, monob, meth):
+def get_L(L, lat, usr, tsr, qsr, hin, Ta, sst, qair, qsea, wind, monob, psim,
+          meth):
     """
     calculates Monin-Obukhov length and virtual star temperature
 
@@ -968,6 +960,7 @@ def get_L(L, lat, usr, tsr, qsr, t10n, hin, Ta, sst, qair, qsea, q10n,
 
     """
     g = gc(lat)
+    Rb = np.empty(sst.shape)
     if (L == "S80"):
         # as in NCAR, LY04
         tsrv = tsr*(1+0.6077*qair)+0.6077*Ta*qsr
@@ -977,20 +970,26 @@ def get_L(L, lat, usr, tsr, qsr, t10n, hin, Ta, sst, qair, qsea, q10n,
         temp = np.minimum(np.abs(temp), 10/hin[0])*np.sign(temp)
         monob = 1/np.copy(temp)
     elif (L == "ecmwf"):
+        Rb = np.empty(sst.shape)
         tsrv = tsr*(1+0.6077*qair)+0.6077*Ta*qsr
-        Rb = g*hin[1]/(wind*wind)*((Ta-sst)/(Ta-0.5*(Ta-sst+g*hin[1] /
-                                                     (1005+1860*qair))) +
-                                   0.6077*(qair-qsea))
+        # from eq. 3.24 ifs Cy46r1 pp. 37
+        thvs = sst*(1+0.6077*qsea) # virtual SST
+        dthv = (Ta-sst)*(1+0.6077*qair)+0.6077*Ta*(qair-qsea)
+        tv = 0.5*(thvs+Ta*(1+0.6077*qair)) # estimate tv within surface layer
+        # adjust wind to T sensor's height
+        uz = (wind-usr/kappa*(np.log(hin[0]/hin[1])-psim +
+                                psim_calc(hin[1]/monob, meth)))
+        Rb = g*dthv*hin[1]/(tv*uz*uz)
         zo = (0.11*visc_air(Ta)/usr+0.018*np.power(usr, 2)/g)
         zot = 0.40*visc_air(Ta)/usr
-        zol = (Rb*(np.power(np.log((hin[0]+zo)/zo)-psim_calc((hin[0]+zo) /
+        zol = (Rb*(np.power(np.log((hin[1]+zo)/zo)-psim_calc((hin[1]+zo) /
                                                               monob, meth) +
                             psim_calc(zo/monob, meth), 2) /
-                   (np.log((hin[0]+zo)/zot) -
-                    psit_calc((hin[0]+zo)/monob, meth) +
+                   (np.log((hin[1]+zo)/zot) -
+                    psit_calc((hin[1]+zo)/monob, meth) +
                     psit_calc(zot/monob, meth))))
-        monob = hin[0]/zol
-    return tsrv, monob
+        monob = hin[1]/zol 
+    return tsrv, monob, Rb
 #------------------------------------------------------------------------------
 
 

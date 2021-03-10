@@ -122,9 +122,9 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                        34. downward longwave radiation (Rl)
                        35. downward shortwave radiation (Rs)
                        36. downward net longwave radiation (Rnl)
-                       37. flag ("n": normal, "ul": spd<2m/s,
+                       37. flag ("n": normal, "o": out of nominal range,
                                  "u": u10n<0, "q":q10n<0
-                                 "t": DT>10, "l": z/L<0.01,
+                                 "m": missing, "l": z/L<0.01,
                                  "i": convergence fail at n)
 
     2021 / Author S. Biri
@@ -138,7 +138,9 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                                                               skin, wl, gust, L,
                                                               tol, meth, qmeth)
     flag = np.ones(spd.shape, dtype="object")*"n"
-    flag = np.where(spd < 2, "ul", flag)
+    flag = np.where(np.isnan(spd+T+SST+lat+hum[1]+P+Rs) & (flag == "n"),
+                    "m", np.where(np.isnan(spd+T+SST+lat+hum[1]+P+Rs) &
+                                  (flag != "n"), flag+[","]+["m"], flag))
     ref_ht = 10        # reference height
     h_in = get_heights(hin, len(spd))  # heights of input measurements/fields
     h_out = get_heights(hout, 1)       # desired height of output variables
@@ -152,6 +154,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                   np.copy(T)*np.power(1000/P,287.1/1004.67))  # potential T
     sst = np.where(SST < 200, np.copy(SST)+CtoK, np.copy(SST))
     qair, qsea = get_hum(hum, T, sst, P, qmeth)
+    Rb = np.empty(sst.shape)
     #lapse rate
     tlapse = gamma_moist(SST, T, qair/1000)
     Ta = np.where(T < 200, np.copy(T)+CtoK+tlapse*h_in[1],
@@ -163,26 +166,24 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
 
     dt = Ta - sst
     dq = qair - qsea
-    flag = np.where((dt > 10) & (flag == "n"), "t",
-                    np.where((dt > 10) & (flag != "n"), flag+[","]+["t"],
-                             flag))
+
     #  first guesses
     t10n, q10n = np.copy(Ta), np.copy(qair)
-    tv10n = t10n*(1+0.61*q10n)
+    tv10n = t10n*(1+0.6077*q10n)
     #  Zeng et al. 1998
-    tv=th*(1.+0.61*qair)   # virtual potential T
-    dtv=dt*(1.+0.61*qair)+0.61*th*dq
+    tv=th*(1+0.6077*qair)   # virtual potential T
+    dtv=dt*(1+0.6077*qair)+0.6077*th*dq
     # ------------
     rho = P*100/(287.1*tv10n)
     lv = (2.501-0.00237*(sst-CtoK))*1e6
     cp = 1004.67*(1 + 0.00084*qsea)
     u10n = np.copy(spd)
-    cdn = cdn_calc(u10n, Ta, None, lat, meth)
-    ctn, ct, cqn, cq = (np.zeros(spd.shape)*np.nan, np.zeros(spd.shape)*np.nan,
+    cd10n = cdn_calc(u10n, Ta, None, lat, meth)
+    ct10n, ct, cq10n, cq = (np.zeros(spd.shape)*np.nan, np.zeros(spd.shape)*np.nan,
                         np.zeros(spd.shape)*np.nan, np.zeros(spd.shape)*np.nan)
     psim, psit, psiq = (np.zeros(spd.shape), np.zeros(spd.shape),
                         np.zeros(spd.shape))
-    cd = cd_calc(cdn, h_in[0], ref_ht, psim)
+    cd = cd_calc(cd10n, h_in[0], ref_ht, psim)
     tsr, tsrv = np.zeros(spd.shape), np.zeros(spd.shape)
     qsr = np.zeros(spd.shape)
     # cskin parameters
@@ -228,22 +229,23 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
         elif (tol[0] == 'all'):
             old = np.array([np.copy(u10n), np.copy(t10n), np.copy(q10n),
                             np.copy(tau), np.copy(sensible), np.copy(latent)])
-        cdn[ind] = cdn_calc(u10n[ind], Ta[ind], None, lat[ind], meth)
-        if (np.all(np.isnan(cdn))):
+        cd10n[ind] = cdn_calc(u10n[ind], Ta[ind], None, lat[ind], meth)
+        if (np.all(np.isnan(cd10n))):
             break
-            logging.info('break %s at iteration %s cdn<0', meth, it)
-        zo[ind] = ref_ht/np.exp(kappa/np.sqrt(cdn[ind]))
+            logging.info('break %s at iteration %s cd10n<0', meth, it)
+        zo[ind] = ref_ht/np.exp(kappa/np.sqrt(cd10n[ind]))
         psim[ind] = psim_calc(h_in[0, ind]/monob[ind], meth)
-        cd[ind] = cd_calc(cdn[ind], h_in[0, ind], ref_ht, psim[ind])
-        ctn[ind], cqn[ind] = ctcqn_calc(h_in[1, ind]/monob[ind], cdn[ind],
-                                        u10n[ind], zo[ind], Ta[ind], meth)
+        cd[ind] = cd_calc(cd10n[ind], h_in[0, ind], ref_ht, psim[ind])
+        ct10n[ind], cq10n[ind] = ctcqn_calc(h_in[1, ind]/monob[ind],
+                                            cd10n[ind], u10n[ind], zo[ind],
+                                            Ta[ind], meth)
         zot[ind] = ref_ht/(np.exp(np.power(kappa, 2) /
-                           (ctn[ind]*np.log(ref_ht/zo[ind]))))
+                           (ct10n[ind]*np.log(ref_ht/zo[ind]))))
         zoq[ind] = ref_ht/(np.exp(np.power(kappa, 2) /
-                           (cqn[ind]*np.log(ref_ht/zo[ind]))))
+                           (cq10n[ind]*np.log(ref_ht/zo[ind]))))
         psit[ind] = psit_calc(h_in[1, ind]/monob[ind], meth)
         psiq[ind] = psit_calc(h_in[2, ind]/monob[ind], meth)
-        ct[ind], cq[ind] = ctcq_calc(cdn[ind], cd[ind], ctn[ind], cqn[ind],
+        ct[ind], cq[ind] = ctcq_calc(cd10n[ind], cd[ind], ct10n[ind], cq10n[ind],
                                       h_in[1, ind], h_in[2, ind], ref_ht,
                                       psit[ind], psiq[ind])
         usr[ind], tsr[ind], qsr[ind] = get_strs(h_in[:, ind], monob[ind],
@@ -325,12 +327,14 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                      tsr[ind]/kappa*(np.log(h_in[1, ind]/ref_ht)-psit[ind]))
         q10n[ind] = (qair[ind] -
                      qsr[ind]/kappa*(np.log(h_in[2, ind]/ref_ht)-psiq[ind]))
-        tv10n[ind] = t10n[ind]*(1+0.61*q10n[ind])
-        tsrv[ind], monob[ind] = get_L(L, lat[ind], usr[ind], tsr[ind],
-                                      qsr[ind], t10n[ind], h_in[:, ind],
-                                      Ta[ind], sst[ind],
-                                      qair[ind], qsea[ind], q10n[ind],
-                                      wind[ind], np.copy(monob[ind]), meth)
+        tv10n[ind] = t10n[ind]*(1+0.6077*q10n[ind])
+        tsrv[ind], monob[ind], Rb[ind] = get_L(L, lat[ind], usr[ind], tsr[ind],
+                                               qsr[ind], h_in[:, ind], Ta[ind],
+                                               sst[ind]-dter[ind]*cskin+dtwl[ind]*wl,
+                                               qair[ind], qsea[ind], wind[ind],
+                                               np.copy(monob[ind]), psim[ind],
+                                               meth)
+        # sst[ind]-dter[ind]*cskin+dtwl[ind]*wl
         psim[ind] = psim_calc(h_in[0, ind]/monob[ind], meth)
         psit[ind] = psit_calc(h_in[1, ind]/monob[ind], meth)
         psiq[ind] = psit_calc(h_in[2, ind]/monob[ind], meth)
@@ -395,14 +399,24 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     # calculate output parameters
     rho = (0.34838*P)/(tv10n)
     t10n = t10n-(273.16+tlapse*ref_ht)
-    zo = ref_ht/np.exp(kappa/cdn**0.5)
-    zot = ref_ht/(np.exp(kappa**2/(ctn*np.log(ref_ht/zo))))
-    zoq = ref_ht/(np.exp(kappa**2/(cqn*np.log(ref_ht/zo))))
+    # solve for zo from cd10n
+    zo = ref_ht/np.exp(kappa/np.sqrt(cd10n))
+    # adjust neutral cdn at any output height
+    cdn = np.power(kappa/np.log(hout/zo), 2)
+    cd = cd_calc(cdn, h_in[0], h_out[0], psim)
+     # solve for zot, zoq from ct10n, cq10n
+    zot = ref_ht/(np.exp(kappa**2/(ct10n*np.log(ref_ht/zo))))
+    zoq = ref_ht/(np.exp(kappa**2/(cq10n*np.log(ref_ht/zo))))
+    # adjust neutral ctn, cqn at any output height
+    ctn =np.power(kappa,2)/(np.log(hout/zo)*np.log(hout/zot))
+    cqn =np.power(kappa,2)/(np.log(hout/zo)*np.log(hout/zoq))
+    ct, cq = ctcq_calc(cdn, cd, ctn, cqn, h_in[1], h_in[2], h_out[1],
+                       psit, psiq)
     uref = (spd-usr/kappa*(np.log(h_in[0]/h_out[0])-psim +
             psim_calc(h_out[0]/monob, meth)))
     tref = (Ta-tsr/kappa*(np.log(h_in[1]/h_out[1])-psit +
             psit_calc(h_out[0]/monob, meth)))
-    tref = tref-(273.16+tlapse*h_out[1])
+    tref = tref-(CtoK+tlapse*h_out[1])
     qref = (qair-qsr/kappa*(np.log(h_in[2]/h_out[2]) -
             psit+psit_calc(h_out[2]/monob, meth)))
     flag = np.where((q10n < 0) & (flag == "n"), "q",
@@ -414,7 +428,41 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     flag = np.where((itera == -1) & (flag == "n"), "i",
                     np.where((itera == -1) & (flag != "n"), flag+[","]+["i"],
                              flag))
-    res = np.zeros((36, len(spd)))
+    if (meth == "S80"):
+        flag = np.where(((u10n < 6) | (u10n > 22)) & (flag == "n"), "o",
+                        np.where(((u10n < 6) | (u10n > 22)) & (flag != "n"),
+                                 flag+[","]+["o"], flag))
+    elif (meth == "LP82"):
+        flag = np.where(((u10n < 3) | (u10n > 25)) & (flag == "n"), "o",
+                        np.where(((u10n < 3) | (u10n > 25)) & (flag != "n"),
+                                 flag+[","]+["o"], flag))
+    elif (meth == "YT96"):
+        flag = np.where(((u10n < 3) | (u10n > 26)) & (flag == "n"), "o",
+                        np.where(((u10n < 3) | (u10n > 26)) & (flag != "n"),
+                                 flag+[","]+["o"], flag))
+    elif (meth == "UA"):
+        flag = np.where(((u10n < 0.5) | (u10n > 18)) & (flag == "n"), "o",
+                        np.where(((u10n < 0.5) | (u10n > 18)) & (flag != "n"),
+                                 flag+[","]+["o"], flag))
+    elif (meth == "LY04"):
+        flag = np.where((u10n < 0.5) & (flag == "n"), "o",
+                        np.where((u10n < 0.5) & (flag != "n"),
+                                 flag+[","]+["o"], flag))
+    if (hum == None):
+        rh = np.ones(sst.shape)*80
+    elif (hum[0] == 'rh'):
+        rh = hum[1]
+        rh = np.where(rh > 100, np.nan, rh)
+    elif (hum[0] == 'Td'):
+        Td = hum[1] # dew point temperature (K)
+        Td = np.where(Td < 200, np.copy(Td)+CtoK, np.copy(Td))
+        T = np.where(T < 200, np.copy(T)+CtoK, np.copy(T))
+        esd = 611.21*np.exp(17.502*((Td-273.16)/(Td-32.19)))
+        es = 611.21*np.exp(17.502*((T-273.16)/(T-32.19)))
+        rh = 100*esd/es
+        rh = np.where(rh > 100, np.nan, rh)
+
+    res = np.zeros((39, len(spd)))
     res[0][:] = tau
     res[1][:] = sensible
     res[2][:] = latent
@@ -451,21 +499,24 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     res[33][:] = Rl
     res[34][:] = Rs
     res[35][:] = Rnl
+    res[36][:] = np.sqrt(np.power(wind, 2)-np.power(spd, 2))
+    res[37][:] = Rb
+    res[38][:] = rh
 
     if (out == 0):
         res[:, ind] = np.nan
     # set missing values where data have non acceptable values
-    res = [np.where(spd < 0, np.nan, res[i][:]) for i in range(36)]
-    res = [np.where(q10n < 0, np.nan, res[i][:]) for i in range(36)]
-    res = np.asarray(res)
+    res = np.asarray([np.where((spd < 0) | (q10n < 0), np.nan,
+                               res[i][:]) for i in range(39)])
     # output with pandas
     resAll = pd.DataFrame(data=res.T, index=range(len(spd)),
                         columns=["tau", "shf", "lhf", "L", "cd", "cdn", "ct",
-                                "ctn", "cq", "cqn", "tsrv", "tsr", "qsr",
-                                "usr", "psim", "psit","psiq", "u10n", "t10n",
-                                "tv10n", "q10n", "zo", "zot", "zoq", "uref",
-                                "tref", "qref", "iteration", "dter", "dqer",
-                                "dtwl", "qair", "qsea", "Rl", "Rs", "Rnl"])
+                                 "ctn", "cq", "cqn", "tsrv", "tsr", "qsr",
+                                 "usr", "psim", "psit","psiq", "u10n", "t10n",
+                                 "tv10n", "q10n", "zo", "zot", "zoq", "uref",
+                                 "tref", "qref", "iteration", "dter", "dqer",
+                                 "dtwl", "qair", "qsea", "Rl", "Rs", "Rnl",
+                                 "ug", "Rib", "rh"])
     resAll["flag"] = flag
     return resAll
     

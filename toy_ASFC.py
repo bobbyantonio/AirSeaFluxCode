@@ -19,14 +19,14 @@ from tabulate import tabulate
 #%%
 def reject_outliers(data, m=2):
     x = np.copy(data)
-    x = np.where(np.abs(x - np.nanmean(x)) < m*np.nanstd(x),
-                    x, np.nan)
+    x = np.where(np.abs(x-np.nanmean(x)) < m*np.nanstd(x), x, np.nan)
     return x
 
 
 def toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
     """
-
+    Example routine of how to run AirSeaFluxCode with the test data given
+    and save output either as .csv or NetCDF
 
     Parameters
     ----------
@@ -39,7 +39,7 @@ def toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
     cskinIn : int
         cool skin option input 0 or 1
     tolIn : float
-        tolerance input option e.g. ['all', 0.01, 0.01, 5e-05, 0.01, 1, 1]
+        tolerance input option e.g. ['all', 0.01, 0.01, 1e-05, 1e-3, 0.1, 0.1]
     meth : str
         parametrisation method option
 
@@ -70,14 +70,9 @@ def toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
         hin = np.array([hu, ht, ht])
         del hu, ht, inDt
         #%% run AirSeaFluxCode
-        temp = AirSeaFluxCode(spd, t, sst, lat=lat, hum=['rh', rh], P=p,
+        res = AirSeaFluxCode(spd, t, sst, lat=lat, hum=['rh', rh], P=p,
                              hin=hin, Rs=sw, tol=tolIn, gust=gustIn,
                              cskin=cskinIn, meth=meth, L="ecmwf", n=30)
-        res = temp.loc[:,"tau":"Rnl"]
-        res = res.to_numpy().T
-        del temp
-        #%% delete variables
-        del spd, t, sst, rh, p, sw, hin
 
     elif (inF == 'era5_r360x180.nc'):
         #%% load era5_r360x180.nc
@@ -95,15 +90,20 @@ def toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
         u = np.array(fid.variables["u10"])
         v = np.array(fid.variables["v10"])
         lsm = np.array(fid.variables["lsm"])
+        icon = np.array(fid.variables["siconc"])
         fid.close()
         spd = np.sqrt(np.power(u, 2)+np.power(v, 2))
         del u, v, fid
         lsm = np.where(lsm > 0, np.nan, 1) # reverse 0 on land 1 over ocean
+        icon = np.where(icon < 0, np.nan, 1)
+        msk = lsm*icon
         hin = np.array([10, 2, 2])
         latIn = np.tile(lat, (len(lon), 1)).T.reshape(len(lon)*len(lat))
         date = np.copy(tim)
+
         #%% run AirSeaFluxCode
-        res = np.zeros((len(tim),len(lon)*len(lat), 36))
+        res = np.zeros((len(tim),len(lon)*len(lat), 39))
+        flg = np.empty((len(tim),len(lon)*len(lat)), dtype="object")
         # reshape input and run code
         for x in range(len(tim)):
             temp = AirSeaFluxCode(spd.reshape(len(tim), len(lon)*len(lat))[x, :],
@@ -117,11 +117,15 @@ def toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
                                Rl=lw.reshape(len(tim), len(lon)*len(lat))[x, :],
                                gust=gustIn, cskin=cskinIn, tol=tolIn, qmeth='WMO',
                                meth=meth, n=30, L="ecmwf")
-            a = temp.loc[:,"tau":"Rnl"]
+            a = temp.loc[:,"tau":"rh"]
             a = a.to_numpy()
-            del temp
+            flg[x, :] = temp["flag"]
             res[x, :, :] = a
-            del a
+            del a, temp
+            n = np.shape(res)
+            res = np.asarray([res[:, :, i]*msk.reshape(n[0], n[1])
+                              for i in range(39)])
+            res = np.moveaxis(res, 0, -1)
 
     if (outF[-3:] == '.nc'):
         if (inF == 'era5_r360x180.nc'):
@@ -169,46 +173,55 @@ def toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
             Rl = fid.createVariable('Rl', 'f4', ('time','lat','lon'))
             Rs = fid.createVariable('Rs', 'f4', ('time','lat','lon'))
             Rnl = fid.createVariable('Rnl', 'f4', ('time','lat','lon'))
+            ug = fid.createVariable('ug', 'f4', ('time','lat','lon'))
+            Rib = fid.createVariable('Rib', 'f4', ('time','lat','lon'))
+            rh = fid.createVariable('rh', 'f4', ('time','lat','lon'))
+            flag = fid.createVariable('flag', 'S1', ('time','lat','lon'))
 
             longitude[:] = lon
             latitude[:] = lat
             Date[:] = tim
-            tau[:] = res[:, :, 0].reshape((len(tim), len(lat), len(lon)))*lsm
-            sensible[:] = res[:, :, 1].reshape((len(tim), len(lat), len(lon)))*lsm
-            latent[:] = res[:, :, 2].reshape((len(tim), len(lat), len(lon)))*lsm
-            monob[:] = res[:, :, 3].reshape((len(tim), len(lat), len(lon)))*lsm
-            cd[:] = res[:, :, 4].reshape((len(tim), len(lat), len(lon)))*lsm
-            cdn[:] = res[:, :, 5].reshape((len(tim), len(lat), len(lon)))*lsm
-            ct[:] = res[:, :, 6].reshape((len(tim), len(lat), len(lon)))*lsm
-            ctn[:] = res[:, :, 7].reshape((len(tim), len(lat), len(lon)))*lsm
-            cq[:] = res[:, :, 8].reshape((len(tim), len(lat), len(lon)))*lsm
-            cqn[:] = res[:, :, 9].reshape((len(tim), len(lat), len(lon)))*lsm
-            tsrv[:] = res[:, :, 10].reshape((len(tim), len(lat), len(lon)))*lsm
-            tsr[:] = res[:, :, 11].reshape((len(tim), len(lat), len(lon)))*lsm
-            qsr[:] = res[:, :, 12].reshape((len(tim), len(lat), len(lon)))*lsm
-            usr[:] = res[:, :, 13].reshape((len(tim), len(lat), len(lon)))*lsm
-            psim[:] = res[:, :, 14].reshape((len(tim), len(lat), len(lon)))*lsm
-            psit[:] = res[:, :, 15].reshape((len(tim), len(lat), len(lon)))*lsm
-            psiq[:] = res[:, :, 16].reshape((len(tim), len(lat), len(lon)))*lsm
-            u10n[:] = res[:, :, 17].reshape((len(tim), len(lat), len(lon)))*lsm
-            t10n[:] = res[:, :, 18].reshape((len(tim), len(lat), len(lon)))*lsm
-            tv10n[:] = res[:, :, 19].reshape((len(tim), len(lat), len(lon)))*lsm
-            q10n[:] = res[:, :, 20].reshape((len(tim), len(lat), len(lon)))*lsm
-            zo[:] = res[:, :, 21].reshape((len(tim), len(lat), len(lon)))*lsm
-            zot[:] = res[:, :, 22].reshape((len(tim), len(lat), len(lon)))*lsm
-            zoq[:] = res[:, :, 23].reshape((len(tim), len(lat), len(lon)))*lsm
-            urefs[:] = res[:, :, 24].reshape((len(tim), len(lat), len(lon)))*lsm
-            trefs[:] = res[:, :, 25].reshape((len(tim), len(lat), len(lon)))*lsm
-            qrefs[:] = res[:, :, 26].reshape((len(tim), len(lat), len(lon)))*lsm
-            itera[:] = res[:, :, 27].reshape((len(tim), len(lat), len(lon)))*lsm
-            dter[:] = res[:, :, 28].reshape((len(tim), len(lat), len(lon)))*lsm
-            dqer[:] = res[:, :, 29].reshape((len(tim), len(lat), len(lon)))*lsm
-            dtwl[:] = res[:, :, 30].reshape((len(tim), len(lat), len(lon)))*lsm
-            qair[:] = res[:, :, 31].reshape((len(tim), len(lat), len(lon)))*lsm
-            qsea[:] = res[:, :, 32].reshape((len(tim), len(lat), len(lon)))*lsm
-            Rl = res[:, :, 33].reshape((len(tim), len(lat), len(lon)))
-            Rs = res[:, :, 34].reshape((len(tim), len(lat), len(lon)))
-            Rnl = res[:, :, 35].reshape((len(tim), len(lat), len(lon)))
+            tau[:] = res[:, :, 0].reshape((len(tim), len(lat), len(lon)))*msk
+            sensible[:] = res[:, :, 1].reshape((len(tim), len(lat), len(lon)))*msk
+            latent[:] = res[:, :, 2].reshape((len(tim), len(lat), len(lon)))*msk
+            monob[:] = res[:, :, 3].reshape((len(tim), len(lat), len(lon)))*msk
+            cd[:] = res[:, :, 4].reshape((len(tim), len(lat), len(lon)))*msk
+            cdn[:] = res[:, :, 5].reshape((len(tim), len(lat), len(lon)))*msk
+            ct[:] = res[:, :, 6].reshape((len(tim), len(lat), len(lon)))*msk
+            ctn[:] = res[:, :, 7].reshape((len(tim), len(lat), len(lon)))*msk
+            cq[:] = res[:, :, 8].reshape((len(tim), len(lat), len(lon)))*msk
+            cqn[:] = res[:, :, 9].reshape((len(tim), len(lat), len(lon)))*msk
+            tsrv[:] = res[:, :, 10].reshape((len(tim), len(lat), len(lon)))*msk
+            tsr[:] = res[:, :, 11].reshape((len(tim), len(lat), len(lon)))*msk
+            qsr[:] = res[:, :, 12].reshape((len(tim), len(lat), len(lon)))*msk
+            usr[:] = res[:, :, 13].reshape((len(tim), len(lat), len(lon)))*msk
+            psim[:] = res[:, :, 14].reshape((len(tim), len(lat), len(lon)))*msk
+            psit[:] = res[:, :, 15].reshape((len(tim), len(lat), len(lon)))*msk
+            psiq[:] = res[:, :, 16].reshape((len(tim), len(lat), len(lon)))*msk
+            u10n[:] = res[:, :, 17].reshape((len(tim), len(lat), len(lon)))*msk
+            t10n[:] = res[:, :, 18].reshape((len(tim), len(lat), len(lon)))*msk
+            tv10n[:] = res[:, :, 19].reshape((len(tim), len(lat), len(lon)))*msk
+            q10n[:] = res[:, :, 20].reshape((len(tim), len(lat), len(lon)))*msk
+            zo[:] = res[:, :, 21].reshape((len(tim), len(lat), len(lon)))*msk
+            zot[:] = res[:, :, 22].reshape((len(tim), len(lat), len(lon)))*msk
+            zoq[:] = res[:, :, 23].reshape((len(tim), len(lat), len(lon)))*msk
+            urefs[:] = res[:, :, 24].reshape((len(tim), len(lat), len(lon)))*msk
+            trefs[:] = res[:, :, 25].reshape((len(tim), len(lat), len(lon)))*msk
+            qrefs[:] = res[:, :, 26].reshape((len(tim), len(lat), len(lon)))*msk
+            itera[:] = res[:, :, 27].reshape((len(tim), len(lat), len(lon)))*msk
+            dter[:] = res[:, :, 28].reshape((len(tim), len(lat), len(lon)))*msk
+            dqer[:] = res[:, :, 29].reshape((len(tim), len(lat), len(lon)))*msk
+            dtwl[:] = res[:, :, 30].reshape((len(tim), len(lat), len(lon)))*msk
+            qair[:] = res[:, :, 31].reshape((len(tim), len(lat), len(lon)))*msk
+            qsea[:] = res[:, :, 32].reshape((len(tim), len(lat), len(lon)))*msk
+            Rl[:] = res[:, :, 33].reshape((len(tim), len(lat), len(lon)))*msk
+            Rs[:] = res[:, :, 34].reshape((len(tim), len(lat), len(lon)))*msk
+            Rnl[:] = res[:, :, 35].reshape((len(tim), len(lat), len(lon)))*msk
+            ug[:] = res[:, :, 36].reshape((len(tim), len(lat), len(lon)))*msk
+            Rib[:] = res[:, :, 37].reshape((len(tim), len(lat), len(lon)))*msk
+            rh[:] = res[:, :, 38].reshape((len(tim), len(lat), len(lon)))*msk
+            flag[:] = flg.reshape((len(tim), len(lat), len(lon)))
+
             longitude.long_name = 'Longitude'
             longitude.units = 'degrees East'
             latitude.long_name = 'Latitude'
@@ -252,7 +265,7 @@ def toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
             tv10n.long_name = '10m neutral virtual temperature'
             tv10n.units = 'degrees Celsius'
             q10n.long_name = '10m neutral specific humidity'
-            q10n.units = 'gr/kgr'
+            q10n.units = 'kgr/kgr'
             zo.long_name = 'momentum roughness length'
             zo.units = 'm'
             zot.long_name = 'temperature roughness length'
@@ -264,19 +277,33 @@ def toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
             trefs.long_name = 'temperature at ref height'
             trefs.units = 'degrees Celsius'
             qrefs.long_name = 'specific humidity at ref height'
-            qrefs.units = 'gr/kgr'
+            qrefs.units = 'kgr/kgr'
             qair.long_name = 'specific humidity of air'
-            qair.units = 'gr/kgr'
+            qair.units = 'kgr/kgr'
             qsea.long_name = 'specific humidity over water'
-            qsea.units = 'gr/kgr'
+            qsea.units = 'kgr/kgr'
             itera.long_name = 'number of iterations'
+            Rl.long_name = 'downward longwave radiation'
+            Rl.units = 'W/m^2'
+            Rs.long_name = 'downward shortwave radiation'
+            Rs.units = 'W/m^2'
+            Rnl.long_name = 'downward net longwave radiation'
+            Rnl.units = 'W/m^2'
+            ug.long_name = 'gust wind speed'
+            ug.units = 'm/s'
+            Rib.long_name = 'bulk Richardson number'
+            rh.long_name = 'relative humidity'
+            rh.units = '%'
+            flag.long_name = ('flag "n" normal, "u": u10n < 0, "q": q10n < 0,'
+                              '"l": zol<0.01, "m": missing, "i": points that'
+                              'have not converged')
             fid.close()
             #%% delete variables
             del longitude, latitude, Date, tau, sensible, latent, monob, cd, cdn
             del ct, ctn, cq, cqn, tsrv, tsr, qsr, usr, psim, psit, psiq, u10n, t10n
             del tv10n, q10n, zo, zot, zoq, urefs, trefs, qrefs, itera, dter, dqer
             del qair, qsea, Rl, Rs, Rnl, dtwl
-            del tim, T, Td, p, lw, sw, lsm, spd, hin, latIn
+            del tim, T, Td, p, lw, sw, lsm, spd, hin, latIn, icon, msk
         else:
             #%% save NetCDF4
             fid = nc.Dataset(outF,'w', format='NETCDF4')
@@ -316,52 +343,61 @@ def toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
             itera = fid.createVariable('iter', 'i4', 'time')
             dter = fid.createVariable('dter', 'f4', 'time')
             dqer = fid.createVariable('dqer', 'f4', 'time')
-            dtwl = fid.createVariable('dter', 'f4', 'time')
+            dtwl = fid.createVariable('dtwl', 'f4', 'time')
             qair = fid.createVariable('qair', 'f4', 'time')
             qsea = fid.createVariable('qsea', 'f4', 'time')
             Rl = fid.createVariable('Rl', 'f4', 'time')
             Rs = fid.createVariable('Rs', 'f4', 'time')
             Rnl = fid.createVariable('Rnl', 'f4', 'time')
+            ug = fid.createVariable('ug', 'f4', 'time')
+            Rib = fid.createVariable('Rib', 'f4', 'time')
+            rh = fid.createVariable('rh', 'f4', 'time')
+            flag = fid.createVariable('flag', 'S1', 'time')
 
             longitude[:] = lon
             latitude[:] = lat
             Date[:] = date
-            tau[:] = res[0]
-            sensible[:] = res[1]
-            latent[:] = res[2]
-            monob[:] = res[3]
-            cd[:] = res[4]
-            cdn[:] = res[5]
-            ct[:] = res[6]
-            ctn[:] = res[7]
-            cq[:] = res[8]
-            cqn[:] = res[9]
-            tsrv[:] = res[10]
-            tsr[:] = res[11]
-            qsr[:] = res[12]
-            usr[:] = res[13]
-            psim[:] = res[14]
-            psit[:] = res[15]
-            psiq[:] = res[16]
-            u10n[:] = res[17]
-            t10n[:] = res[18]
-            tv10n[:] = res[19]
-            q10n[:] = res[20]
-            zo[:] = res[21]
-            zot[:] = res[22]
-            zoq[:] = res[23]
-            urefs[:] = res[24]
-            trefs[:] = res[25]
-            qrefs[:] = res[26]
-            itera[:] = res[27]
-            dter[:] = res[28]
-            dqer[:] = res[29]
-            dtwl[:] = res[30]
-            qair[:] = res[31]
-            qsea[:] = res[32]
-            Rl[:] = res[33]
-            Rs[:] = res[34]
-            Rnl[:] = res[35]
+            tau[:] = res["tau"]
+            sensible[:] = res["shf"]
+            latent[:] = res["lhf"]
+            monob[:] = res["L"]
+            cd[:] = res["cd"]
+            cdn[:] = res["cdn"]
+            ct[:] = res["ct"]
+            ctn[:] = res["ctn"]
+            cq[:] = res["cq"]
+            cqn[:] = res["cqn"]
+            tsrv[:] = res["tsrv"]
+            tsr[:] = res["tsr"]
+            qsr[:] = res["qsr"]
+            usr[:] = res["usr"]
+            psim[:] = res["psim"]
+            psit[:] = res["psit"]
+            psiq[:] = res["psiq"]
+            u10n[:] = res["u10n"]
+            t10n[:] = res["t10n"]
+            tv10n[:] = res["tv10n"]
+            q10n[:] = res["q10n"]
+            zo[:] = res["zo"]
+            zot[:] = res["zot"]
+            zoq[:] = res["zoq"]
+            urefs[:] = res["uref"]
+            trefs[:] = res["tref"]
+            qrefs[:] = res["qref"]
+            itera[:] = res["iteration"]
+            dter[:] = res["dter"]
+            dqer[:] = res["dqer"]
+            dtwl[:] = res["dtwl"]
+            qair[:] = res["qair"]
+            qsea[:] = res["qsea"]
+            Rl[:] = res["Rl"]
+            Rs[:] = res["Rs"]
+            Rnl[:] = res["Rnl"]
+            ug[:] = res["ug"]
+            Rib[:] = res["Rib"]
+            rh[:] = res["rh"]
+            flag[:] = res["flag"]
+
             longitude.long_name = 'Longitude'
             longitude.units = 'degrees East'
             latitude.long_name = 'Latitude'
@@ -405,7 +441,7 @@ def toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
             tv10n.long_name = '10m neutral virtual temperature'
             tv10n.units = 'degrees Celsius'
             q10n.long_name = '10m neutral specific humidity'
-            q10n.units = 'gr/kgr'
+            q10n.units = 'kgr/kgr'
             zo.long_name = 'momentum roughness length'
             zo.units = 'm'
             zot.long_name = 'temperature roughness length'
@@ -417,27 +453,39 @@ def toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
             trefs.long_name = 'temperature at ref height'
             trefs.units = 'degrees Celsius'
             qrefs.long_name = 'specific humidity at ref height'
-            qrefs.units = 'gr/kgr'
+            qrefs.units = 'kgr/kgr'
             qair.long_name = 'specific humidity of air'
-            qair.units = 'gr/kgr'
+            qair.units = 'kgr/kgr'
             qsea.long_name = 'specific humidity over water'
-            qsea.units = 'gr/kgr'
+            qsea.units = 'kgr/kgr'
             itera.long_name = 'number of iterations'
+            Rl.long_name = 'downward longwave radiation'
+            Rl.units = 'W/m^2'
+            Rs.long_name = 'downward shortwave radiation'
+            Rs.units = 'W/m^2'
+            Rnl.long_name = 'downward net longwave radiation'
+            Rnl.units = 'W/m^2'
+            ug.long_name = 'gust wind speed'
+            ug.units = 'm/s'
+            Rib.long_name = 'bulk Richardson number'
+            rh.long_name = 'relative humidity'
+            rh.units = '%'
+            flag.long_name = ('flag "n" normal, "u": u10n < 0, "q": q10n < 0,'
+                              '"l": zol<0.01, "m": missing, "i": points that'
+                              'have not converged')
             fid.close()
             #%% delete variables
             del longitude, latitude, Date, tau, sensible, latent, monob, cd, cdn
             del ct, ctn, cq, cqn, tsrv, tsr, qsr, usr, psim, psit, psiq, u10n, t10n
             del tv10n, q10n, zo, zot, zoq, urefs, trefs, qrefs, itera, dter, dqer
-            del qair, qsea, Rl, Rs, Rnl
-            del t, rh, date, p, sw, spd, hin
+            del qair, qsea, Rl, Rs, Rnl, ug, rh, Rib
+            del t, date, p, sw, spd, hin, sst
     else:
         #%% save as .csv
-        np.savetxt(outF, np.vstack((date, lon, lat, res)).T,
-                   delimiter=',',
-                   header="date, lon, lat, tau, shf, lhf, L, cd, cdn, ct, ctn,"
-                   " cq, cqn, tsrv, tsr, qsr, usr, psim, psit, psiq, u10n,"
-                   " t10n, tv10n, q10n, zo, zot, zoq, uref, tref, qref, iter,"
-                   " dter, dqer, dtwl, qair, qsea, Rl, Rs, Rnl")
+        res.insert(loc=0, column='date', value=date)
+        res.insert(loc=1, column='lon', value=lon)
+        res.insert(loc=2, column='lat', value=lat)
+        res.to_csv(outF)
     return res, lon, lat
 #%% run function
 start_time = time.perf_counter()
@@ -530,7 +578,7 @@ elif (inF == "data_all.csv"):
     ttl = ["tau (Nm$^{-2}$)", "shf (Wm$^{-2}$)", "lhf (Wm$^{-2}$)"]
     for i in range(3):
         plt.figure()
-        plt.plot(res[i],'.c', markersize=1)
+        plt.plot(res[ttl[i][:3]],'.c', markersize=1)
         plt.title(meth)
         plt.xlabel("points")
         plt.ylabel(ttl[i])
@@ -564,7 +612,8 @@ ttl = np.asarray(["tau  ", "shf  ", "lhf  ", "L    ", "cd   ", "cdn  ",
                   "qsr  ", "usr  ", "psim ", "psit ", "psiq ", "u10n ",
                   "t10n ", "tv10n", "q10n ", "zo   ", "zot  ", "zoq  ",
                   "urefs", "trefs", "qrefs", "itera", "dter ", "dqer ",
-                  "dtwl ", "qair ", "qsea ", "Rl   ", "Rs   ", "Rnl  "])
+                  "dtwl ", "qair ", "qsea ", "Rl   ", "Rs   ", "Rnl  ",
+                  "ug   ", "Rib  ", "rh   "])
 header = ["var", "mean", "median", "min", "max", "5%", "95%"]
 n = np.shape(res)
 stats = np.copy(ttl)
@@ -582,16 +631,18 @@ if (inF == 'era5_r360x180.nc'):
                                "2.2e")), file=open('./stats.txt', 'a'))
     print('-'*79+'\n', file=open('./stats.txt', 'a'))
 elif (inF == "data_all.csv"):
-    stats = np.c_[stats, np.nanmean(res, axis=1)]
-    stats = np.c_[stats, np.nanmedian(res, axis=1)]
-    stats = np.c_[stats, np.nanmin(res, axis=1)]
-    stats = np.c_[stats, np.nanmax(res, axis=1)]
-    stats = np.c_[stats, np.nanpercentile(res, 5, axis=1)]
-    stats = np.c_[stats, np.nanpercentile(res, 95, axis=1)]
+    a = res.loc[:,"tau":"rh"].to_numpy(dtype="float64").T
+    stats = np.c_[stats, np.nanmean(a, axis=1)]
+    stats = np.c_[stats, np.nanmedian(a, axis=1)]
+    stats = np.c_[stats, np.nanmin(a, axis=1)]
+    stats = np.c_[stats, np.nanmax(a, axis=1)]
+    stats = np.c_[stats, np.nanpercentile(a, 5, axis=1)]
+    stats = np.c_[stats, np.nanpercentile(a, 95, axis=1)]
     print(tabulate(stats, headers=header, tablefmt="github", numalign="left",
                    floatfmt=("s", "2.2e", "2.2e", "2.2e", "2.2e", "2.2e",
                                "2.2e")), file=open('./stats.txt', 'a'))
     print('-'*79+'\n', file=open('./stats.txt', 'a'))
+    del a
 
 print('input file name: {}, \n method: {}, \n gustiness: {}, \n cskin: {},'
       ' \n tolerance: {}, \n output is written in: {}'.format(inF, meth,
