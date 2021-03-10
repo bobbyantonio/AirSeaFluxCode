@@ -403,14 +403,14 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     zo = ref_ht/np.exp(kappa/np.sqrt(cd10n))
     # adjust neutral cdn at any output height
     cdn = np.power(kappa/np.log(hout/zo), 2)
-    cd = cd_calc(cdn, h_in[0], h_out[0], psim)
-     # solve for zot, zoq from ct10n, cq10n
+    cd = cd_calc(cdn, h_out[0], h_out[0], psim)
+    # solve for zot, zoq from ct10n, cq10n
     zot = ref_ht/(np.exp(kappa**2/(ct10n*np.log(ref_ht/zo))))
     zoq = ref_ht/(np.exp(kappa**2/(cq10n*np.log(ref_ht/zo))))
     # adjust neutral ctn, cqn at any output height
-    ctn =np.power(kappa,2)/(np.log(hout/zo)*np.log(hout/zot))
-    cqn =np.power(kappa,2)/(np.log(hout/zo)*np.log(hout/zoq))
-    ct, cq = ctcq_calc(cdn, cd, ctn, cqn, h_in[1], h_in[2], h_out[1],
+    ctn =np.power(kappa, 2)/(np.log(h_out[0]/zo)*np.log(h_out[1]/zot))
+    cqn =np.power(kappa, 2)/(np.log(h_out[0]/zo)*np.log(h_out[2]/zoq))
+    ct, cq = ctcq_calc(cdn, cd, ctn, cqn, h_out[1], h_out[2], h_out[1],
                        psit, psiq)
     uref = (spd-usr/kappa*(np.log(h_in[0]/h_out[0])-psim +
             psim_calc(h_out[0]/monob, meth)))
