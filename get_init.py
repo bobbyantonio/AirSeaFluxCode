@@ -1,7 +1,7 @@
 import numpy as np
 import sys
 
-def get_init(spd, T, SST, lat, P, Rl, Rs, cskin, skin, wl, gust, L, tol, meth,
+def get_init(spd, T, SST, lat, hum, P, Rl, Rs, cskin, skin, wl, gust, L, tol, meth,
              qmeth):
     """
     Checks initial input values and sets defaults if needed
@@ -17,6 +17,8 @@ def get_init(spd, T, SST, lat, P, Rl, Rs, cskin, skin, wl, gust, L, tol, meth,
         sea surface temperature in K
     lat : float
         latitude (deg), default 45deg
+    hum : float
+        relative humidity, if None is set to 80%
     P : float
         air pressure (hPa), default 1013hPa
     Rl : float
@@ -100,6 +102,11 @@ def get_init(spd, T, SST, lat, P, Rl, Rs, cskin, skin, wl, gust, L, tol, meth,
         lat = 45*np.ones(spd.shape)
     elif ((np.all(lat != None)) and (np.size(lat) == 1)):
         lat = np.ones(spd.shape)*np.copy(lat)
+    if (hum == None):
+        RH = np.ones(SST.shape)*80
+        hum = ['rh', RH]
+    else:
+        hum = hum
     if ((np.all(P == None)) or np.all(np.isnan(P))):
         P = np.ones(spd.shape)*1013
     elif (((np.all(P != None)) or np.all(~np.isnan(P))) and np.size(P) == 1):
@@ -149,4 +156,4 @@ def get_init(spd, T, SST, lat, P, Rl, Rs, cskin, skin, wl, gust, L, tol, meth,
         tol = ['flux', 1e-3, 0.1, 0.1]
     elif (tol[0] not in ['flux', 'ref', 'all']):
         sys.exit("unknown tolerance input")
-    return lat, P, Rl, Rs, cskin, skin, wl, gust, tol, L
+    return lat, hum, P, Rl, Rs, cskin, skin, wl, gust, tol, L

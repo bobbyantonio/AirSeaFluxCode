@@ -136,14 +136,15 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                         format='%(asctime)s %(message)s',level=logging.INFO)
     logging.captureWarnings(True)
     #  check input values and set defaults where appropriate
-    lat, P, Rl, Rs, cskin, skin, wl, gust, tol, L = get_init(spd, T, SST, lat,
-                                                              P, Rl, Rs, cskin,
-                                                              skin, wl, gust, L,
-                                                              tol, meth, qmeth)
+    lat, hum, P, Rl, Rs, cskin, skin, wl, gust, tol, L = get_init(spd, T, SST,
+                                                                  lat, hum, P,
+                                                                  Rl, Rs,
+                                                                  cskin, skin,
+                                                                  wl, gust, L,
+                                                                  tol, meth,
+                                                                  qmeth)
     flag = np.ones(spd.shape, dtype="object")*"n"
-    flag = np.where(np.isnan(spd+T+SST+lat+hum[1]+P+Rs) & (flag == "n"),
-                    "m", np.where(np.isnan(spd+T+SST+lat+hum[1]+P+Rs) &
-                                  (flag != "n"), flag+[","]+["m"], flag))
+    flag = np.where(np.isnan(spd+T+SST+lat+hum[1]+P+Rs), "m", flag)
     ref_ht = 10        # reference height
     h_in = get_heights(hin, len(spd))  # heights of input measurements/fields
     h_out = get_heights(hout, 1)       # desired height of output variables
