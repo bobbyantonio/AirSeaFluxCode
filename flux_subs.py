@@ -123,7 +123,7 @@ def cd_calc(cdn, hin, hout, psim):
     cdn : float
         neutral drag coefficient
     hin : float
-        original sensor height  [m]
+        wind speed height  [m]
     hout : float
         reference height        [m]
     psim : float
@@ -236,11 +236,11 @@ def ctcq_calc(cdn, cd, ctn, cqn, ht, hq, hout, psit, psiq):
     cqn : float
         neutral moisture exchange coefficient
     ht : float
-        original temperature sensor height [m]
+        original temperature height [m]
     hq : float
-        original moisture sensor height    [m]
+        original moisture height    [m]
     hout : float
-        output height                   [m]
+        reference height            [m]
     psit : float
         heat stability function
     psiq : float
