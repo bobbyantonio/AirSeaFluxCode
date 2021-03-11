@@ -123,7 +123,7 @@ def cd_calc(cdn, hin, hout, psim):
     cdn : float
         neutral drag coefficient
     hin : float
-        wind speed height  [m]
+        wind speed height       [m]
     hout : float
         reference height        [m]
     psim : float
