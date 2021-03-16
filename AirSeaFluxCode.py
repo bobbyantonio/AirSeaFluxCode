@@ -362,8 +362,8 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
         u10n[ind] = wind[ind]-usr[ind]/kappa*(np.log(h_in[0, ind]/10) -
                                               psim[ind])
         flag = np.where((u10n < 0) & (flag == "n"), "u",
-                        np.where((u10n < 0) & (flag != "n"), flag+[","]+["u"],
-                                 flag))
+                        np.where((u10n < 0) & (flag != "u"),
+                                 flag+[","]+["u"], flag))
         u10n = np.where(u10n < 0, np.nan, u10n)
         itera[ind] = np.ones(1)*it
         sensible = -rho*cp*usr*tsr
