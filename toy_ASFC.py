@@ -94,8 +94,8 @@ def toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
         fid.close()
         spd = np.sqrt(np.power(u, 2)+np.power(v, 2))
         del u, v, fid
-        lsm = np.where(lsm > 0, np.nan, 1) # reverse 0 on land 1 over ocean
-        icon = np.where(icon < 0, np.nan, 1)
+        lsm = np.where(lsm >= 0, np.nan, 1) # reverse 0 on land 1 over ocean
+        icon = np.where(icon <= 0, np.nan, 1)
         msk = lsm*icon
         hin = np.array([10, 2, 2])
         latIn = np.tile(lat, (len(lon), 1)).T.reshape(len(lon)*len(lat))
@@ -126,7 +126,8 @@ def toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
             res = np.asarray([res[:, :, i]*msk.reshape(n[0], n[1])
                               for i in range(39)])
             res = np.moveaxis(res, 0, -1)
-
+        flg = np.where(np.isnan(msk.reshape(len(tim), len(lon)*len(lat))),
+                       'm', flg)
     if (outF[-3:] == '.nc'):
         if (inF == 'era5_r360x180.nc'):
             #%% save NetCDF4
@@ -352,7 +353,7 @@ def toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
             ug = fid.createVariable('ug', 'f4', 'time')
             Rib = fid.createVariable('Rib', 'f4', 'time')
             rh = fid.createVariable('rh', 'f4', 'time')
-            flag = fid.createVariable('flag', 'S1', 'time')
+            flag = fid.createVariable('flag', 'U1', 'time')
 
             longitude[:] = lon
             latitude[:] = lat
