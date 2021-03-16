@@ -58,7 +58,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
             default for UA, ecmwf [1, 1, 1000]
             default else [1, 1.2, 800]
         meth : str
-            "S80", "S88", "LP82", "YT96", "UA", "LY04", "C30", "C35", "C40",
+            "S80", "S88", "LP82", "YT96", "UA", "LY04", "C30", "C35",
             "ecmwf", "Beljaars"
         qmeth : str
             is the saturation evaporation method to use amongst
@@ -86,17 +86,17 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     Returns
     -------
         res : array that contains
-                       1. momentum flux (N/m^2)
-                       2. sensible heat (W/m^2)
-                       3. latent heat (W/m^2)
-                       4. Monin-Obhukov length (mb)
+                       1. momentum flux       (N/m^2)
+                       2. sensible heat       (W/m^2)
+                       3. latent heat         (W/m^2)
+                       4. Monin-Obhukov length (m)
                        5. drag coefficient (cd)
                        6. neutral drag coefficient (cdn)
-                       7. heat exhange coefficient (ct)
-                       8. neutral heat exhange coefficient (ctn)
+                       7. heat exchange coefficient (ct)
+                       8. neutral heat exchange coefficient (ctn)
                        9. moisture exhange coefficient (cq)
-                       10. neutral moisture exhange coefficient (cqn)
-                       11. star virtual temperature (tsrv)
+                       10. neutral moisture exchange coefficient (cqn)
+                       11. star virtual temperatcure (tsrv)
                        12. star temperature (tsr)
                        13. star specific humidity (qsr)
                        14. star wind speed (usr)
@@ -110,7 +110,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                        22. surface roughness length (zo)
                        23. heat roughness length (zot)
                        24. moisture roughness length (zoq)
-                       25. velocity at reference height (uref)
+                       25. wind speed at reference height (uref)
                        26. temperature at reference height (tref)
                        27. specific humidity at reference height (qref)
                        28. number of iterations until convergence
@@ -349,8 +349,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                                   np.power(get_gust(gust[1], tv[ind], usr[ind],
                                   tsrv[ind], gust[2], lat[ind]), 2)))
                                   # Zeng et al. 1998 (20)
-        elif (gust[0] == 1 and (meth == "C30" or meth == "C35" or
-                                meth == "C40")):
+        elif (gust[0] == 1 and (meth == "C30" or meth == "C35")):
             wind[ind] = np.sqrt(np.power(np.copy(spd[ind]), 2) +
                                 np.power(get_gust(gust[1], Ta[ind], usr[ind],
                                 tsrv[ind], gust[2], lat[ind]), 2))

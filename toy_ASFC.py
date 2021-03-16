@@ -493,7 +493,7 @@ start_time = time.perf_counter()
 inF = input("Give input file name (data_all.csv or era5_r360x180.nc): \n")
 meth = input("Give prefered method: \n")
 while meth not in ["S80", "S88", "LP82", "YT96", "UA", "LY04", "C30", "C35",
-                   "C40", "ecmwf","Beljaars"]:
+                   "ecmwf","Beljaars"]:
     print("method unknown")
     meth = input("Give prefered method: \n")
 else:
@@ -519,8 +519,8 @@ if (cskinIn == ''):
                              meth == "LY04")):
         cskinIn = 0
         ext = ext+'noskin_'
-    elif ((cskinIn == None) and (meth == "C30" or meth == "C35" or meth == "C40"
-                               or meth == "ecmwf" or meth == "Beljaars")):
+    elif ((cskinIn == None) and (meth == "C30" or meth == "C35"
+                                 or meth == "ecmwf" or meth == "Beljaars")):
         cskinIn = 1
         ext = ext+'skin_'
 else:
@@ -589,10 +589,10 @@ if ((cskinIn == None) and (meth == "S80" or meth == "S88" or meth == "LP82"
                            or meth == "YT96" or meth == "UA" or
                            meth == "LY04")):
    cskinIn = 0
-elif ((cskinIn == None) and (meth == "C30" or meth == "C35" or meth == "C40"
+elif ((cskinIn == None) and (meth == "C30" or meth == "C35"
                              or meth == "ecmwf" or meth == "Beljaars")):
    cskinIn = 1
-if (np.all(gustIn == None) and (meth == "C30" or meth == "C35" or meth == "C40")):
+if (np.all(gustIn == None) and (meth == "C30" or meth == "C35")):
     gustIn = [1, 1.2, 600]
 elif (np.all(gustIn == None) and (meth == "UA" or meth == "ecmwf")):
     gustIn = [1, 1, 1000]

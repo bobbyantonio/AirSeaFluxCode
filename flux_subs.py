@@ -6,7 +6,7 @@ from util_subs import (CtoK, kappa, gc, visc_air)
 
 def cdn_calc(u10n, Ta, Tp, lat, meth="S80"):
     """
-    Calculates 10m neutral drag coefficient
+    Calculates neutral drag coefficient
 
     Parameters
     ----------
@@ -33,7 +33,7 @@ def cdn_calc(u10n, Ta, Tp, lat, meth="S80"):
                        np.where((u10n < 11) & (u10n >= 4), 1.2*0.001,
                                 (0.49+0.065*u10n)*0.001))
     elif (meth == "S88" or meth == "UA" or meth == "ecmwf" or meth == "C30" or
-          meth == "C35" or meth == "C40" or meth == "Beljaars"):
+          meth == "C35" or meth == "Beljaars"): 
         cdn = cdn_from_roughness(u10n, Ta, None, lat, meth)
     elif (meth == "YT96"):
         # for u<3 YT96 convert usr in eq. 21 to cdn
@@ -56,7 +56,7 @@ def cdn_calc(u10n, Ta, Tp, lat, meth="S80"):
 
 def cdn_from_roughness(u10n, Ta, Tp, lat, meth="S88"):
     """
-    Calculates 10m neutral drag coefficient from roughness length
+    Calculates neutral drag coefficient from roughness length
 
     Parameters
     ----------
@@ -99,10 +99,6 @@ def cdn_from_roughness(u10n, Ta, Tp, lat, meth="S88"):
             a = 0.011*np.ones(Ta.shape)
             a = np.where(u10n > 19, 0.0017*19-0.0050, 0.0017*u10n-0.0050)
             zo = 0.11*visc_air(Ta)/usr+a*np.power(usr, 2)/g
-        elif (meth == "C40"):
-            a = 0.011*np.ones(Ta.shape)
-            a = np.where(u10n > 22, 0.0016*22-0.0035, 0.0016*u10n-0.0035)
-            zo = a*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr # surface roughness
         elif ((meth == "ecmwf" or meth == "Beljaars")):
             # eq. (3.26) p.38 over sea IFS Documentation cy46r1
             zo = 0.018*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr
@@ -140,7 +136,7 @@ def cd_calc(cdn, hin, hout, psim):
 
 def ctcqn_calc(zol, cdn, u10n, zo, Ta, meth="S80"):
     """
-    Calculates 10m neutral heat and moisture exchange coefficients
+    Calculates neutral heat and moisture exchange coefficients
 
     Parameters
     ----------
@@ -198,16 +194,6 @@ def ctcqn_calc(zol, cdn, u10n, zo, Ta, meth="S80"):
         zot=zoq  # temperature roughness
         cqn = kappa**2/np.log(10/zo)/np.log(10/zoq)
         ctn = kappa**2/np.log(10/zo)/np.log(10/zot)
-    elif (meth == "C40"):
-        usr = np.sqrt(cdn*np.power(u10n, 2))
-        rr = zo*usr/visc_air(Ta)
-        zot = np.where(1.0e-4/np.power(rr, 0.55) > 2.4e-4/np.power(rr, 1.2),
-                       2.4e-4/np.power(rr, 1.2),
-                       1.0e-4/np.power(rr, 0.55)) # temperature roughness
-        zoq = np.where(2.0e-5/np.power(rr,0.22) > 1.1e-4/np.power(rr,0.9),
-                       1.1e-4/np.power(rr,0.9), 2.0e-5/np.power(rr,0.22))
-        cqn = kappa**2/np.log(10/zo)/np.log(10/zoq)
-        ctn = kappa**2/np.log(10/zo)/np.log(10/zot)
     elif (meth == "ecmwf" or meth == "Beljaars"):
         # eq. (3.26) p.38 over sea IFS Documentation cy46r1
         usr = np.sqrt(cdn*np.power(u10n, 2))
@@ -236,11 +222,11 @@ def ctcq_calc(cdn, cd, ctn, cqn, ht, hq, hout, psit, psiq):
     cqn : float
         neutral moisture exchange coefficient
     ht : float
-        original temperature height [m]
+        original temperature sensor height [m]
     hq : float
-        original moisture height    [m]
+        original moisture sensor height    [m]
     hout : float
-        reference height            [m]
+        reference height                   [m]
     psit : float
         heat stability function
     psiq : float
@@ -276,7 +262,7 @@ def get_stabco(meth="S80"):
     alpha, beta, gamma = 0, 0, 0
     if (meth == "S80" or meth == "S88" or meth == "LY04" or
         meth == "UA" or meth == "ecmwf" or meth == "C30" or
-        meth == "C35" or meth == "C40" or meth == "Beljaars"):
+        meth == "C35" or meth == "Beljaars"):
         alpha, beta, gamma = 16, 0.25, 5  # Smith 1980, from Dyer (1974)
     elif (meth == "LP82"):
         alpha, beta, gamma = 16, 0.25, 7
@@ -308,7 +294,7 @@ def psim_calc(zol, meth="S80"):
     """
     if (meth == "ecmwf"):
         psim = psim_ecmwf(zol)
-    elif (meth == "C30" or meth == "C35" or meth == "C40"):
+    elif (meth == "C30" or meth == "C35"):  # or meth == "C40"
         psim = psiu_26(zol, meth)
     elif (meth == "Beljaars"): # Beljaars (1997) eq. 16, 17
         psim = np.where(zol < 0, psim_conv(zol, meth), psi_Bel(zol))
@@ -337,7 +323,7 @@ def psit_calc(zol, meth="S80"):
     if (meth == "ecmwf"):
         psit = np.where(zol < 0, psi_conv(zol, meth),
                         psi_ecmwf(zol))
-    elif (meth == "C30" or meth == "C35" or meth == "C40"):
+    elif (meth == "C30" or meth == "C35"):
         psit = psit_26(zol)
     elif (meth == "Beljaars"): # Beljaars (1997) eq. 16, 17
         psit = np.where(zol < 0, psi_conv(zol, meth), psi_Bel(zol))
@@ -514,7 +500,7 @@ def psiu_26(zol, meth):
                         4*np.arctan(1)/np.sqrt(3), np.nan)
         f = np.power(zol, 2)/(1+np.power(zol, 2))
         psi = np.where(zol < 0, (1-f)*psik+f*psic, psi)
-    elif (meth == "C35" or meth == "C40"):
+    elif (meth == "C35"):
         dzol = np.where(0.35*zol > 50, 50, 0.35*zol)  # stable
         a, b, c, d = 0.7, 3/4, 5, 0.35
         psi = np.where(zol > 0, -(a*zol+b*(zol-c/d)*np.exp(-dzol)+b*c/d),
@@ -949,7 +935,7 @@ def get_L(L, lat, usr, tsr, qsr, hin, Ta, sst, qair, qsea, wind, monob, psim,
         Monin-Obukhov length from previous iteration step (m)
     meth : str
         bulk parameterisation method option: "S80", "S88", "LP82", "YT96",
-        "UA", "LY04", "C30", "C35", "C40", "ecmwf", "Beljaars"
+        "UA", "LY04", "C30", "C35", "ecmwf", "Beljaars"
 
     Returns
     -------
@@ -988,7 +974,7 @@ def get_L(L, lat, usr, tsr, qsr, hin, Ta, sst, qair, qsea, wind, monob, psim,
                    (np.log((hin[1]+zo)/zot) -
                     psit_calc((hin[1]+zo)/monob, meth) +
                     psit_calc(zot/monob, meth))))
-        monob = hin[1]/zol 
+        monob = hin[1]/zol
     return tsrv, monob, Rb
 #------------------------------------------------------------------------------
 
@@ -1032,7 +1018,7 @@ def get_strs(hin, monob, wind, zo, zot, zoq, dt, dq, dter, dqer, dtwl, ct, cq,
         warm layer correction switch
     meth : str
         bulk parameterisation method option: "S80", "S88", "LP82", "YT96", "UA",
-        "LY04", "C30", "C35", "C40", "ecmwf", "Beljaars"
+        "LY04", "C30", "C35", "ecmwf", "Beljaars"
 
     Returns
     -------
@@ -1096,7 +1082,7 @@ def get_strs(hin, monob, wind, zo, zot, zoq, dt, dq, dter, dqer, dtwl, ct, cq,
                                          (np.log(monob/zoq)+5-5*zoq/monob +
                                           5*np.log(hin[2]/monob) +
                                           hin[2]/monob-1))))
-    elif (meth == "C30" or meth == "C35" or meth == "C40"):
+    elif (meth == "C30" or meth == "C35"):
         usr = (wind*kappa/(np.log(hin[0]/zo)-psiu_26(hin[0]/monob, meth)))
         tsr = ((dt+dter*cskin-dtwl*wl)*(kappa/(np.log(hin[1]/zot) -
                                        psit_26(hin[1]/monob))))

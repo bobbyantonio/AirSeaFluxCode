@@ -1,8 +1,8 @@
 import numpy as np
 import sys
 
-def get_init(spd, T, SST, lat, hum, P, Rl, Rs, cskin, skin, wl, gust, L, tol, meth,
-             qmeth):
+def get_init(spd, T, SST, lat, hum, P, Rl, Rs, cskin, skin, wl, gust, L, tol,
+             meth, qmeth):
     """
     Checks initial input values and sets defaults if needed
 
@@ -17,7 +17,7 @@ def get_init(spd, T, SST, lat, hum, P, Rl, Rs, cskin, skin, wl, gust, L, tol, me
         sea surface temperature in K
     lat : float
         latitude (deg), default 45deg
-    hum : float
+    hum : array
         relative humidity, if None is set to 80%
     P : float
         air pressure (hPa), default 1013hPa
@@ -40,14 +40,14 @@ def get_init(spd, T, SST, lat, hum, P, Rl, Rs, cskin, skin, wl, gust, L, tol, me
         default else [1, 1.2, 800]
     L : int
         Monin-Obukhov length definition options
-    tol : float
+    tol : array
         4x1 or 7x1 [option, lim1-3 or lim1-6]
         option : 'flux' to set tolerance limits for fluxes only lim1-3
         option : 'ref' to set tolerance limits for height adjustment lim-1-3
         option : 'all' to set tolerance limits for both fluxes and height
                  adjustment lim1-6 ['all', 0.01, 0.01, 5e-05, 1e-3, 0.1, 0.1]
     meth : str
-        "S80","S88","LP82","YT96","UA","LY04","C30","C35","C40","ecmwf",
+        "S80","S88","LP82","YT96","UA","LY04","C30","C35","ecmwf",
         "Beljaars"
     qmeth : str
         is the saturation evaporation method to use amongst
@@ -90,7 +90,7 @@ def get_init(spd, T, SST, lat, hum, P, Rl, Rs, cskin, skin, wl, gust, L, tol, me
         sys.exit("input dtype of spd, T and SST should be float")
     # if input values are nan break
     if meth not in ["S80", "S88", "LP82", "YT96", "UA", "LY04", "C30", "C35",
-                    "C40", "ecmwf", "Beljaars"]:
+                    "ecmwf", "Beljaars"]:
         sys.exit("unknown method")
     if qmeth not in ["HylandWexler", "Hardy", "Preining", "Wexler",
                      "GoffGratch", "WMO", "MagnusTetens", "Buck", "Buck2",
@@ -119,11 +119,10 @@ def get_init(spd, T, SST, lat, hum, P, Rl, Rs, cskin, skin, wl, gust, L, tol, me
                              or meth == "YT96" or meth == "UA" or
                              meth == "LY04")):
         cskin = 0
-    elif ((cskin == None) and (meth == "C30" or meth == "C35" or meth == "C40"
+    elif ((cskin == None) and (meth == "C30" or meth == "C35"
                                or meth == "ecmwf" or meth == "Beljaars")):
         cskin = 1
-        if ((skin == None) and (meth == "C30" or meth == "C35"
-                                or meth == "C40")):
+        if ((skin == None) and (meth == "C30" or meth == "C35")):
             skin = "C35"
         elif ((skin == None) and (meth == "ecmwf")):
             skin = "ecmwf"
@@ -131,8 +130,7 @@ def get_init(spd, T, SST, lat, hum, P, Rl, Rs, cskin, skin, wl, gust, L, tol, me
             skin = "Beljaars"
     if (wl == None):
         wl = 0
-    if (np.all(gust == None) and (meth == "C30" or meth == "C35" or
-                                  meth == "C40")):
+    if (np.all(gust == None) and (meth == "C30" or meth == "C35")):
         gust = [1, 1.2, 600]
     elif (np.all(gust == None) and (meth == "UA" or meth == "ecmwf" or
                                     meth == "Beljaars")):
@@ -148,7 +146,7 @@ def get_init(spd, T, SST, lat, hum, P, Rl, Rs, cskin, skin, wl, gust, L, tol, me
     if ((L == None) and (meth == "S80" or meth == "S88" or meth == "LP82"
                          or meth == "YT96" or meth == "LY04" or
                          meth == "UA" or meth == "C30" or meth == "C35"
-                         or meth == "C40" or meth == "Beljaars")):
+                         or meth == "Beljaars")):
         L = "S80"
     elif ((L == None) and (meth == "ecmwf")):
         L = "ecmwf"
