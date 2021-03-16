@@ -176,7 +176,7 @@ def toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
             ug = fid.createVariable('ug', 'f4', ('time','lat','lon'))
             Rib = fid.createVariable('Rib', 'f4', ('time','lat','lon'))
             rh = fid.createVariable('rh', 'f4', ('time','lat','lon'))
-            flag = fid.createVariable('flag', 'S1', ('time','lat','lon'))
+            flag = fid.createVariable('flag', 'U1', ('time','lat','lon'))
 
             longitude[:] = lon
             latitude[:] = lat
