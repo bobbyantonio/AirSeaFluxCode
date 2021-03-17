@@ -434,24 +434,24 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                     np.where((itera == -1) & (flag != "n"), flag+[","]+["i"],
                              flag))
     if (meth == "S80"):
-        flag = np.where(((u10n < 6) | (u10n > 22)) & (flag == "n"), "o",
-                        np.where(((u10n < 6) | (u10n > 22)) & (flag != "n"),
+        flag = np.where(((spd < 6) | (spd > 22)) & (flag == "n"), "o",
+                        np.where(((spd < 6) | (spd > 22)) & (flag != "n"),
                                  flag+[","]+["o"], flag))
     elif (meth == "LP82"):
-        flag = np.where(((u10n < 3) | (u10n > 25)) & (flag == "n"), "o",
-                        np.where(((u10n < 3) | (u10n > 25)) & (flag != "n"),
+        flag = np.where(((spd < 3) | (spd > 25)) & (flag == "n"), "o",
+                        np.where(((spd < 3) | (spd > 25)) & (flag != "n"),
                                  flag+[","]+["o"], flag))
     elif (meth == "YT96"):
-        flag = np.where(((u10n < 3) | (u10n > 26)) & (flag == "n"), "o",
-                        np.where(((u10n < 3) | (u10n > 26)) & (flag != "n"),
+        flag = np.where(((spd < 3) | (spd > 26)) & (flag == "n"), "o",
+                        np.where(((spd < 3) | (spd > 26)) & (flag != "n"),
                                  flag+[","]+["o"], flag))
     elif (meth == "UA"):
-        flag = np.where((u10n > 18) & (flag == "n"), "o",
-                        np.where((u10n > 18) & (flag != "n"),
+        flag = np.where((spd > 18) & (flag == "n"), "o",
+                        np.where((spd > 18) & (flag != "n"),
                                  flag+[","]+["o"], flag))
     elif (meth == "LY04"):
-        flag = np.where((u10n < 0.5) & (flag == "n"), "o",
-                        np.where((u10n < 0.5) & (flag != "n"),
+        flag = np.where((spd < 0.5) & (flag == "n"), "o",
+                        np.where((spd < 0.5) & (flag != "n"),
                                  flag+[","]+["o"], flag))
     if (hum == None):
         rh = np.ones(sst.shape)*80
