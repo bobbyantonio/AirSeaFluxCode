@@ -79,24 +79,24 @@ def toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
         fid = nc.Dataset(inF)
         lon = np.array(fid.variables["lon"])
         lat = np.array(fid.variables["lat"])
-        T = np.array(fid.variables["t2m"])
         tim = np.array(fid.variables["time"])
-        Td = np.array(fid.variables["d2m"])
-        sst = np.array(fid.variables["sst"])
-        sst = np.where(sst < -100, np.nan, sst)
-        p = np.array(fid.variables["msl"])/100 # to set hPa
-        lw = np.array(fid.variables["strd"])/60/60
-        sw = np.array(fid.variables["ssrd"])/60/60
-        u = np.array(fid.variables["u10"])
-        v = np.array(fid.variables["v10"])
         lsm = np.array(fid.variables["lsm"])
         icon = np.array(fid.variables["siconc"])
-        fid.close()
-        spd = np.sqrt(np.power(u, 2)+np.power(v, 2))
-        del u, v, fid
         lsm = np.where(lsm > 0, np.nan, 1) # reverse 0 on land 1 over ocean
         icon = np.where(icon < 0, np.nan, 1)
         msk = lsm*icon
+        T = np.array(fid.variables["t2m"])*msk
+        Td = np.array(fid.variables["d2m"])*msk
+        sst = np.array(fid.variables["sst"])*msk
+        sst = np.where(sst < -100, np.nan, sst)*msk
+        p = np.array(fid.variables["msl"])*msk/100 # to set hPa
+        lw = np.array(fid.variables["strd"])*msk/60/60
+        sw = np.array(fid.variables["ssrd"])*msk/60/60
+        u = np.array(fid.variables["u10"])
+        v = np.array(fid.variables["v10"])
+        fid.close()
+        spd = np.sqrt(np.power(u, 2)+np.power(v, 2))*msk
+        del u, v, fid
         hin = np.array([10, 2, 2])
         latIn = np.tile(lat, (len(lon), 1)).T.reshape(len(lon)*len(lat))
         date = np.copy(tim)
