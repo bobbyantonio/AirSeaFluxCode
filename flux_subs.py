@@ -33,7 +33,7 @@ def cdn_calc(u10n, Ta, Tp, lat, meth="S80"):
                        np.where((u10n < 11) & (u10n >= 4), 1.2*0.001,
                                 (0.49+0.065*u10n)*0.001))
     elif (meth == "S88" or meth == "UA" or meth == "ecmwf" or meth == "C30" or
-          meth == "C35" or meth == "Beljaars"): 
+          meth == "C35" or meth == "Beljaars"):
         cdn = cdn_from_roughness(u10n, Ta, None, lat, meth)
     elif (meth == "YT96"):
         # for u<3 YT96 convert usr in eq. 21 to cdn
@@ -96,9 +96,9 @@ def cdn_from_roughness(u10n, Ta, Tp, lat, meth="S88"):
                          np.where(u10n > 18, 0.018, a))
             zo = a*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr
         elif (meth == "C35"):
-            a = 0.011*np.ones(Ta.shape)
-            a = np.where(u10n > 19, 0.0017*19-0.0050, 0.0017*u10n-0.0050)
-            zo = 0.11*visc_air(Ta)/usr+a*np.power(usr, 2)/g
+            zo = (0.11*visc_air(Ta)/usr +
+                  np.minimum(0.0017*19-0.0050, 0.0017*u10n-0.0050) *
+                  np.power(usr, 2)/g)
         elif ((meth == "ecmwf" or meth == "Beljaars")):
             # eq. (3.26) p.38 over sea IFS Documentation cy46r1
             zo = 0.018*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr
@@ -174,9 +174,9 @@ def ctcqn_calc(zol, cdn, u10n, zo, Ta, meth="S80"):
         re=usr*zo/visc_air(Ta)
         zoq = zo/np.exp(2.67*np.power(re, 1/4)-2.57)
         zot = zoq
-        cqn = np.where((u10n > 0.5) & (u10n < 18), np.power(kappa, 2) /
+        cqn = np.where(u10n < 18, np.power(kappa, 2) /
                        (np.log(10/zo)*np.log(10/zoq)), np.nan)
-        ctn = np.where((u10n > 0.5) & (u10n < 18), np.power(kappa, 2) /
+        ctn = np.where(u10n < 18, np.power(kappa, 2) /
                        (np.log(10/zo)*np.log(10/zoq)), np.nan)
     elif (meth == "C30"):
         usr = np.sqrt(cdn*np.power(u10n, 2))

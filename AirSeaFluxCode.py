@@ -422,6 +422,8 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     tref = tref-(CtoK+tlapse*h_out[1])
     qref = (qair-qsr/kappa*(np.log(h_in[2]/h_out[2]) -
             psit+psit_calc(h_out[2]/monob, meth)))
+    if (wl == 0):
+        dtwl = np.zeros(T.shape) # reset to zero if not used
     flag = np.where((q10n < 0) & (flag == "n"), "q",
                     np.where((q10n < 0) & (flag != "n"), flag+[","]+["q"],
                              flag))
@@ -444,8 +446,8 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                         np.where(((u10n < 3) | (u10n > 26)) & (flag != "n"),
                                  flag+[","]+["o"], flag))
     elif (meth == "UA"):
-        flag = np.where(((u10n < 0.5) | (u10n > 18)) & (flag == "n"), "o",
-                        np.where(((u10n < 0.5) | (u10n > 18)) & (flag != "n"),
+        flag = np.where((u10n > 18) & (flag == "n"), "o",
+                        np.where((u10n > 18) & (flag != "n"),
                                  flag+[","]+["o"], flag))
     elif (meth == "LY04"):
         flag = np.where((u10n < 0.5) & (flag == "n"), "o",
