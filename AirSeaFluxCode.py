@@ -427,9 +427,9 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     flag = np.where((q10n < 0) & (flag == "n"), "q",
                     np.where((q10n < 0) & (flag != "n"), flag+[","]+["q"],
                              flag))
-    flag = np.where((Rb < -0.5 | Rb > 0.2) & (flag == "n"), "l",
-                    np.where((Rb < -0.5 | Rb > 0.2) & (flag != "n"),
-                             flag+[","]+["l"], flag))
+    flag = np.where(((Rb < -0.5) | (Rb > 0.2)) & (flag == "n"), "l",
+                    np.where(((Rb < -0.5) | (Rb > 0.2)) & (flag != "n"),
+                             flag+[","]+["l"], flag)))
     flag = np.where((itera == -1) & (flag == "n"), "i",
                     np.where((itera == -1) & (flag != "n"), flag+[","]+["i"],
                              flag))
