@@ -947,25 +947,23 @@ def get_L(L, lat, usr, tsr, qsr, hin, Ta, sst, qair, qsea, wind, monob, psim,
     """
     g = gc(lat)
     Rb = np.empty(sst.shape)
+    # as in NCAR, LY04
+    tsrv = tsr*(1+0.6077*qair)+0.6077*Ta*qsr
+    # from eq. 3.24 ifs Cy46r1 pp. 37
+    thvs = sst*(1+0.6077*qsea) # virtual SST
+    dthv = (Ta-sst)*(1+0.6077*qair)+0.6077*Ta*(qair-qsea)
+    tv = 0.5*(thvs+Ta*(1+0.6077*qair)) # estimate tv within surface layer
+    # adjust wind to T sensor's height
+    uz = (wind-usr/kappa*(np.log(hin[0]/hin[1])-psim +
+                            psim_calc(hin[1]/monob, meth)))
+    Rb = g*dthv*hin[1]/(tv*uz*uz)
     if (L == "S80"):
-        # as in NCAR, LY04
-        tsrv = tsr*(1+0.6077*qair)+0.6077*Ta*qsr
         temp = (g*kappa*tsrv /
                 np.maximum(np.power(usr, 2)*Ta*(1+0.6077*qair), 1e-9))
         temp = np.minimum(np.abs(temp), 200)*np.sign(temp)
         temp = np.minimum(np.abs(temp), 10/hin[0])*np.sign(temp)
         monob = 1/np.copy(temp)
     elif (L == "ecmwf"):
-        Rb = np.empty(sst.shape)
-        tsrv = tsr*(1+0.6077*qair)+0.6077*Ta*qsr
-        # from eq. 3.24 ifs Cy46r1 pp. 37
-        thvs = sst*(1+0.6077*qsea) # virtual SST
-        dthv = (Ta-sst)*(1+0.6077*qair)+0.6077*Ta*(qair-qsea)
-        tv = 0.5*(thvs+Ta*(1+0.6077*qair)) # estimate tv within surface layer
-        # adjust wind to T sensor's height
-        uz = (wind-usr/kappa*(np.log(hin[0]/hin[1])-psim +
-                                psim_calc(hin[1]/monob, meth)))
-        Rb = g*dthv*hin[1]/(tv*uz*uz)
         zo = (0.11*visc_air(Ta)/usr+0.018*np.power(usr, 2)/g)
         zot = 0.40*visc_air(Ta)/usr
         zol = (Rb*(np.power(np.log((hin[1]+zo)/zo)-psim_calc((hin[1]+zo) /

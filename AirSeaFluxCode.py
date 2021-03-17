@@ -122,13 +122,13 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                        34. downward longwave radiation (Rl)
                        35. downward shortwave radiation (Rs)
                        36. downward net longwave radiation (Rnl)
-                       37. flag ("n": normal, "o": out of nominal range,
+                       37. gust wind speed (ug)
+                       38. Bulk Richardson number (Rib)
+                       39. relative humidity (rh)
+                       40. flag ("n": normal, "o": out of nominal range,
                                  "u": u10n<0, "q":q10n<0
-                                 "m": missing, "l": z/L<0.01,
+                                 "m": missing, "l": Rib<-0.5 or Rib>0.2,
                                  "i": convergence fail at n)
-                       38. gust wind speed (ug)
-                       39. Bulk Richardson number (Rib)
-                       40. relative humidity (rh)
 
     2021 / Author S. Biri
     """
@@ -349,7 +349,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                                   np.power(get_gust(gust[1], tv[ind], usr[ind],
                                   tsrv[ind], gust[2], lat[ind]), 2)))
                                   # Zeng et al. 1998 (20)
-        elif (gust[0] == 1 and (meth == "C30" or meth == "C35")):
+        elif (gust[0] == 1 and (meth == "C30" or meth == "C35")): # or meth == "C40"
             wind[ind] = np.sqrt(np.power(np.copy(spd[ind]), 2) +
                                 np.power(get_gust(gust[1], Ta[ind], usr[ind],
                                 tsrv[ind], gust[2], lat[ind]), 2))
@@ -427,8 +427,8 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     flag = np.where((q10n < 0) & (flag == "n"), "q",
                     np.where((q10n < 0) & (flag != "n"), flag+[","]+["q"],
                              flag))
-    flag = np.where((np.abs(hin[0]/monob) < 0.01) & (flag == "n"), "l",
-                    np.where((np.abs(hin[0]/monob) < 0.01) & (flag != "n"),
+    flag = np.where((Rb < -0.5 | Rb > 0.2) & (flag == "n"), "l",
+                    np.where((Rb < -0.5 | Rb > 0.2) & (flag != "n"),
                              flag+[","]+["l"], flag))
     flag = np.where((itera == -1) & (flag == "n"), "i",
                     np.where((itera == -1) & (flag != "n"), flag+[","]+["i"],
