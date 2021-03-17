@@ -26,8 +26,7 @@ def cdn_calc(u10n, Ta, Tp, lat, meth="S80"):
     """
     cdn = np.zeros(Ta.shape)*np.nan
     if (meth == "S80"):
-        cdn = np.where(u10n <= 3, (0.61+0.567/u10n)*0.001,
-                       (0.61+0.063*u10n)*0.001)
+        cdn = (0.61+0.063*u10n)*0.001
     elif (meth == "LP82"):
        cdn = np.where(u10n < 4, 1.14*0.001,
                        np.where((u10n < 11) & (u10n >= 4), 1.2*0.001,
@@ -173,25 +172,21 @@ def ctcqn_calc(zol, cdn, u10n, zo, Ta, meth="S80"):
         # Zeng et al. 1998 (25)
         re=usr*zo/visc_air(Ta)
         zoq = zo/np.exp(2.67*np.power(re, 1/4)-2.57)
-        zot = zoq
-        cqn = np.where(u10n < 18, np.power(kappa, 2) /
-                       (np.log(10/zo)*np.log(10/zoq)), np.nan)
-        ctn = np.where(u10n < 18, np.power(kappa, 2) /
-                       (np.log(10/zo)*np.log(10/zoq)), np.nan)
+        zot = np.copy(zoq)
+        cqn = np.power(kappa, 2)/(np.log(10/zo)*np.log(10/zoq))
+        ctn = np.power(kappa, 2)/(np.log(10/zo)*np.log(10/zoq))
     elif (meth == "C30"):
         usr = np.sqrt(cdn*np.power(u10n, 2))
         rr = zo*usr/visc_air(Ta)
-        zoq = np.where(5e-5/np.power(rr, 0.6) > 1.15e-4, 1.15e-4,
-                       5e-5/np.power(rr, 0.6))  # moisture roughness
-        zot=zoq  # temperature roughness
+        zoq = np.minimum(5e-5/np.power(rr, 0.6), 1.15e-4)  # moisture roughness
+        zot = np.copy(zoq)  # temperature roughness
         cqn = kappa**2/np.log(10/zo)/np.log(10/zoq)
         ctn = kappa**2/np.log(10/zo)/np.log(10/zot)
     elif (meth == "C35"):
         usr = np.sqrt(cdn*np.power(u10n, 2))
         rr = zo*usr/visc_air(Ta)
-        zoq = np.where(5.8e-5/np.power(rr, 0.72) > 1.6e-4, 1.6e-4,
-                       5.8e-5/np.power(rr, 0.72))  # moisture roughness
-        zot=zoq  # temperature roughness
+        zoq = np.minimum(5.8e-5/np.power(rr, 0.72), 1.6e-4)  # moisture roughness
+        zot = np.copy(zoq)  # temperature roughness
         cqn = kappa**2/np.log(10/zo)/np.log(10/zoq)
         ctn = kappa**2/np.log(10/zo)/np.log(10/zot)
     elif (meth == "ecmwf" or meth == "Beljaars"):
@@ -488,8 +483,8 @@ def psiu_26(zol, meth):
     psi : float
     """
     if (meth == "C30"):
-        dzol = np.where(0.35*zol > 50, 50, 0.35*zol) # stable
-        psi = np.where(zol > 0, -((1+zol)+0.6667*(zol-14.28)*np.exp(-dzol) +
+        dzol = np.minimum(0.35*zol, 50) # stable
+        psi = np.where(zol >= 0, -((1+zol)+0.6667*(zol-14.28)*np.exp(-dzol) +
                                   8.525), np.nan)
         x = np.where(zol < 0, np.power(1-15*zol, 0.25), np.nan)
         psik = np.where(zol < 0, 2*np.log((1+x)/2)+np.log((1+np.power(x, 2)) /
@@ -500,10 +495,10 @@ def psiu_26(zol, meth):
                         4*np.arctan(1)/np.sqrt(3), np.nan)
         f = np.power(zol, 2)/(1+np.power(zol, 2))
         psi = np.where(zol < 0, (1-f)*psik+f*psic, psi)
-    elif (meth == "C35"):
-        dzol = np.where(0.35*zol > 50, 50, 0.35*zol)  # stable
+    elif (meth == "C35"): #  or meth == "C40"
+        dzol = np.minimum(0.35*zol, 50)  # stable
         a, b, c, d = 0.7, 3/4, 5, 0.35
-        psi = np.where(zol > 0, -(a*zol+b*(zol-c/d)*np.exp(-dzol)+b*c/d),
+        psi = np.where(zol >= 0, -(a*zol+b*(zol-c/d)*np.exp(-dzol)+b*c/d),
                        np.nan)
         x = np.where(zol < 0, np.power(1-15*zol, 0.25), np.nan)
         psik = np.where(zol < 0, 2*np.log((1+x)/2)+np.log((1+x**2)/2) -
