@@ -4,7 +4,7 @@ from util_subs import (CtoK, kappa, gc, visc_air)
 # ---------------------------------------------------------------------
 
 
-def cdn_calc(u10n, Ta, Tp, lat, meth="S80"):
+def cdn_calc(u10n, usr, Ta, lat, meth="S80"):
     """
     Calculates neutral drag coefficient
 
@@ -12,10 +12,10 @@ def cdn_calc(u10n, Ta, Tp, lat, meth="S80"):
     ----------
     u10n : float
         neutral 10m wind speed [m/s]
+    usr : float
+        friction velocity      [m/s]
     Ta   : float
         air temperature        [K]
-    Tp   : float
-        wave period
     lat : float
         latitude               [degE]
     meth : str
@@ -32,8 +32,8 @@ def cdn_calc(u10n, Ta, Tp, lat, meth="S80"):
                        np.where((u10n < 11) & (u10n >= 4), 1.2*0.001,
                                 (0.49+0.065*u10n)*0.001))
     elif (meth == "S88" or meth == "UA" or meth == "ecmwf" or meth == "C30" or
-          meth == "C35" or meth == "Beljaars"):
-        cdn = cdn_from_roughness(u10n, Ta, None, lat, meth)
+          meth == "C35" or meth == "Beljaars"): #  or meth == "C40"
+        cdn = cdn_from_roughness(u10n, usr, Ta, lat, meth)
     elif (meth == "YT96"):
         # convert usr in eq. 21 to cdn to expand for low wind speeds
         cdn = np.power((0.10038+u10n*2.17e-3+np.power(u10n, 2)*2.78e-3 -
@@ -48,7 +48,7 @@ def cdn_calc(u10n, Ta, Tp, lat, meth="S80"):
 # ---------------------------------------------------------------------
 
 
-def cdn_from_roughness(u10n, Ta, Tp, lat, meth="S88"):
+def cdn_from_roughness(u10n, usr, Ta, lat, meth="S88"):
     """
     Calculates neutral drag coefficient from roughness length
 
@@ -56,10 +56,10 @@ def cdn_from_roughness(u10n, Ta, Tp, lat, meth="S88"):
     ----------
     u10n : float
         neutral 10m wind speed [m/s]
+    usr : float
+        friction velocity      [m/s]
     Ta   : float
         air temperature        [K]
-    Tp   : float
-        wave period
     lat : float                [degE]
         latitude
     meth : str
@@ -68,13 +68,10 @@ def cdn_from_roughness(u10n, Ta, Tp, lat, meth="S88"):
     -------
     cdn : float
     """
-    g, tol = gc(lat, None), 0.000001
-    cdn, usr = np.zeros(Ta.shape), np.zeros(Ta.shape)
-    cdnn = (0.61+0.063*u10n)*0.001
+    g = gc(lat, None)
+    cdn = (0.61+0.063*u10n)*0.001
     zo, zc, zs = np.zeros(Ta.shape), np.zeros(Ta.shape), np.zeros(Ta.shape)
     for it in range(5):
-        cdn = np.copy(cdnn)
-        usr = np.sqrt(cdn*u10n**2)
         if (meth == "S88"):
             # Charnock roughness length (eq. 4 in Smith 88)
             zc = 0.011*np.power(usr, 2)/g
@@ -98,8 +95,7 @@ def cdn_from_roughness(u10n, Ta, Tp, lat, meth="S88"):
             zo = 0.018*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr
         else:
             print("unknown method for cdn_from_roughness "+meth)
-        cdnn = (kappa/np.log(10/zo))**2
-    cdn = np.where(np.abs(cdnn-cdn) < tol, cdnn, np.nan)
+        cdn = np.power(kappa/np.log(10/zo), 2)
     return cdn
 # ---------------------------------------------------------------------
 
@@ -128,7 +124,7 @@ def cd_calc(cdn, hin, hout, psim):
 # ---------------------------------------------------------------------
 
 
-def ctcqn_calc(zol, cdn, u10n, zo, Ta, meth="S80"):
+def ctcqn_calc(zol, cdn, usr, zo, Ta, meth="S80"):
     """
     Calculates neutral heat and moisture exchange coefficients
 
@@ -138,8 +134,8 @@ def ctcqn_calc(zol, cdn, u10n, zo, Ta, meth="S80"):
         height over MO length
     cdn  : float
         neutral drag coefficient
-    u10n : float
-        neutral 10m wind speed  [m/s]
+    usr : float
+        friction velocity      [m/s]
     zo   : float
         surface roughness       [m]
     Ta   : float
@@ -163,41 +159,37 @@ def ctcqn_calc(zol, cdn, u10n, zo, Ta, meth="S80"):
         cqn = 34.6*0.001*np.sqrt(cdn)
         ctn = np.where(zol <= 0, 32.7*0.001*np.sqrt(cdn), 18*0.001*np.sqrt(cdn))
     elif (meth == "UA"):
-        usr = np.sqrt(cdn*np.power(u10n, 2))
         # Zeng et al. 1998 (25)
-        re=usr*zo/visc_air(Ta)
-        zoq = zo/np.exp(2.67*np.power(re, 1/4)-2.57)
+        rr = usr*zo/visc_air(Ta)
+        zoq = zo/np.exp(2.67*np.power(rr, 1/4)-2.57)
         zot = np.copy(zoq)
         cqn = np.power(kappa, 2)/(np.log(10/zo)*np.log(10/zoq))
         ctn = np.power(kappa, 2)/(np.log(10/zo)*np.log(10/zoq))
     elif (meth == "C30"):
-        usr = np.sqrt(cdn*np.power(u10n, 2))
         rr = zo*usr/visc_air(Ta)
         zoq = np.minimum(5e-5/np.power(rr, 0.6), 1.15e-4)  # moisture roughness
         zot = np.copy(zoq)  # temperature roughness
-        cqn = kappa**2/np.log(10/zo)/np.log(10/zoq)
-        ctn = kappa**2/np.log(10/zo)/np.log(10/zot)
+        cqn = np.power(kappa, 2)/np.log(10/zo)/np.log(10/zoq)
+        ctn = np.power(kappa, 2)/np.log(10/zo)/np.log(10/zot)
     elif (meth == "C35"):
-        usr = np.sqrt(cdn*np.power(u10n, 2))
         rr = zo*usr/visc_air(Ta)
-        zoq = np.minimum(5.8e-5/np.power(rr, 0.72), 1.6e-4)  # moisture roughness
+        zoq = np.minimum(5.8e-5/np.power(rr, 0.72), 1.6e-4) # moisture roughness
         zot = np.copy(zoq)  # temperature roughness
-        cqn = kappa**2/np.log(10/zo)/np.log(10/zoq)
-        ctn = kappa**2/np.log(10/zo)/np.log(10/zot)
+        cqn = np.power(kappa, 2)/np.log(10/zo)/np.log(10/zoq)
+        ctn = np.power(kappa, 2)/np.log(10/zo)/np.log(10/zot)
     elif (meth == "ecmwf" or meth == "Beljaars"):
         # eq. (3.26) p.38 over sea IFS Documentation cy46r1
-        usr = np.sqrt(cdn*np.power(u10n, 2))
         zot = 0.40*visc_air(Ta)/usr
         zoq = 0.62*visc_air(Ta)/usr
-        cqn = kappa**2/np.log(10/zo)/np.log(10/zoq)
-        ctn = kappa**2/np.log(10/zo)/np.log(10/zot)
+        cqn = np.power(kappa, 2)/np.log(10/zo)/np.log(10/zoq)
+        ctn = np.power(kappa, 2)/np.log(10/zo)/np.log(10/zot)
     else:
         print("unknown method ctcqn: "+meth)
     return ctn, cqn
 # ---------------------------------------------------------------------
 
 
-def ctcq_calc(cdn, cd, ctn, cqn, ht, hq, hout, psit, psiq):
+def ctcq_calc(cdn, cd, ctn, cqn, hin, hout, psit, psiq):
     """
     Calculates heat and moisture exchange coefficients at reference height
 
@@ -211,12 +203,10 @@ def ctcq_calc(cdn, cd, ctn, cqn, ht, hq, hout, psit, psiq):
         neutral heat exchange coefficient
     cqn : float
         neutral moisture exchange coefficient
-    ht : float
-        original temperature sensor height [m]
-    hq : float
-        original moisture sensor height    [m]
+    hin : float
+        original temperature/humidity sensor height [m]
     hout : float
-        reference height                   [m]
+        reference height                            [m]
     psit : float
         heat stability function
     psiq : float
@@ -230,9 +220,9 @@ def ctcq_calc(cdn, cd, ctn, cqn, ht, hq, hout, psit, psiq):
        moisture exchange coefficient
     """
     ct = (ctn*np.sqrt(cd/cdn) /
-          (1+ctn*((np.log(ht/hout)-psit)/(kappa*np.sqrt(cdn)))))
+          (1+ctn*((np.log(hin[1]/hout[1])-psit)/(kappa*np.sqrt(cdn)))))
     cq = (cqn*np.sqrt(cd/cdn) /
-          (1+cqn*((np.log(hq/hout)-psiq)/(kappa*np.sqrt(cdn)))))
+          (1+cqn*((np.log(hin[2]/hout[2])-psiq)/(kappa*np.sqrt(cdn)))))
     return ct, cq
 # ---------------------------------------------------------------------
 
@@ -380,16 +370,16 @@ def psit_26(zol):
     psi : float
     """
     b, d = 2/3, 0.35
-    dzol = np.where(d*zol > 50, 50, d*zol)
-    psi = np.where(zol > 0,-(np.power(1+b*zol, 1.5)+b*(zol-14.28) *
-                             np.exp(-dzol)+8.525), np.nan)
-    psik = np.where(zol < 0, 2*np.log((1+np.sqrt(1-15*zol))/2), np.nan)
-    psic = np.where(zol < 0, 1.5*np.log((1+np.power(1-34.15*zol, 1/3) +
-                    np.power(1-34.15*zol, 2/3))/3)-np.sqrt(3) *
-                    np.arctan(1+2*np.power(1-34.15*zol, 1/3))/np.sqrt(3) +
-                    4*np.arctan(1)/np.sqrt(3), np.nan)
-    f = np.power(zol, 2)/(1+np.power(zol, 2))
-    psi = np.where(zol < 0, (1-f)*psik+f*psic, psi)
+    dzol = np.minimum(d*zol, 50)
+    psi = -1*((1+b*zol)**1.5+b*(zol-14.28)*np.exp(-dzol)+8.525)
+    k = np.where(zol < 0)
+    x = np.sqrt(1-15*zol[k])
+    psik = 2*np.log((1+x)/2)
+    x = np.power(1-34.15*zol[k], 1/3)
+    psic = (1.5*np.log((1+x+np.power(x, 2))/3)-np.sqrt(3) *
+            np.arctan((1+2*x)/np.sqrt(3))+4*np.arctan(1)/np.sqrt(3))
+    f = np.power(zol[k], 2)/(1+np.power(zol[k], 2))
+    psi[k] = (1-f)*psik+f*psic
     return psi
 # ---------------------------------------------------------------------
 
@@ -479,31 +469,29 @@ def psiu_26(zol, meth):
     """
     if (meth == "C30"):
         dzol = np.minimum(0.35*zol, 50) # stable
-        psi = np.where(zol >= 0, -((1+zol)+0.6667*(zol-14.28)*np.exp(-dzol) +
-                                  8.525), np.nan)
-        x = np.where(zol < 0, np.power(1-15*zol, 0.25), np.nan)
-        psik = np.where(zol < 0, 2*np.log((1+x)/2)+np.log((1+np.power(x, 2)) /
-                        2)-2*np.arctan(x)+2*np.arctan(1), np.nan)
-        x = np.where(zol < 0, np.power(1-10.15*zol, 0.3333), np.nan)
-        psic = np.where(zol < 0, 1.5*np.log((1+x+np.power(x, 2))/3) -
-                        np.sqrt(3)*np.arctan((1+2*x)/np.sqrt(3)) +
-                        4*np.arctan(1)/np.sqrt(3), np.nan)
-        f = np.power(zol, 2)/(1+np.power(zol, 2))
-        psi = np.where(zol < 0, (1-f)*psik+f*psic, psi)
+        psi = -1*((1+zol)+0.6667*(zol-14.28)*np.exp(-dzol)+8.525)
+        k = np.where(zol < 0) # unstable
+        x = (1-15*zol[k])**0.25
+        psik = (2*np.log((1+x)/2)+np.log((1+x*x)/2)-2*np.arctan(x) +
+                2*np.arctan(1))
+        x = (1-10.15*zol[k])**(1/3)
+        psic = (1.5*np.log((1+x+x*x)/3) -
+                np.sqrt(3)*np.arctan((1+2*x)/np.sqrt(3)) +
+                4*np.arctan(1)/np.sqrt(3))
+        f = zol[k]**2/(1+zol[k]**2)
+        psi[k] = (1-f)*psik+f*psic
     elif (meth == "C35"): #  or meth == "C40"
-        dzol = np.minimum(0.35*zol, 50)  # stable
+        dzol = np.minimum(50, 0.35*zol)  # stable
         a, b, c, d = 0.7, 3/4, 5, 0.35
-        psi = np.where(zol >= 0, -(a*zol+b*(zol-c/d)*np.exp(-dzol)+b*c/d),
-                       np.nan)
-        x = np.where(zol < 0, np.power(1-15*zol, 0.25), np.nan)
-        psik = np.where(zol < 0, 2*np.log((1+x)/2)+np.log((1+x**2)/2) -
-                        2*np.arctan(x)+2*np.arctan(1), np.nan)
-        x = np.where(zol < 0, np.power(1-10.15*zol, 0.3333), np.nan)
-        psic = np.where(zol < 0, 1.5*np.log((1+x+np.power(x, 2))/3) -
-                        np.sqrt(3)*np.arctan((1+2*x)/np.sqrt(3)) +
-                        4*np.arctan(1)/np.sqrt(3), np.nan)
-        f = np.power(zol, 2)/(1+np.power(zol, 2))
-        psi = np.where(zol < 0, (1-f)*psik+f*psic, psi)
+        psi = -1*(a*zol+b*(zol-c/d)*np.exp(-dzol)+b*c/d)
+        k = np.where(zol < 0)  # unstable
+        x = np.power(1-15*zol[k], 1/4)
+        psik = 2*np.log((1+x)/2)+np.log((1+x*x)/2)-2*np.arctan(x)+2*np.arctan(1)
+        x = np.power(1-10.15*zol[k], 1/3)
+        psic = (1.5*np.log((1+x+np.power(x, 2))/3)-np.sqrt(3) *
+                np.arctan((1+2*x)/np.sqrt(3))+4*np.arctan(1)/np.sqrt(3))
+        f = np.power(zol[k], 2)/(1+np.power(zol[k], 2))
+        psi[k] = (1-f)*psik+f*psic
     return psi
 #------------------------------------------------------------------------------
 

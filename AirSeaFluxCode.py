@@ -182,7 +182,8 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     lv = (2.501-0.00237*(sst-CtoK))*1e6
     cp = 1004.67*(1 + 0.00084*qsea)
     u10n = np.copy(spd)
-    cd10n = cdn_calc(u10n, Ta, None, lat, meth)
+    usr = 0.035*u10n
+    cd10n = cdn_calc(u10n, usr, Ta, lat, meth)
     ct10n, ct, cq10n, cq = (np.zeros(spd.shape)*np.nan, np.zeros(spd.shape)*np.nan,
                         np.zeros(spd.shape)*np.nan, np.zeros(spd.shape)*np.nan)
     psim, psit, psiq = (np.zeros(spd.shape), np.zeros(spd.shape),
@@ -233,7 +234,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
         elif (tol[0] == 'all'):
             old = np.array([np.copy(u10n), np.copy(t10n), np.copy(q10n),
                             np.copy(tau), np.copy(sensible), np.copy(latent)])
-        cd10n[ind] = cdn_calc(u10n[ind], Ta[ind], None, lat[ind], meth)
+        cd10n[ind] = cdn_calc(u10n[ind], usr[ind], Ta[ind], lat[ind], meth)
         if (np.all(np.isnan(cd10n))):
             break
             logging.info('break %s at iteration %s cd10n<0', meth, it)
@@ -241,7 +242,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
         psim[ind] = psim_calc(h_in[0, ind]/monob[ind], meth)
         cd[ind] = cd_calc(cd10n[ind], h_in[0, ind], ref_ht, psim[ind])
         ct10n[ind], cq10n[ind] = ctcqn_calc(h_in[1, ind]/monob[ind],
-                                            cd10n[ind], u10n[ind], zo[ind],
+                                            cd10n[ind], usr[ind], zo[ind],
                                             Ta[ind], meth)
         zot[ind] = ref_ht/(np.exp(np.power(kappa, 2) /
                            (ct10n[ind]*np.log(ref_ht/zo[ind]))))
@@ -250,7 +251,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
         psit[ind] = psit_calc(h_in[1, ind]/monob[ind], meth)
         psiq[ind] = psit_calc(h_in[2, ind]/monob[ind], meth)
         ct[ind], cq[ind] = ctcq_calc(cd10n[ind], cd[ind], ct10n[ind], cq10n[ind],
-                                      h_in[1, ind], h_in[2, ind], ref_ht,
+                                      h_in[:, ind], [ref_ht, ref_ht, ref_ht],
                                       psit[ind], psiq[ind])
         usr[ind], tsr[ind], qsr[ind] = get_strs(h_in[:, ind], monob[ind],
                                                 wind[ind], zo[ind], zot[ind],
@@ -413,8 +414,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     # adjust neutral ctn, cqn at any output height
     ctn =np.power(kappa, 2)/(np.log(h_out[0]/zo)*np.log(h_out[1]/zot))
     cqn =np.power(kappa, 2)/(np.log(h_out[0]/zo)*np.log(h_out[2]/zoq))
-    ct, cq = ctcq_calc(cdn, cd, ctn, cqn, h_out[1], h_out[2], h_out[1],
-                       psit, psiq)
+    ct, cq = ctcq_calc(cdn, cd, ctn, cqn, h_out, h_out, psit, psiq)
     uref = (spd-usr/kappa*(np.log(h_in[0]/h_out[0])-psim +
             psim_calc(h_out[0]/monob, meth)))
     tref = (Ta-tsr/kappa*(np.log(h_in[1]/h_out[1])-psit +
