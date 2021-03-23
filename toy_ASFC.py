@@ -73,6 +73,7 @@ def toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
         res = AirSeaFluxCode(spd, t, sst, lat=lat, hum=['rh', rh], P=p,
                              hin=hin, Rs=sw, tol=tolIn, gust=gustIn,
                              cskin=cskinIn, meth=meth, L="ecmwf", n=30)
+        flg = res["flag"]
 
     elif (inF == 'era5_r360x180.nc'):
         #%% load era5_r360x180.nc
@@ -87,7 +88,7 @@ def toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
         msk = lsm*icon
         T = np.array(fid.variables["t2m"])*msk
         Td = np.array(fid.variables["d2m"])*msk
-        sst = np.array(fid.variables["sst"])*msk
+        sst = np.array(fid.variables["sst"])
         sst = np.where(sst < -100, np.nan, sst)*msk
         p = np.array(fid.variables["msl"])*msk/100 # to set hPa
         lw = np.array(fid.variables["strd"])*msk/60/60
@@ -115,8 +116,8 @@ def toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
                                hin=hin,
                                Rs=sw.reshape(len(tim), len(lon)*len(lat))[x, :],
                                Rl=lw.reshape(len(tim), len(lon)*len(lat))[x, :],
-                               gust=gustIn, cskin=cskinIn, tol=tolIn, qmeth='WMO',
-                               meth=meth, n=30, L="ecmwf")
+                               gust=gustIn, cskin=cskinIn, tol=tolIn,
+                               qmeth='Buck2', meth=meth, n=30, L="ecmwf")
             a = temp.loc[:,"tau":"rh"]
             a = a.to_numpy()
             flg[x, :] = temp["flag"]
@@ -533,7 +534,7 @@ else:
 #------------------------------------------------------------------------------
 tolIn = input("Give tolerance option (to use default press enter): \n")
 if (tolIn == ''):
-    tolIn = ['flux', 1e-3, 0.1, 0.1]
+    tolIn = ['all', 0.01, 0.01, 1e-05, 1e-3, 0.1, 0.1]
 else:
     tolIn = eval(tolIn)
 ext = ext+'tol'+tolIn[0]
