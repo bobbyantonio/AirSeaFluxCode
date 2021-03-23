@@ -206,7 +206,7 @@ def ctcq_calc(cdn, cd, ctn, cqn, hin, hout, psit, psiq):
     hin : float
         original temperature/humidity sensor height [m]
     hout : float
-        reference height                            [m]
+        reference height                   [m]
     psit : float
         heat stability function
     psiq : float

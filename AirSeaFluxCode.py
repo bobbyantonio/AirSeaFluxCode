@@ -71,8 +71,8 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
            option : 'flux' to set tolerance limits for fluxes only lim1-3
            option : 'ref' to set tolerance limits for height adjustment lim-1-3
            option : 'all' to set tolerance limits for both fluxes and height
-                    adjustment lim1-6 ['all', 0.01, 0.01, 1e-05, 1e-3, 0.1, 0.1]
-           default is tol=['flux', 1e-3, 0.1, 0.1]
+                    adjustment lim1-6
+           default is tol=['all', 0.01, 0.01, 1e-05, 1e-3, 0.1, 0.1]
         n : int
             number of iterations (defautl = 10)
         out : int
@@ -132,17 +132,20 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
 
     2021 / Author S. Biri
     """
-    logging.basicConfig(filename='flux_calc.log',
+    logging.basicConfig(filename='flux_calc.log', filemode="w",
                         format='%(asctime)s %(message)s',level=logging.INFO)
     logging.captureWarnings(True)
     #  check input values and set defaults where appropriate
-    lat, hum, P, Rl, Rs, cskin, skin, wl, gust, tol, L = get_init(spd, T, SST,
-                                                                  lat, hum, P,
-                                                                  Rl, Rs,
-                                                                  cskin, skin,
-                                                                  wl, gust, L,
-                                                                  tol, meth,
-                                                                  qmeth)
+    lat, hum, P, Rl, Rs, cskin, skin, wl, gust, tol, L, n = get_init(spd, T,
+                                                                     SST, lat,
+                                                                     hum, P,
+                                                                     Rl, Rs,
+                                                                     cskin,
+                                                                     skin,
+                                                                     wl, gust,
+                                                                     L, tol, n,
+                                                                     meth,
+                                                                     qmeth)
     flag = np.ones(spd.shape, dtype="object")*"n"
     flag = np.where(np.isnan(spd+T+SST+lat+hum[1]+P+Rs), "m", flag)
     ref_ht = 10        # reference height
@@ -150,8 +153,9 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     h_out = get_heights(hout, 1)       # desired height of output variables
     logging.info('method %s, inputs: lat: %s | P: %s | Rl: %s |'
                  ' Rs: %s | gust: %s | cskin: %s | L : %s', meth,
-                 np.nanmedian(lat), np.nanmedian(P), np.nanmedian(Rl),
-                 np.nanmedian(Rs), gust, cskin, L)
+                 np.nanmedian(lat), np.round(np.nanmedian(P), 2),
+                 np.round(np.nanmedian(Rl),2 ), np.round(np.nanmedian(Rs), 2),
+                 gust, cskin, L)
     #  set up/calculate temperatures and specific humidities
     th = np.where(T < 200, (np.copy(T)+CtoK) *
                   np.power(1000/P,287.1/1004.67),
@@ -164,7 +168,8 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     Ta = np.where(T < 200, np.copy(T)+CtoK+tlapse*h_in[1],
                   np.copy(T)+tlapse*h_in[1])  # convert to Kelvin if needed
     logging.info('method %s and q method %s | qsea:%s, qair:%s', meth, qmeth,
-                  np.nanmedian(qsea), np.nanmedian(qair))
+                 np.round(np.nanmedian(qsea), 7),
+                 np.round(np.nanmedian(qair), 7))
     if (np.all(np.isnan(qsea)) or np.all(np.isnan(qair))):
         print("qsea and qair cannot be nan")
 
@@ -322,10 +327,13 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
            tkt[ind] = 0.001*np.ones(T[ind].shape)
         logging.info('method %s | dter = %s | dqer = %s | tkt = %s | Rnl = %s '
                      '| usr = %s | tsr = %s | qsr = %s', meth,
-                     np.nanmedian(dter), np.nanmedian(dqer),
-                     np.nanmedian(tkt), np.nanmedian(Rnl),
-                     np.nanmedian(usr), np.nanmedian(tsr),
-                     np.nanmedian(qsr))
+                     np.round(np.nanmedian(dter), 2),
+                     np.round(np.nanmedian(dqer), 7),
+                     np.round(np.nanmedian(tkt), 2),
+                     np.round(np.nanmedian(Rnl), 2),
+                     np.round(np.nanmedian(usr), 3),
+                     np.round(np.nanmedian(tsr), 4),
+                     np.round(np.nanmedian(qsr), 7))
         Rnl[ind] = 0.97*(5.67e-8*np.power(sst[ind] -
                           dter[ind]*cskin, 4)-Rl[ind])
         t10n[ind] = (Ta[ind] -
@@ -362,6 +370,8 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
             wind[ind] = np.copy(spd[ind])
         u10n[ind] = wind[ind]-usr[ind]/kappa*(np.log(h_in[0, ind]/10) -
                                               psim[ind])
+        if (it < 4): # make sure you allow small negative values convergence
+            u10n = np.where(u10n < 0, 0.5, u10n)
         flag = np.where((u10n < 0) & (flag == "n"), "u",
                         np.where((u10n < 0) & (flag != "u"),
                                  flag+[","]+["u"], flag))
@@ -398,7 +408,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     itera[ind] = -1
     # itera = np.where(itera > n, -1, itera)
     logging.info('method %s | # of iterations:%s', meth, it)
-    logging.info('method %s | # of points that did not converge :%s', meth,
+    logging.info('method %s | # of points that did not converge :%s \n', meth,
                   ind[0].size)
     # calculate output parameters
     rho = (0.34838*P)/(tv10n)
@@ -428,30 +438,43 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                     np.where((q10n < 0) & (flag != "n"), flag+[","]+["q"],
                              flag))
     flag = np.where(((Rb < -0.5) | (Rb > 0.2)) & (flag == "n"), "l",
-                    np.where(((Rb < -0.5) | (Rb > 0.2)) & (flag != "n"),
-                             flag+[","]+["l"], flag))
+                    np.where(((Rb < -0.5) | (Rb > 0.2)) &
+                             ((flag != "n") & (("u" in flag) == False) &
+                              (("q" in flag) == False)), flag+[","]+["l"], flag))
     flag = np.where((itera == -1) & (flag == "n"), "i",
-                    np.where((itera == -1) & (flag != "n"), flag+[","]+["i"],
-                             flag))
+                    np.where((itera == -1) &
+                             ((flag != "n") & (("u" in flag) == False) &
+                              (("q" in flag) == False)),
+                             flag+[","]+["i"], flag))
     if (meth == "S80"):
-        flag = np.where(((spd < 6) | (spd > 22)) & (flag == "n"), "o",
-                        np.where(((spd < 6) | (spd > 22)) & (flag != "n"),
+        flag = np.where(((u10n < 6) | (u10n > 22)) & (flag == "n"), "o",
+                        np.where(((u10n < 6) | (u10n > 22)) &
+                                 ((flag != "n") & (("u" in flag) == False) &
+                                  (("q" in flag) == False)),
                                  flag+[","]+["o"], flag))
     elif (meth == "LP82"):
-        flag = np.where(((spd < 3) | (spd > 25)) & (flag == "n"), "o",
-                        np.where(((spd < 3) | (spd > 25)) & (flag != "n"),
+        flag = np.where(((u10n < 3) | (u10n > 25)) & (flag == "n"), "o",
+                        np.where(((u10n < 3) | (u10n > 25)) &
+                                 ((flag != "n") & (("u" in flag) == False) &
+                                  (("q" in flag) == False)),
                                  flag+[","]+["o"], flag))
     elif (meth == "YT96"):
-        flag = np.where(((spd < 3) | (spd > 26)) & (flag == "n"), "o",
-                        np.where(((spd < 3) | (spd > 26)) & (flag != "n"),
+        flag = np.where(((u10n < 3) | (u10n > 26)) & (flag == "n"), "o",
+                        np.where(((u10n < 3) | (u10n > 26)) &
+                                 ((flag != "n") & (("u" in flag) == False) &
+                                  (("q" in flag) == False)),
                                  flag+[","]+["o"], flag))
     elif (meth == "UA"):
-        flag = np.where((spd > 18) & (flag == "n"), "o",
-                        np.where((spd > 18) & (flag != "n"),
+        flag = np.where((u10n > 18) & (flag == "n"), "o",
+                        np.where((u10n > 18) &
+                                 ((flag != "n") & (("u" in flag) == False) &
+                                  (("q" in flag) == False)),
                                  flag+[","]+["o"], flag))
     elif (meth == "LY04"):
-        flag = np.where((spd < 0.5) & (flag == "n"), "o",
-                        np.where((spd < 0.5) & (flag != "n"),
+        flag = np.where((u10n < 0.5) & (flag == "n"), "o",
+                        np.where((u10n < 0.5) &
+                                 ((flag != "n") & (("u" in flag) == False) &
+                                  (("q" in flag) == False)),
                                  flag+[","]+["o"], flag))
     if (hum == None):
         rh = np.ones(sst.shape)*80
@@ -462,8 +485,8 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
         Td = hum[1] # dew point temperature (K)
         Td = np.where(Td < 200, np.copy(Td)+CtoK, np.copy(Td))
         T = np.where(T < 200, np.copy(T)+CtoK, np.copy(T))
-        esd = 611.21*np.exp(17.502*((Td-273.16)/(Td-32.19)))
-        es = 611.21*np.exp(17.502*((T-273.16)/(T-32.19)))
+        esd = 611.21*np.exp(17.502*((Td-CtoK)/(Td-32.19)))
+        es = 611.21*np.exp(17.502*((T-CtoK)/(T-32.19)))
         rh = 100*esd/es
         rh = np.where(rh > 100, np.nan, rh)
 
@@ -511,17 +534,17 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     if (out == 0):
         res[:, ind] = np.nan
     # set missing values where data have non acceptable values
-    res = np.asarray([np.where((spd < 0) | (q10n < 0), np.nan,
+    res = np.asarray([np.where(q10n < 0, np.nan,
                                res[i][:]) for i in range(39)])
     # output with pandas
     resAll = pd.DataFrame(data=res.T, index=range(len(spd)),
-                        columns=["tau", "shf", "lhf", "L", "cd", "cdn", "ct",
-                                 "ctn", "cq", "cqn", "tsrv", "tsr", "qsr",
-                                 "usr", "psim", "psit","psiq", "u10n", "t10n",
-                                 "tv10n", "q10n", "zo", "zot", "zoq", "uref",
-                                 "tref", "qref", "iteration", "dter", "dqer",
-                                 "dtwl", "qair", "qsea", "Rl", "Rs", "Rnl",
-                                 "ug", "Rib", "rh"])
+                          columns=["tau", "shf", "lhf", "L", "cd", "cdn", "ct",
+                                   "ctn", "cq", "cqn", "tsrv", "tsr", "qsr",
+                                   "usr", "psim", "psit","psiq", "u10n",
+                                   "t10n", "tv10n", "q10n", "zo", "zot", "zoq",
+                                   "uref", "tref", "qref", "iteration", "dter",
+                                   "dqer", "dtwl", "qair", "qsea", "Rl", "Rs",
+                                   "Rnl", "ug", "Rib", "rh"])
     resAll["flag"] = flag
     return resAll
 

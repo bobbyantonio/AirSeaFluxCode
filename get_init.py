@@ -2,7 +2,7 @@ import numpy as np
 import sys
 
 def get_init(spd, T, SST, lat, hum, P, Rl, Rs, cskin, skin, wl, gust, L, tol,
-             meth, qmeth):
+             n, meth, qmeth):
     """
     Checks initial input values and sets defaults if needed
 
@@ -17,7 +17,7 @@ def get_init(spd, T, SST, lat, hum, P, Rl, Rs, cskin, skin, wl, gust, L, tol,
         sea surface temperature in K
     lat : float
         latitude (deg), default 45deg
-    hum : array
+    hum : float
         relative humidity, if None is set to 80%
     P : float
         air pressure (hPa), default 1013hPa
@@ -40,12 +40,14 @@ def get_init(spd, T, SST, lat, hum, P, Rl, Rs, cskin, skin, wl, gust, L, tol,
         default else [1, 1.2, 800]
     L : int
         Monin-Obukhov length definition options
-    tol : array
+    tol : float
         4x1 or 7x1 [option, lim1-3 or lim1-6]
         option : 'flux' to set tolerance limits for fluxes only lim1-3
         option : 'ref' to set tolerance limits for height adjustment lim-1-3
         option : 'all' to set tolerance limits for both fluxes and height
                  adjustment lim1-6 ['all', 0.01, 0.01, 5e-05, 1e-3, 0.1, 0.1]
+    n : int
+        number of iterations
     meth : str
         "S80","S88","LP82","YT96","UA","LY04","C30","C35","ecmwf",
         "Beljaars"
@@ -78,7 +80,8 @@ def get_init(spd, T, SST, lat, hum, P, Rl, Rs, cskin, skin, wl, gust, L, tol,
         tolerance limits
     L : int
         MO length switch
-
+    n : int
+        number of iterations
     """
     # check if input is correct (type, size, value) and set defaults
     if ((type(spd) != np.ndarray) or (type(T) != np.ndarray) or
@@ -143,15 +146,13 @@ def get_init(spd, T, SST, lat, hum, P, Rl, Rs, cskin, skin, wl, gust, L, tol,
         sys.exit("gust input must be a 3x1 array")
     if (L not in [None, "S80", "ecmwf"]):
         sys.exit("L input must be either None, S80 or ecmwf")
-    if ((L == None) and (meth == "S80" or meth == "S88" or meth == "LP82"
-                         or meth == "YT96" or meth == "LY04" or
-                         meth == "UA" or meth == "C30" or meth == "C35"
-                         or meth == "Beljaars")):
-        L = "S80"
-    elif ((L == None) and (meth == "ecmwf")):
+    if (L == None):
         L = "ecmwf"
     if (tol == None):
-        tol = ['flux', 1e-3, 0.1, 0.1]
+        tol = ['all', 0.01, 0.01, 1e-05, 1e-3, 0.1, 0.1]
     elif (tol[0] not in ['flux', 'ref', 'all']):
         sys.exit("unknown tolerance input")
-    return lat, hum, P, Rl, Rs, cskin, skin, wl, gust, tol, L
+    if (n < 5):
+        n = 5
+        print("Number of iterations should not be less than 5; n is set to 5")
+    return lat, hum, P, Rl, Rs, cskin, skin, wl, gust, tol, L, n
