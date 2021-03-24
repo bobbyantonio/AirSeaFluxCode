@@ -39,10 +39,10 @@ def cdn_calc(u10n, usr, Ta, lat, meth="S80"):
         cdn = np.power((0.10038+u10n*2.17e-3+np.power(u10n, 2)*2.78e-3 -
                         np.power(u10n, 3)*4.4e-5)/u10n, 2)
     elif (meth == "LY04"):
-        cdn = np.where(u10n > 0.25, (0.142+2.7/u10n+u10n/13.09 -
+        cdn = np.where(u10n > 0.5, (0.142+2.7/u10n+u10n/13.09 -
                                     3.14807e-10*np.power(u10n, 6))*1e-3,
-                       (0.142+2.7/0.25+0.25/13.09 -
-                        3.14807e-10*np.power(0.25, 6))*1e-3)
+                       (0.142+2.7/0.5+0.5/13.09 -
+                        3.14807e-10*np.power(0.5, 6))*1e-3)
         cdn = np.where(u10n > 33, 2.34e-3, np.copy(cdn))
         cdn = np.maximum(np.copy(cdn), 0.1e-3)
     else:
