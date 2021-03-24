@@ -39,9 +39,12 @@ def cdn_calc(u10n, usr, Ta, lat, meth="S80"):
         cdn = np.power((0.10038+u10n*2.17e-3+np.power(u10n, 2)*2.78e-3 -
                         np.power(u10n, 3)*4.4e-5)/u10n, 2)
     elif (meth == "LY04"):
-        cdn = np.where(u10n >= 0.5,
-                       (0.142+(2.7/u10n)+(u10n/13.09))*0.001,
-                       (0.142+(2.7/0.5)+(0.5/13.09))*0.001)
+        cdn = np.where(u10n > 0.25, (0.142+2.7/u10n+u10n/13.09 -
+                                    3.14807e-10*np.power(u10n, 6))*1e-3,
+                       (0.142+2.7/0.25+0.25/13.09 -
+                        3.14807e-10*np.power(0.25, 6))*1e-3)
+        cdn = np.where(u10n > 33, 2.34e-3, np.copy(cdn))
+        cdn = np.maximum(np.copy(cdn), 0.1e-3)
     else:
         print("unknown method cdn: "+meth)
     return cdn
@@ -156,8 +159,9 @@ def ctcqn_calc(zol, cdn, usr, zo, Ta, meth="S80"):
         cqn = np.where((zol <= 0), 1.15*0.001, 1*0.001)
         ctn = np.where((zol <= 0), 1.13*0.001, 0.66*0.001)
     elif (meth == "LY04"):
-        cqn = 34.6*0.001*np.sqrt(cdn)
-        ctn = np.where(zol <= 0, 32.7*0.001*np.sqrt(cdn), 18*0.001*np.sqrt(cdn))
+        cqn = np.maximum(34.6*0.001*np.sqrt(cdn), 0.1e-3)
+        ctn = np.maximum(np.where(zol <= 0, 32.7*0.001*np.sqrt(cdn),
+                                  18*0.001*np.sqrt(cdn)), 0.1e-3)
     elif (meth == "UA"):
         # Zeng et al. 1998 (25)
         rr = usr*zo/visc_air(Ta)
@@ -274,7 +278,7 @@ def psim_calc(zol, meth="S80"):
     """
     if (meth == "ecmwf"):
         psim = psim_ecmwf(zol)
-    elif (meth == "C30" or meth == "C35"):  # or meth == "C40"
+    elif (meth == "C30" or meth == "C35"):
         psim = psiu_26(zol, meth)
     elif (meth == "Beljaars"): # Beljaars (1997) eq. 16, 17
         psim = np.where(zol < 0, psim_conv(zol, meth), psi_Bel(zol))

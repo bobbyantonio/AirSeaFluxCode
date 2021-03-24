@@ -189,8 +189,6 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     u10n = np.copy(spd)
     usr = 0.035*u10n
     cd10n = cdn_calc(u10n, usr, Ta, lat, meth)
-    ct10n, ct, cq10n, cq = (np.zeros(spd.shape)*np.nan, np.zeros(spd.shape)*np.nan,
-                        np.zeros(spd.shape)*np.nan, np.zeros(spd.shape)*np.nan)
     psim, psit, psiq = (np.zeros(spd.shape), np.zeros(spd.shape),
                         np.zeros(spd.shape))
     cd = cd_calc(cd10n, h_in[0], ref_ht, psim)
@@ -214,8 +212,14 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
         wind = np.copy(spd)
     # stars and roughness lengths
     usr = np.sqrt(cd*np.power(wind, 2))
-    zo = 0.0001*np.ones(spd.shape)
-    zot, zoq = 0.0001*np.ones(spd.shape), 0.0001*np.ones(spd.shape)
+    zo = 1e-4*np.ones(spd.shape)
+    zot, zoq = 1e-4*np.ones(spd.shape), 1e-4*np.ones(spd.shape)
+    ct10n = np.power(kappa, 2)/(np.log(h_in[0]/zo)*np.log(h_in[1]/zot))
+    cq10n = np.power(kappa, 2)/(np.log(h_in[0]/zo)*np.log(h_in[2]/zoq))
+    ct = np.power(kappa, 2)/((np.log(h_in[0]/zo)-psim) *
+                             (np.log(h_in[1]/zot)-psit))
+    cq = np.power(kappa, 2)/((np.log(h_in[0]/zo)-psim) *
+                             (np.log(h_in[2]/zoq)-psiq))
     monob = -100*np.ones(spd.shape)  # Monin-Obukhov length
     tsr = (dt+dter*cskin-dtwl*wl)*kappa/(np.log(h_in[1]/zot) -
                                          psit_calc(h_in[1]/monob, meth))
@@ -223,7 +227,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                                  psit_calc(h_in[2]/monob, meth))
     # set-up to feed into iteration loop
     it, ind = 0, np.where(spd > 0)
-    ii, itera = True, np.zeros(spd.shape)*np.nan
+    ii, itera = True, -1*np.ones(spd.shape)
     tau = 0.05*np.ones(spd.shape)
     sensible = 5*np.ones(spd.shape)
     latent = 65*np.ones(spd.shape)
@@ -258,6 +262,11 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
         ct[ind], cq[ind] = ctcq_calc(cd10n[ind], cd[ind], ct10n[ind], cq10n[ind],
                                       h_in[:, ind], [ref_ht, ref_ht, ref_ht],
                                       psit[ind], psiq[ind])
+        if (meth == "LY04"):
+            cd = np.maximum(np.copy(cd), 1e-4)
+            ct = np.maximum(np.copy(ct), 1e-4)
+            cq = np.maximum(np.copy(cq), 1e-4)
+            zo = np.minimum(np.copy(zo), 0.0025)
         usr[ind], tsr[ind], qsr[ind] = get_strs(h_in[:, ind], monob[ind],
                                                 wind[ind], zo[ind], zot[ind],
                                                 zoq[ind], dt[ind], dq[ind],
@@ -358,7 +367,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                                   np.power(get_gust(gust[1], tv[ind], usr[ind],
                                   tsrv[ind], gust[2], lat[ind]), 2)))
                                   # Zeng et al. 1998 (20)
-        elif (gust[0] == 1 and (meth == "C30" or meth == "C35")): # or meth == "C40"
+        elif (gust[0] == 1 and (meth == "C30" or meth == "C35")):
             wind[ind] = np.sqrt(np.power(np.copy(spd[ind]), 2) +
                                 np.power(get_gust(gust[1], Ta[ind], usr[ind],
                                 tsrv[ind], gust[2], lat[ind]), 2))
@@ -370,6 +379,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
             wind[ind] = np.copy(spd[ind])
         u10n[ind] = wind[ind]-usr[ind]/kappa*(np.log(h_in[0, ind]/10) -
                                               psim[ind])
+        #  usr[ind]/np.sqrt(cd10n[ind])
         if (it < 4): # make sure you allow small negative values convergence
             u10n = np.where(u10n < 0, 0.5, u10n)
         flag = np.where((u10n < 0) & (flag == "n"), "u",
@@ -406,7 +416,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
         else:
             ii = True
     itera[ind] = -1
-    # itera = np.where(itera > n, -1, itera)
+    itera = np.where(itera > n, -1, itera)
     logging.info('method %s | # of iterations:%s', meth, it)
     logging.info('method %s | # of points that did not converge :%s \n', meth,
                   ind[0].size)
