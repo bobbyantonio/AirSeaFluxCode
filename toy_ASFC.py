@@ -23,7 +23,7 @@ def reject_outliers(data, m=2):
     return x
 
 
-def toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
+def toy_ASFC(inF, outF, outS, gustIn, cskinIn, tolIn, meth):
     """
     Example routine of how to run AirSeaFluxCode with the test data given
     and save output either as .csv or NetCDF
@@ -34,6 +34,8 @@ def toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
         input filename either data_all.csv or era5_r360x180.nc
     outF : str
         output filename
+    outS : str
+        output statistics filename
     gustIn : float
         gustiness option e.g. [1, 1.2, 800]
     cskinIn : int
@@ -260,6 +262,7 @@ def toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth):
             usr.units = 'm/s'
             psim.long_name = 'Momentum stability function'
             psit.long_name = 'Heat stability function'
+            psiq.long_name = 'moisture stability function'
             u10n.long_name = '10m neutral wind speed'
             u10n.units = 'm/s'
             t10n.long_name = '10m neutral temperature'
@@ -554,9 +557,18 @@ elif ((outF[-3:] != '.nc') and (outF[-4:] != '.csv')):
 else:
     outF = outF
 #------------------------------------------------------------------------------
+outS = input("Give path and statistics file name: \n")
+if ((outS == '') and (inF == "data_all.csv")):
+    outS = "RV_"+ext+"_stats.txt"
+elif ((outS == '') and (inF == "era5_r360x180.nc")):
+    outS = "era5_"+ext+"_stats.txt"
+elif (outS[-4:] != '.txt'):
+    outF = outS+".txt"
+
+#------------------------------------------------------------------------------
 print("\n run_ASFC.py, started for method "+meth)
 
-res, lon, lat = toy_ASFC(inF, outF, gustIn, cskinIn, tolIn, meth)
+res, lon, lat = toy_ASFC(inF, outF, outS, gustIn, cskinIn, tolIn, meth)
 print("run_ASFC.py took ", np.round((time.perf_counter()-start_time)/60, 2),
       "minutes to run")
 
@@ -605,10 +617,11 @@ elif ((np.size(gustIn) < 3) and (gustIn == 0)):
 if (tolIn == None):
     tolIn = ['flux', 0.01, 1, 1]
 
-print("Input summary", file=open('./stats.txt', 'a'))
+
+print("Input summary", file=open('./'+outS, 'a'))
 print('input file name: {}, \n method: {}, \n gustiness: {}, \n cskin: {},'
       ' \n tolerance: {}'.format(inF, meth, gustIn, cskinIn, tolIn),
-      file=open('./stats.txt', 'a'))
+      file=open('./'+outS, 'a'))
 ttl = np.asarray(["tau  ", "shf  ", "lhf  ", "L    ", "cd   ", "cdn  ",
                   "ct   ", "ctn  ", "cq   ", "cqn  ", "tsrv ", "tsr  ",
                   "qsr  ", "usr  ", "psim ", "psit ", "psiq ", "u10n ",
@@ -630,8 +643,8 @@ if (inF == 'era5_r360x180.nc'):
                                           axis=0)]
     print(tabulate(stats, headers=header, tablefmt="github", numalign="left",
                    floatfmt=("s", "2.2e", "2.2e", "2.2e", "2.2e", "2.2e",
-                               "2.2e")), file=open('./stats.txt', 'a'))
-    print('-'*79+'\n', file=open('./stats.txt', 'a'))
+                             "2.2e")), file=open('./'+outS, 'a'))
+    print('-'*79+'\n', file=open('./'+outS, 'a'))
 elif (inF == "data_all.csv"):
     a = res.loc[:,"tau":"rh"].to_numpy(dtype="float64").T
     stats = np.c_[stats, np.nanmean(a, axis=1)]
@@ -642,8 +655,9 @@ elif (inF == "data_all.csv"):
     stats = np.c_[stats, np.nanpercentile(a, 95, axis=1)]
     print(tabulate(stats, headers=header, tablefmt="github", numalign="left",
                    floatfmt=("s", "2.2e", "2.2e", "2.2e", "2.2e", "2.2e",
-                               "2.2e")), file=open('./stats.txt', 'a'))
-    print('-'*79+'\n', file=open('./stats.txt', 'a'))
+                               "2.2e")),
+          file=open('./'+outS, 'a'))
+    print('-'*79+'\n', file=open('./'+outS, 'a'))
     del a
 
 print('input file name: {}, \n method: {}, \n gustiness: {}, \n cskin: {},'
