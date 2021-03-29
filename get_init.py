@@ -140,6 +140,8 @@ def get_init(spd, T, SST, lat, hum, P, Rl, Rs, cskin, skin, wl, gust, L, tol,
         gust = [1, 1, 1000]
     elif np.all(gust == None):
         gust = [1, 1.2, 800]
+    elif (np.all(gust == None) and (meth == "YT96")):
+        gust = [0, 0, 0]
     elif ((np.size(gust) < 3) and (gust == 0)):
         gust = [0, 0, 0]
     elif (np.size(gust) < 3):
