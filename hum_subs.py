@@ -380,7 +380,7 @@ def get_hum(hum, T, sst, P, qmeth):
         if (np.all(RH < 1)):
             sys.exit("input relative humidity units should be \%")
             qair, qsea = np.nan, np.nan
-        RH = np.where(RH > 100, np.nan, RH)  # ensure RH <=100
+        # RH = np.where(RH > 100, np.nan, RH)  # ensure RH <=100
         qsea = qsat_sea(sst, P, qmeth)/1000    # surface water q (kg/kg)
         qair = qsat_air(T, P, RH, qmeth)/1000  # q of air (kg/kg)
     elif (hum[0] == 'q'):
@@ -393,7 +393,7 @@ def get_hum(hum, T, sst, P, qmeth):
         esd = 611.21*np.exp(17.502*((Td-273.16)/(Td-32.19)))
         es = 611.21*np.exp(17.502*((T-273.16)/(T-32.19)))
         RH = 100*esd/es
-        RH = np.where(RH > 100, np.nan, RH) # ensure RH <=100
+        # RH = np.where(RH > 100, np.nan, RH)  # ensure RH <=100
         qair = qsat_air(T, P, RH, qmeth)/1000  # q of air (kg/kg)
         qsea = qsat_sea(sst, P, qmeth)/1000    # surface water q (kg/kg)
     return qair, qsea

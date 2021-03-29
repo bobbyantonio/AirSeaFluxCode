@@ -12,7 +12,7 @@ from flux_subs import (cs_C35, cs_Beljaars, cs_ecmwf, wl_ecmwf,
 
 def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                    Rl=None, Rs=None, cskin=None, skin="C35", wl=0, gust=None,
-                   meth="S80", qmeth="Buck2", tol=None, n=10, out=0, L=None):
+                   meth="S88", qmeth="Buck2", tol=None, n=10, out=0, L=None):
     """
     Calculates turbulent surface fluxes using different parameterizations
     Calculates height adjusted values for spd, T, q
@@ -379,7 +379,6 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
             wind[ind] = np.copy(spd[ind])
         u10n[ind] = wind[ind]-usr[ind]/kappa*(np.log(h_in[0, ind]/10) -
                                               psim[ind])
-        #  usr[ind]/np.sqrt(cd10n[ind])
         if (it < 4): # make sure you allow small negative values convergence
             u10n = np.where(u10n < 0, 0.5, u10n)
         flag = np.where((u10n < 0) & (flag == "n"), "u",
@@ -490,7 +489,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
         rh = np.ones(sst.shape)*80
     elif (hum[0] == 'rh'):
         rh = hum[1]
-        rh = np.where(rh > 100, np.nan, rh)
+        # rh = np.where(rh > 100, np.nan, rh)
     elif (hum[0] == 'Td'):
         Td = hum[1] # dew point temperature (K)
         Td = np.where(Td < 200, np.copy(Td)+CtoK, np.copy(Td))
@@ -498,7 +497,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
         esd = 611.21*np.exp(17.502*((Td-CtoK)/(Td-32.19)))
         es = 611.21*np.exp(17.502*((T-CtoK)/(T-32.19)))
         rh = 100*esd/es
-        rh = np.where(rh > 100, np.nan, rh)
+        # rh = np.where(rh > 100, np.nan, rh)
 
     res = np.zeros((39, len(spd)))
     res[0][:] = tau
