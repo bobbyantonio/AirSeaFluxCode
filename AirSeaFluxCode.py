@@ -128,7 +128,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                        40. flag ("n": normal, "o": out of nominal range,
                                  "u": u10n<0, "q":q10n<0
                                  "m": missing, "l": Rib<-0.5 or Rib>0.2,
-                                 "rh" : rh>100%,
+                                 "r" : rh>100%,
                                  "i": convergence fail at n)
 
     2021 / Author S. Biri
@@ -187,7 +187,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     flag = np.empty(spd.shape, dtype="object")
     flag[:] = "n"
     flag = np.where(np.isnan(spd+T+SST+hum[1]+P+Rs+Rl), "m", flag)
-    flag = np.where(rh > 100, "rh", flag)
+    flag = np.where(rh > 100, "r", flag)
 
     dt = Ta - sst
     dq = qair - qsea
