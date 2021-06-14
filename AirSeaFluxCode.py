@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import logging
 from get_init import get_init
-from hum_subs import (get_hum, gamma_moist)
+from hum_subs import (get_hum, gamma)
 from util_subs import (kappa, CtoK, get_heights)
 from flux_subs import (cs_C35, cs_Beljaars, cs_ecmwf, wl_ecmwf,
                        get_gust, get_L, get_strs, psim_calc,
@@ -162,8 +162,10 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     sst = np.where(SST < 200, np.copy(SST)+CtoK, np.copy(SST))
     qair, qsea = get_hum(hum, T, sst, P, qmeth)
     Rb = np.empty(sst.shape)
+    # specific heat
+    cp = 1004.67*(1+0.00084*qsea) #1005*np.ones(spd.shape)#
     #lapse rate
-    tlapse = gamma_moist(SST, T, qair/1000)
+    tlapse = gamma("dry", SST, T, qair/1000, cp)
     Ta = np.where(T < 200, np.copy(T)+CtoK+tlapse*h_in[1],
                   np.copy(T)+tlapse*h_in[1])  # convert to Kelvin if needed
     logging.info('method %s and q method %s | qsea:%s, qair:%s', meth, qmeth,
@@ -201,7 +203,6 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     # ------------
     rho = P*100/(287.1*tv10n)
     lv = (2.501-0.00237*(sst-CtoK))*1e6
-    cp = 1005*np.ones(spd.shape)#1004.67*(1 + 0.00084*qsea)
     u10n = np.copy(spd)
     usr = 0.035*u10n
     cd10n = cdn_calc(u10n, usr, Ta, lat, meth)

@@ -400,12 +400,16 @@ def get_hum(hum, T, sst, P, qmeth):
 #------------------------------------------------------------------------------
 
 
-def gamma_moist(sst, t, q):
+def gamma(opt, sst, t, q, cp):
     """
-    Computes the moist adiabatic lapse-rate
+    Computes the adiabatic lapse-rate
 
     Parameters
     ----------
+    opt : str
+        type of adiabatic lapse rate dry or "moist"
+        dry has options to be constant "dry_c", for dry air "dry", or
+        for unsaturated air with water vapor "dry_v"
     sst : float
         sea surface temperature [K]
     t : float
@@ -423,12 +427,22 @@ def gamma_moist(sst, t, q):
         sst = sst+CtoK
     if (np.nanmin(t) < 200):  # if sst in Celsius convert to Kelvin
         t = t+CtoK
-    t = np.maximum(t, 180)
-    q = np.maximum(q,  1e-6)
-    w = q/(1-q) # mixing ratio w = q/(1-q)
-    iRT = 1/(287.05*t)
-    # latent heat of vaporization of water as a function of temperature
-    lv = (2.501-0.00237*(sst-CtoK))*1e6
-    gamma = 9.8*(1+lv*w*iRT)/(1005+np.power(lv, 2)*w*(287.05/461.495)*iRT/t)
+    if (opt == "moist"):
+        t = np.maximum(t, 180)
+        q = np.maximum(q,  1e-6)
+        w = q/(1-q) # mixing ratio w = q/(1-q)
+        iRT = 1/(287.05*t)
+        # latent heat of vaporization of water as a function of temperature
+        lv = (2.501-0.00237*(sst-CtoK))*1e6
+        gamma = 9.8*(1+lv*w*iRT)/(1005+np.power(lv, 2)*w*(287.05/461.495) *
+                                  iRT/t)
+    elif (opt == "dry_c"):
+        gamma = 0.0098*np.ones(t.shape)
+    elif (opt == "dry"):
+        gamma = 9.81/cp
+    elif (opt == "dry_v"):
+        w = q/(1-q) # mixing ratio
+        f_v = 1-0.85*w #(1+w)/(1+w*)
+        gamma = f_v*9.81/cp
     return gamma
 #------------------------------------------------------------------------------
