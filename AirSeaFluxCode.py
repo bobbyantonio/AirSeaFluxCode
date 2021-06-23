@@ -161,9 +161,12 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                   np.copy(T)*np.power(1000/P,287.1/1004.67))  # potential T
     sst = np.where(SST < 200, np.copy(SST)+CtoK, np.copy(SST))
     qair, qsea = get_hum(hum, T, sst, P, qmeth)
-    Rb = np.empty(sst.shape)
+    # mask to preserve missing values when initialising variables
+    msk = np.empty(sst.shape)
+    msk = np.where(np.isnan(spd+T+SST), np.nan, 1)
+    Rb = np.empty(sst.shape)*msk
     # specific heat
-    cp = 1004.67*(1+0.00084*qsea) #1005*np.ones(spd.shape)#
+    cp = 1004.67*(1+0.00084*qsea)
     #lapse rate
     tlapse = gamma("dry", SST, T, qair/1000, cp)
     Ta = np.where(T < 200, np.copy(T)+CtoK+tlapse*h_in[1],
@@ -177,7 +180,6 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
         rh = np.ones(sst.shape)*80
     elif (hum[0] == 'rh'):
         rh = hum[1]
-        # rh = np.where(rh > 100, np.nan, rh)
     elif (hum[0] == 'Td'):
         Td = hum[1] # dew point temperature (K)
         Td = np.where(Td < 200, np.copy(Td)+CtoK, np.copy(Td))
@@ -185,7 +187,6 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
         esd = 611.21*np.exp(17.502*((Td-CtoK)/(Td-32.19)))
         es = 611.21*np.exp(17.502*((T-CtoK)/(T-32.19)))
         rh = 100*esd/es
-        # rh = np.where(rh > 100, np.nan, rh)
     flag = np.empty(spd.shape, dtype="object")
     flag[:] = "n"
     flag = np.where(np.isnan(spd+T+SST+hum[1]+P+Rs+Rl), "m", flag)
@@ -206,18 +207,18 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     u10n = np.copy(spd)
     usr = 0.035*u10n
     cd10n = cdn_calc(u10n, usr, Ta, lat, meth)
-    psim, psit, psiq = (np.zeros(spd.shape), np.zeros(spd.shape),
-                        np.zeros(spd.shape))
+    psim, psit, psiq = (np.zeros(spd.shape)*msk, np.zeros(spd.shape)*msk,
+                        np.zeros(spd.shape)*msk)
     cd = cd_calc(cd10n, h_in[0], ref_ht, psim)
-    tsr, tsrv = np.zeros(spd.shape), np.zeros(spd.shape)
-    qsr = np.zeros(spd.shape)
+    tsr, tsrv, qsr = (np.zeros(spd.shape)*msk, np.zeros(spd.shape)*msk,
+                      np.zeros(spd.shape)*msk)
     # cskin parameters
-    tkt = 0.001*np.ones(T.shape)
-    dter = np.ones(T.shape)*0.3
+    tkt = 0.001*np.ones(T.shape)*msk
+    dter = np.ones(T.shape)*0.3*msk
     dqer = dter*0.622*lv*qsea/(287.1*np.power(sst, 2))
     Rnl = 0.97*(5.67e-8*np.power(sst-0.3*cskin, 4)-Rl)
     Qs = 0.945*Rs
-    dtwl = np.ones(T.shape)*0.3
+    dtwl = np.ones(T.shape)*0.3*msk
     skt = np.copy(sst)
     # gustiness adjustment
     if (gust[0] == 1 and meth == "UA"):
@@ -229,25 +230,25 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
         wind = np.copy(spd)
     # stars and roughness lengths
     usr = np.sqrt(cd*np.power(wind, 2))
-    zo = 1e-4*np.ones(spd.shape)
-    zot, zoq = 1e-4*np.ones(spd.shape), 1e-4*np.ones(spd.shape)
+    zo, zot, zoq = (1e-4*np.ones(spd.shape)*msk, 1e-4*np.ones(spd.shape)*msk,
+                    1e-4*np.ones(spd.shape)*msk)
     ct10n = np.power(kappa, 2)/(np.log(h_in[0]/zo)*np.log(h_in[1]/zot))
     cq10n = np.power(kappa, 2)/(np.log(h_in[0]/zo)*np.log(h_in[2]/zoq))
     ct = np.power(kappa, 2)/((np.log(h_in[0]/zo)-psim) *
                              (np.log(h_in[1]/zot)-psit))
     cq = np.power(kappa, 2)/((np.log(h_in[0]/zo)-psim) *
                              (np.log(h_in[2]/zoq)-psiq))
-    monob = -100*np.ones(spd.shape)  # Monin-Obukhov length
+    monob = -100*np.ones(spd.shape)*msk  # Monin-Obukhov length
     tsr = (dt+dter*cskin-dtwl*wl)*kappa/(np.log(h_in[1]/zot) -
                                          psit_calc(h_in[1]/monob, meth))
     qsr = (dq+dqer*cskin)*kappa/(np.log(h_in[2]/zoq) -
                                  psit_calc(h_in[2]/monob, meth))
     # set-up to feed into iteration loop
     it, ind = 0, np.where(spd > 0)
-    ii, itera = True, -1*np.ones(spd.shape)
-    tau = 0.05*np.ones(spd.shape)
-    sensible = 5*np.ones(spd.shape)
-    latent = 65*np.ones(spd.shape)
+    ii, itera = True, -1*np.ones(spd.shape)*msk
+    tau = 0.05*np.ones(spd.shape)*msk
+    sensible = 5*np.ones(spd.shape)*msk
+    latent = 65*np.ones(spd.shape)*msk
     #  iteration loop
     while np.any(ii):
         it += 1
@@ -371,8 +372,8 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                                                qsr[ind], h_in[:, ind], Ta[ind],
                                                sst[ind]-dter[ind]*cskin+dtwl[ind]*wl,
                                                qair[ind], qsea[ind], wind[ind],
-                                               np.copy(monob[ind]), psim[ind],
-                                               meth)
+                                               np.copy(monob[ind]), zo[ind],
+                                               zot[ind], psim[ind], meth)
         # sst[ind]-dter[ind]*cskin+dtwl[ind]*wl
         psim[ind] = psim_calc(h_in[0, ind]/monob[ind], meth)
         psit[ind] = psit_calc(h_in[1, ind]/monob[ind], meth)
@@ -396,14 +397,12 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
             wind[ind] = np.copy(spd[ind])
         u10n[ind] = wind[ind]-usr[ind]/kappa*(np.log(h_in[0, ind]/10) -
                                               psim[ind])
-        #  usr[ind]/np.sqrt(cd10n[ind])
         if (it < 4): # make sure you allow small negative values convergence
             u10n = np.where(u10n < 0, 0.5, u10n)
         flag = np.where((u10n < 0) & (flag == "n"), "u",
                         np.where((u10n < 0) &
                                  (np.char.find(flag.astype(str), 'u') == -1),
                                  flag+[","]+["u"], flag))
-        # u10n = np.where(u10n < 0, np.nan, u10n)
         utmp = np.copy(u10n)
         utmp = np.where(utmp < 0, np.nan, utmp)
         itera[ind] = np.ones(1)*it
@@ -464,7 +463,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     qref = (qair-qsr/kappa*(np.log(h_in[2]/h_out[2]) -
             psit+psit_calc(h_out[2]/monob, meth)))
     if (wl == 0):
-        dtwl = np.zeros(T.shape) # reset to zero if not used
+        dtwl = np.zeros(T.shape)*msk # reset to zero if not used
     flag = np.where((q10n < 0) & (flag == "n"), "q",
                     np.where((q10n < 0) & (flag != "n"), flag+[","]+["q"],
                              flag))

@@ -878,8 +878,8 @@ def get_gust(beta, Ta, usr, tsrv, zi, lat):
 # ---------------------------------------------------------------------
 
 
-def get_L(L, lat, usr, tsr, qsr, hin, Ta, sst, qair, qsea, wind, monob, psim,
-          meth):
+def get_L(L, lat, usr, tsr, qsr, hin, Ta, sst, qair, qsea, wind, monob, zo,
+          zot, psim, meth):
     """
     calculates Monin-Obukhov length and virtual star temperature
 
@@ -915,6 +915,10 @@ def get_L(L, lat, usr, tsr, qsr, hin, Ta, sst, qair, qsea, wind, monob, psim,
         wind speed (m/s)
     monob : float
         Monin-Obukhov length from previous iteration step (m)
+    zo   : float
+        surface roughness       (m)
+    zot   : float
+        temperature roughness length       (m)
     meth : str
         bulk parameterisation method option: "S80", "S88", "LP82", "YT96",
         "UA", "LY04", "C30", "C35", "ecmwf", "Beljaars"
@@ -929,7 +933,7 @@ def get_L(L, lat, usr, tsr, qsr, hin, Ta, sst, qair, qsea, wind, monob, psim,
     """
     g = gc(lat)
     Rb = np.empty(sst.shape)
-    # as in NCAR, LY04
+    # as in aerobulk One_on_L in mod_phymbl.f90
     tsrv = tsr*(1+0.6077*qair)+0.6077*Ta*qsr
     # from eq. 3.24 ifs Cy46r1 pp. 37
     thvs = sst*(1+0.6077*qsea) # virtual SST
@@ -937,7 +941,7 @@ def get_L(L, lat, usr, tsr, qsr, hin, Ta, sst, qair, qsea, wind, monob, psim,
     tv = 0.5*(thvs+Ta*(1+0.6077*qair)) # estimate tv within surface layer
     # adjust wind to T sensor's height
     uz = (wind-usr/kappa*(np.log(hin[0]/hin[1])-psim +
-                            psim_calc(hin[1]/monob, meth)))
+                          psim_calc(hin[1]/monob, meth)))
     Rb = g*dthv*hin[1]/(tv*uz*uz)
     if (L == "S80"):
         temp = (g*kappa*tsrv /
@@ -946,8 +950,6 @@ def get_L(L, lat, usr, tsr, qsr, hin, Ta, sst, qair, qsea, wind, monob, psim,
         temp = np.minimum(np.abs(temp), 10/hin[0])*np.sign(temp)
         monob = 1/np.copy(temp)
     elif (L == "ecmwf"):
-        zo = (0.11*visc_air(Ta)/usr+0.018*np.power(usr, 2)/g)
-        zot = 0.40*visc_air(Ta)/usr
         zol = (Rb*(np.power(np.log((hin[1]+zo)/zo)-psim_calc((hin[1]+zo) /
                                                               monob, meth) +
                             psim_calc(zo/monob, meth), 2) /
