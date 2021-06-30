@@ -146,10 +146,12 @@ def get_init(spd, T, SST, lat, hum, P, Rl, Rs, cskin, skin, wl, gust, L, tol,
         gust = [0, 0, 0]
     elif (np.size(gust) < 3):
         sys.exit("gust input must be a 3x1 array")
-    if (L not in [None, "S80", "ecmwf"]):
-        sys.exit("L input must be either None, S80 or ecmwf")
-    if (L == None):
-        L = "ecmwf"
+    if (L not in [None, "tsrv", "Rb"]):
+        sys.exit("L input must be either None, tsrv or Rb")
+    if ((L == None) and ((meth != "ecmwf") and (meth != "Beljaars"))):
+        L = "tsrv"
+    elif ((L == None) and ((meth == "ecmwf") or (meth == "Beljaars"))):
+        L = "Rb"
     if (tol == None):
         tol = ['all', 0.01, 0.01, 1e-05, 1e-3, 0.1, 0.1]
     elif (tol[0] not in ['flux', 'ref', 'all']):

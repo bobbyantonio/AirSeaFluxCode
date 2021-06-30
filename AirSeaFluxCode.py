@@ -80,9 +80,10 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
             set 1 to keep points
         L : str
            Monin-Obukhov length definition options
-           "S80"  : default for S80, S88, LP82, YT96 and LY04
-           "ecmwf" : following ecmwf (IFS Documentation cy46r1), default for
-           ecmwf
+           "tsrv"  : default for "S80", "S88", "LP82", "YT96", "UA", "LY04",
+                     "C30", "C35"
+           "Rb" : following ecmwf (IFS Documentation cy46r1), default for
+                  "ecmwf", "Beljaars"
     Returns
     -------
         res : array that contains

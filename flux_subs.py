@@ -935,6 +935,7 @@ def get_L(L, lat, usr, tsr, qsr, hin, Ta, sst, qair, qsea, wind, monob, zo,
     Rb = np.empty(sst.shape)
     # as in aerobulk One_on_L in mod_phymbl.f90
     tsrv = tsr*(1+0.6077*qair)+0.6077*Ta*qsr
+    # tsrv = tsr+0.6077*Ta*qsr
     # from eq. 3.24 ifs Cy46r1 pp. 37
     thvs = sst*(1+0.6077*qsea) # virtual SST
     dthv = (Ta-sst)*(1+0.6077*qair)+0.6077*Ta*(qair-qsea)
@@ -943,13 +944,12 @@ def get_L(L, lat, usr, tsr, qsr, hin, Ta, sst, qair, qsea, wind, monob, zo,
     uz = (wind-usr/kappa*(np.log(hin[0]/hin[1])-psim +
                           psim_calc(hin[1]/monob, meth)))
     Rb = g*dthv*hin[1]/(tv*uz*uz)
-    if (L == "S80"):
+    if (L == "tsrv"):
         temp = (g*kappa*tsrv /
                 np.maximum(np.power(usr, 2)*Ta*(1+0.6077*qair), 1e-9))
         temp = np.minimum(np.abs(temp), 200)*np.sign(temp)
-        temp = np.minimum(np.abs(temp), 10/hin[0])*np.sign(temp)
         monob = 1/np.copy(temp)
-    elif (L == "ecmwf"):
+    elif (L == "Rb"):
         zol = (Rb*(np.power(np.log((hin[1]+zo)/zo)-psim_calc((hin[1]+zo) /
                                                               monob, meth) +
                             psim_calc(zo/monob, meth), 2) /
