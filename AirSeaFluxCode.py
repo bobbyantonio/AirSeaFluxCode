@@ -407,6 +407,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
         utmp = np.copy(u10n)
         utmp = np.where(utmp < 0, np.nan, utmp)
         itera[ind] = np.ones(1)*it
+        rho = (0.34838*P)/(tv10n)
         sensible = -rho*cp*usr*tsr
         latent = -rho*lv*usr*qsr
         if (gust[0] == 1):
