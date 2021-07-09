@@ -400,10 +400,6 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                                               psim[ind])
         if (it < 4): # make sure you allow small negative values convergence
             u10n = np.where(u10n < 0, 0.5, u10n)
-        flag = np.where((u10n < 0) & (flag == "n"), "u",
-                        np.where((u10n < 0) &
-                                 (np.char.find(flag.astype(str), 'u') == -1),
-                                 flag+[","]+["u"], flag))
         utmp = np.copy(u10n)
         utmp = np.where(utmp < 0, np.nan, utmp)
         itera[ind] = np.ones(1)*it
@@ -466,6 +462,10 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
             psit+psit_calc(h_out[2]/monob, meth)))
     if (wl == 0):
         dtwl = np.zeros(T.shape)*msk # reset to zero if not used
+    flag = np.where((u10n < 0) & (flag == "n"), "u",
+                        np.where((u10n < 0) &
+                                 (np.char.find(flag.astype(str), 'u') == -1),
+                                 flag+[","]+["u"], flag))
     flag = np.where((q10n < 0) & (flag == "n"), "q",
                     np.where((q10n < 0) & (flag != "n"), flag+[","]+["q"],
                              flag))
