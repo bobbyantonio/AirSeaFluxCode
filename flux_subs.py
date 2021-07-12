@@ -885,10 +885,11 @@ def get_L(L, lat, usr, tsr, qsr, hin, Ta, sst, qair, qsea, wind, monob, zo,
 
     Parameters
     ----------
-    L : int
+    L : str
         Monin-Obukhov length definition options
-        "S80"  : default for S80, S88, LP82, YT96 and LY04
-        "ecmwf" : following ecmwf (IFS Documentation cy46r1), default for ecmwf
+        "tsrv"  : default for S80, S88, LP82, YT96, UA, C30, C35 and LY04
+        "Rb" : following ecmwf (IFS Documentation cy46r1), default for ecmwf
+               and Beljaars
     lat : float
         latitude
     usr : float
@@ -897,8 +898,6 @@ def get_L(L, lat, usr, tsr, qsr, hin, Ta, sst, qair, qsea, wind, monob, zo,
         star temperature (K)
     qsr : float
         star specific humidity (g/kg)
-    t10n : float
-        neutral temperature at 10m (K)
     hin : float
         sensor heights (m)
     Ta : float
@@ -909,8 +908,6 @@ def get_L(L, lat, usr, tsr, qsr, hin, Ta, sst, qair, qsea, wind, monob, zo,
         air specific humidity (g/kg)
     qsea : float
         specific humidity at sea surface (g/kg)
-    q10n : float
-        neutral specific humidity at 10m (g/kg)
     wind : float
         wind speed (m/s)
     monob : float
@@ -919,6 +916,8 @@ def get_L(L, lat, usr, tsr, qsr, hin, Ta, sst, qair, qsea, wind, monob, zo,
         surface roughness       (m)
     zot   : float
         temperature roughness length       (m)
+    psim : floast
+        momentum stability function
     meth : str
         bulk parameterisation method option: "S80", "S88", "LP82", "YT96",
         "UA", "LY04", "C30", "C35", "ecmwf", "Beljaars"
@@ -929,6 +928,8 @@ def get_L(L, lat, usr, tsr, qsr, hin, Ta, sst, qair, qsea, wind, monob, zo,
         virtual star temperature (K)
     monob : float
         M-O length (m)
+    Rb  : float
+        Richardson number
 
     """
     g = gc(lat)

@@ -416,7 +416,8 @@ def gamma(opt, sst, t, q, cp):
         air temperature [K]
     q : float
         specific humidity of air [kg/kg]
-
+    cp : float
+        specific capacity of air at constant Pressure [kJ/(kg*K)]
     Returns
     -------
     gamma : float
