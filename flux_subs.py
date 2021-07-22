@@ -596,7 +596,7 @@ def cs_C35(sst, qsea, rho, Rs, Rnl, cp, lv, delta, usr, tsr, qsr, lat):
     # density of water, specific heat capacity of water, water viscosity,
     # thermal conductivity of water
     rhow, cpw, visw, tcw = 1022, 4000, 1e-6, 0.6
-    for i in range(5):
+    for i in range(4):
         aw = 2.1e-5*np.power(np.maximum(sst+3.2, 0), 0.79)
         bigc = 16*g*cpw*np.power(rhow*visw, 3)/(np.power(tcw, 2)*np.power(rho, 2))
         wetc = 0.622*lv*qsea/(287.1*np.power(sst+273.16, 2))
@@ -664,7 +664,7 @@ def cs_ecmwf(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, sst, lat):
     Rs : float
         downward solar radiation [Wm-2]
     Rnl : float
-        net thermal radiaion     [Wm-2]
+        net thermal radiation     [Wm-2]
     cp : float
        specific heat of air at constant pressure [J/K/kg]
     lv : float
@@ -694,7 +694,7 @@ def cs_ecmwf(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, sst, lat):
     lhf = -rho*lv*usr*qsr
     Qnsol = shf+lhf+Rnl  # eq. 8.152
     d = delta(aw, Qnsol, usr, lat)
-    for jc in range(5): # because implicit in terms of delta...
+    for jc in range(4): # because implicit in terms of delta...
         # # fraction of the solar radiation absorbed in layer delta eq. 8.153
         # and Eq.(5) Zeng & Beljaars, 2005
         fs = 0.065+11*d-6.6e-5/d*(1-np.exp(-d/8e-4))
@@ -929,7 +929,7 @@ def get_L(L, lat, usr, tsr, qsr, hin, Ta, sst, qair, qsea, wind, monob, zo,
     monob : float
         M-O length (m)
     Rb  : float
-        Richardson number
+       Richardson number
 
     """
     g = gc(lat)
