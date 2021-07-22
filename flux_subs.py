@@ -596,21 +596,21 @@ def cs_C35(sst, qsea, rho, Rs, Rnl, cp, lv, delta, usr, tsr, qsr, lat):
     # density of water, specific heat capacity of water, water viscosity,
     # thermal conductivity of water
     rhow, cpw, visw, tcw = 1022, 4000, 1e-6, 0.6
-    aw = 2.1e-5*np.power(np.maximum(sst+3.2, 0), 0.79)
-    bigc = 16*g*cpw*np.power(rhow*visw, 3)/(np.power(tcw, 2)*np.power(rho, 2))
-    wetc = 0.622*lv*qsea/(287.1*np.power(sst+273.16, 2))
-    Rns = 0.945*Rs  # albedo correction
-    shf = -rho*cp*usr*tsr
-    lhf = -rho*lv*usr*qsr
-    Qnsol = Rnl+shf+lhf
-    fs = 0.065+11*delta-6.6e-5/delta*(1-np.exp(-delta/8.0e-4))
-    qcol = Qnsol-Rns*fs
-    alq = aw*qcol+0.026*lhf*cpw/lv
-    xlamx = 6*np.ones(sst.shape)
-    xlamx = np.where(alq > 0, 6/(1+(bigc*alq/usr**4)**0.75)**0.333, 6)
-    delta = np.where(alq > 0, xlamx*visw/(np.sqrt(rho/rhow)*usr),
-                   np.where(xlamx*visw/(np.sqrt(rho/rhow)*usr) > 0.01, 0.01,
-                   xlamx*visw/(np.sqrt(rho/rhow)*usr)))
+    for i in range(5):
+        aw = 2.1e-5*np.power(np.maximum(sst+3.2, 0), 0.79)
+        bigc = 16*g*cpw*np.power(rhow*visw, 3)/(np.power(tcw, 2)*np.power(rho, 2))
+        wetc = 0.622*lv*qsea/(287.1*np.power(sst+273.16, 2))
+        Rns = 0.945*Rs  # albedo correction
+        shf = -rho*cp*usr*tsr
+        lhf = -rho*lv*usr*qsr
+        Qnsol = shf+lhf+Rnl
+        fs = 0.065+11*delta-6.6e-5/delta*(1-np.exp(-delta/8.0e-4))
+        qcol = Qnsol-Rns*fs
+        alq = aw*qcol+0.026*lhf*cpw/lv
+        xlamx = 6*np.ones(sst.shape)
+        xlamx = np.where(alq > 0, 6/(1+(bigc*alq/usr**4)**0.75)**0.333, 6)
+        delta =  np.minimum(xlamx*visw/(np.sqrt(rho/rhow)*usr), 0.01)
+        delta = np.where(alq > 0, xlamx*visw/(np.sqrt(rho/rhow)*usr), delta)
     dter = qcol*delta/tcw
     dqer = wetc*dter
     return dter, dqer, delta
@@ -694,7 +694,7 @@ def cs_ecmwf(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, sst, lat):
     lhf = -rho*lv*usr*qsr
     Qnsol = shf+lhf+Rnl  # eq. 8.152
     d = delta(aw, Qnsol, usr, lat)
-    for jc in range(10): # because implicit in terms of delta...
+    for jc in range(5): # because implicit in terms of delta...
         # # fraction of the solar radiation absorbed in layer delta eq. 8.153
         # and Eq.(5) Zeng & Beljaars, 2005
         fs = 0.065+11*d-6.6e-5/d*(1-np.exp(-d/8e-4))
