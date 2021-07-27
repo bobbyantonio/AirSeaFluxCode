@@ -215,9 +215,9 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                       np.zeros(spd.shape)*msk)
     # cskin parameters
     tkt = 0.001*np.ones(T.shape)*msk
-    dter = np.ones(T.shape)*0.3*msk
+    dter = -0.3*np.ones(T.shape)*msk
     dqer = dter*0.622*lv*qsea/(287.1*np.power(sst, 2))
-    Rnl = 0.97*(5.67e-8*np.power(sst-0.3*cskin, 4)-Rl)
+    Rnl = 0.97*(Rl-5.67e-8*np.power(sst-0.3*cskin, 4))
     Qs = 0.945*Rs
     dtwl = np.ones(T.shape)*0.3*msk
     skt = np.copy(sst)
@@ -240,16 +240,16 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     cq = np.power(kappa, 2)/((np.log(h_in[0]/zo)-psim) *
                              (np.log(h_in[2]/zoq)-psiq))
     monob = -100*np.ones(spd.shape)*msk  # Monin-Obukhov length
-    tsr = (dt+dter*cskin-dtwl*wl)*kappa/(np.log(h_in[1]/zot) -
+    tsr = (dt-dter*cskin-dtwl*wl)*kappa/(np.log(h_in[1]/zot) -
                                          psit_calc(h_in[1]/monob, meth))
-    qsr = (dq+dqer*cskin)*kappa/(np.log(h_in[2]/zoq) -
+    qsr = (dq-dqer*cskin)*kappa/(np.log(h_in[2]/zoq) -
                                  psit_calc(h_in[2]/monob, meth))
     # set-up to feed into iteration loop
     it, ind = 0, np.where(spd > 0)
     ii, itera = True, -1*np.ones(spd.shape)*msk
     tau = 0.05*np.ones(spd.shape)*msk
-    sensible = 5*np.ones(spd.shape)*msk
-    latent = 65*np.ones(spd.shape)*msk
+    sensible = -5*np.ones(spd.shape)*msk
+    latent = -65*np.ones(spd.shape)*msk
     #  iteration loop
     while np.any(ii):
         it += 1
@@ -326,7 +326,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                                      lv[ind], usr[ind], tsr[ind], qsr[ind],
                                      np.copy(sst[ind]), np.copy(skt[ind]),
                                      np.copy(dter[ind]), lat[ind])
-                skt = np.copy(sst)-dter+dtwl
+                skt = np.copy(sst)+dter+dtwl
             elif (skin == "ecmwf"):
                 dter[ind] = cs_ecmwf(rho[ind], Rs[ind], Rnl[ind], cp[ind],
                                      lv[ind], usr[ind], tsr[ind], qsr[ind],
@@ -335,7 +335,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                                      lv[ind], usr[ind], tsr[ind], qsr[ind],
                                      np.copy(sst[ind]), np.copy(skt[ind]),
                                      np.copy(dter[ind]), lat[ind])
-                skt = np.copy(sst)-dter+dtwl
+                skt = np.copy(sst)+dter+dtwl
                 dqer[ind] = (dter[ind]*0.622*lv[ind]*qsea[ind] /
                              (287.1*np.power(skt[ind], 2)))
             elif (skin == "Beljaars"):
@@ -347,7 +347,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                                      lv[ind], usr[ind], tsr[ind], qsr[ind],
                                      np.copy(sst[ind]), np.copy(skt[ind]),
                                      np.copy(dter[ind]), lat[ind])
-                skt = np.copy(sst)-dter+dtwl
+                skt = np.copy(sst)+dter+dtwl
                 dqer = dter*0.622*lv*qsea/(287.1*np.power(skt, 2))
         else:
            dter[ind] = np.zeros(sst[ind].shape)
@@ -362,8 +362,8 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                      np.round(np.nanmedian(usr), 3),
                      np.round(np.nanmedian(tsr), 4),
                      np.round(np.nanmedian(qsr), 7))
-        Rnl[ind] = 0.97*(5.67e-8*np.power(sst[ind] -
-                          dter[ind]*cskin, 4)-Rl[ind])
+        Rnl[ind] = 0.97*(Rl[ind]-5.67e-8*np.power(sst[ind] +
+                                                  dter[ind]*cskin, 4))
         t10n[ind] = (Ta[ind] -
                      tsr[ind]/kappa*(np.log(h_in[1, ind]/ref_ht)-psit[ind]))
         q10n[ind] = (qair[ind] -
@@ -371,11 +371,10 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
         tv10n[ind] = t10n[ind]*(1+0.6077*q10n[ind])
         tsrv[ind], monob[ind], Rb[ind] = get_L(L, lat[ind], usr[ind], tsr[ind],
                                                qsr[ind], h_in[:, ind], Ta[ind],
-                                               sst[ind]-dter[ind]*cskin+dtwl[ind]*wl,
+                                               sst[ind]+dter[ind]*cskin+dtwl[ind]*wl,
                                                qair[ind], qsea[ind], wind[ind],
                                                np.copy(monob[ind]), zo[ind],
                                                zot[ind], psim[ind], meth)
-        # sst[ind]-dter[ind]*cskin+dtwl[ind]*wl
         psim[ind] = psim_calc(h_in[0, ind]/monob[ind], meth)
         psit[ind] = psit_calc(h_in[1, ind]/monob[ind], meth)
         psiq[ind] = psit_calc(h_in[2, ind]/monob[ind], meth)
@@ -403,8 +402,8 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
         utmp = np.copy(u10n)
         utmp = np.where(utmp < 0, np.nan, utmp)
         itera[ind] = np.ones(1)*it
-        sensible = -rho*cp*usr*tsr
-        latent = -rho*lv*usr*qsr
+        sensible = rho*cp*usr*tsr
+        latent = rho*lv*usr*qsr
         if (gust[0] == 1):
             tau = rho*np.power(usr, 2)*(spd/wind)
         elif (gust[0] == 0):
@@ -521,7 +520,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                                  flag+[","]+["o"], flag))
 
 
-    res = np.zeros((39, len(spd)))
+    res = np.zeros((40, len(spd)))
     res[0][:] = tau
     res[1][:] = sensible
     res[2][:] = latent
@@ -561,14 +560,15 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     res[36][:] = np.sqrt(np.power(wind, 2)-np.power(spd, 2))
     res[37][:] = Rb
     res[38][:] = rh
+    res[39][:] = tkt
 
     if (out == 0):
         res[:, ind] = np.nan
         # set missing values where data have non acceptable values
         res = np.asarray([np.where(q10n < 0, np.nan,
-                                   res[i][:]) for i in range(39)])
+                                   res[i][:]) for i in range(40)])
         res = np.asarray([np.where(u10n < 0, np.nan,
-                                   res[i][:]) for i in range(39)])
+                                   res[i][:]) for i in range(40)])
     # output with pandas
     resAll = pd.DataFrame(data=res.T, index=range(len(spd)),
                           columns=["tau", "shf", "lhf", "L", "cd", "cdn", "ct",
@@ -577,7 +577,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                                    "t10n", "tv10n", "q10n", "zo", "zot", "zoq",
                                    "uref", "tref", "qref", "iteration", "dter",
                                    "dqer", "dtwl", "qair", "qsea", "Rl", "Rs",
-                                   "Rnl", "ug", "Rib", "rh"])
+                                   "Rnl", "ug", "Rib", "rh", "delta"])
     resAll["flag"] = flag
     return resAll
 
