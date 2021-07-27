@@ -526,7 +526,10 @@ while qmIn not in ["HylandWexler", "Hardy", "Preining", "Wexler",
 else:
     qmIn = qmIn
 #------------------------------------------------------------------------------
-gustIn = input("Give gustiness option (to use default press enter): \n")
+gustIn = input("Give gustiness option (to switch it off enter 0;"
+               " to set your own input use the form [1, B, zi]"
+               " i.e. [1, 1, 800] or "
+               "to use default press enter): \n")
 if (gustIn == ''):
     gustIn = None
     ext = ext+'gust_'
@@ -563,11 +566,11 @@ else:
     tolIn = eval(tolIn)
 ext = ext+'tol'+tolIn[0]
 #------------------------------------------------------------------------------
-LIn = input("Give prefered method for L (S80 or ecmwf): \n")
+LIn = input("Give prefered method for L (tsrv or Rb): \n")
 if (LIn == ''):
-    LIn = 'ecmwf' # default
-elif LIn not in ["S80", "ecmwf"]:
-    LIn = 'ecmwf' # default
+    LIn = 'tsrv' # default
+elif LIn not in ["tsrv", "Rb"]:
+    LIn = 'tsrv' # default
 else:
     LIn = LIn
 #------------------------------------------------------------------------------
