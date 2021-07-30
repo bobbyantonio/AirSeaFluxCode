@@ -126,6 +126,8 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                        37. gust wind speed (ug)
                        38. Bulk Richardson number (Rib)
                        39. relative humidity (rh)
+                       40. thickness of the viscous layer (delta)
+                       41. lv latent heat of vaporization (Jkg−1)
                        40. flag ("n": normal, "o": out of nominal range,
                                  "u": u10n<0, "q":q10n<0
                                  "m": missing, "l": Rib<-0.5 or Rib>0.2,
@@ -294,7 +296,8 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                                                 meth)
         if ((cskin == 1) and (wl == 0)):
             if (skin == "C35"):
-                dter[ind], dqer[ind], tkt[ind] = cs_C35(sst[ind], qsea[ind],
+                dter[ind], dqer[ind], tkt[ind] = cs_C35(np.copy(sst[ind]),
+                                                        qsea[ind],
                                                         rho[ind], Rs[ind],
                                                         Rnl[ind],
                                                         cp[ind], lv[ind],
@@ -304,7 +307,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
             elif (skin == "ecmwf"):
                 dter[ind] = cs_ecmwf(rho[ind], Rs[ind], Rnl[ind], cp[ind],
                                      lv[ind], usr[ind], tsr[ind], qsr[ind],
-                                     sst[ind], lat[ind])
+                                     np.copy(sst[ind]), lat[ind])
                 dqer[ind] = (dter[ind]*0.622*lv[ind]*qsea[ind] /
                              (287.1*np.power(sst[ind], 2)))
             elif (skin == "Beljaars"):
@@ -313,6 +316,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                                                  tsr[ind], qsr[ind], lat[ind],
                                                  np.copy(Qs[ind]))
                 dqer = dter*0.622*lv*qsea/(287.1*np.power(sst, 2))
+            skt = np.copy(sst)+dter
         elif ((cskin == 1) and (wl == 1)):
             if (skin == "C35"):
                 dter[ind], dqer[ind], tkt[ind] = cs_C35(sst[ind], qsea[ind],
@@ -520,7 +524,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                                  flag+[","]+["o"], flag))
 
 
-    res = np.zeros((40, len(spd)))
+    res = np.zeros((41, len(spd)))
     res[0][:] = tau
     res[1][:] = sensible
     res[2][:] = latent
@@ -561,14 +565,15 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     res[37][:] = Rb
     res[38][:] = rh
     res[39][:] = tkt
+    res[40][:] = lv
 
     if (out == 0):
         res[:, ind] = np.nan
         # set missing values where data have non acceptable values
         res = np.asarray([np.where(q10n < 0, np.nan,
-                                   res[i][:]) for i in range(40)])
+                                   res[i][:]) for i in range(41)])
         res = np.asarray([np.where(u10n < 0, np.nan,
-                                   res[i][:]) for i in range(40)])
+                                   res[i][:]) for i in range(41)])
     # output with pandas
     resAll = pd.DataFrame(data=res.T, index=range(len(spd)),
                           columns=["tau", "shf", "lhf", "L", "cd", "cdn", "ct",
@@ -577,7 +582,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                                    "t10n", "tv10n", "q10n", "zo", "zot", "zoq",
                                    "uref", "tref", "qref", "iteration", "dter",
                                    "dqer", "dtwl", "qair", "qsea", "Rl", "Rs",
-                                   "Rnl", "ug", "Rib", "rh", "delta"])
+                                   "Rnl", "ug", "Rib", "rh", "delta", "lv"])
     resAll["flag"] = flag
     return resAll
 
