@@ -944,10 +944,10 @@ def get_L(L, lat, usr, tsr, qsr, hin, Ta, sst, qair, qsea, wind, monob, zo,
                           psim_calc(hin[1]/monob, meth)))
     Rb = g*dthv*hin[1]/(tv*uz*uz)
     if (L == "tsrv"):
-        temp = (g*kappa*tsrv /
+        tmp = (g*kappa*tsrv /
                 np.maximum(np.power(usr, 2)*Ta*(1+0.6077*qair), 1e-9))
-        temp = np.minimum(np.abs(temp), 200)*np.sign(temp)
-        monob = 1/np.copy(temp)
+        tmp = np.minimum(np.abs(tmp), 200)*np.sign(tmp)
+        monob = 1/np.copy(tmp)
     elif (L == "Rb"):
         zol = (Rb*(np.power(np.log((hin[1]+zo)/zo)-psim_calc((hin[1]+zo) /
                                                               monob, meth) +
