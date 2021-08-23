@@ -137,8 +137,8 @@ def VaporPressure(temp, P, phase, meth):
             Standards and Recommended Practices, App. A, 1988."""
             Ts = 273.16  # triple point temperature in K
             Psat = np.power(10, 10.79574*(1-Ts/T)-5.028*np.log10(T/Ts) +
-                            1.50475e-4*(1-np.power(10, -8.2969*(T/Ts-1))) +
-                            0.42873e-3*(np.power(10, 4.76955*(1-Ts/T))-1) +  # in eq. 13 is -4.76955; in aerobulk is like this
+                            1.50475e-4*(1-10**(-8.2969*(T/Ts-1))) +
+                            0.42873e-3*(10**(4.76955*(1-Ts/T))-1) +  # in eq. 13 is -4.76955; in aerobulk is like this
                             0.78614)
         if (meth == 'WMO2018'):
             """WMO 2018 edition. Annex 4.B, eq. 4.B.1, 4.B.2, 4.B.5 """
@@ -393,7 +393,6 @@ def get_hum(hum, T, sst, P, qmeth):
         esd = 611.21*np.exp(17.502*((Td-273.16)/(Td-32.19)))
         es = 611.21*np.exp(17.502*((T-273.16)/(T-32.19)))
         RH = 100*esd/es
-        # RH = np.where(RH > 100, np.nan, RH)  # ensure RH <=100
         qair = qsat_air(T, P, RH, qmeth)/1000  # q of air (kg/kg)
         qsea = qsat_sea(sst, P, qmeth)/1000    # surface water q (kg/kg)
     return qair, qsea
@@ -417,7 +416,8 @@ def gamma(opt, sst, t, q, cp):
     q : float
         specific humidity of air [kg/kg]
     cp : float
-        specific capacity of air at constant Pressure [kJ/(kg*K)]
+        specific capacity of air at constant Pressure
+
     Returns
     -------
     gamma : float
