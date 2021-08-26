@@ -525,7 +525,11 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                                   (np.char.find(flag.astype(str), 'u') == -1) &
                                   (np.char.find(flag.astype(str), 'q') == -1)),
                                  flag+[","]+["o"], flag))
-
+    # Do not output radiation parameters if they are not input, unless the
+    # cs/wl is switched on
+    if (((cskin == 0) and (wl == 0)) and
+        (np.all(Rl == 370) and np.all(Rs == 150))):
+        Rl, Rs, Rnl = Rl*np.nan, Rs*np.nan, Rnl*np.nan
 
     res = np.zeros((41, len(spd)))
     res[0][:] = tau
