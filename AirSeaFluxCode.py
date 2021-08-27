@@ -128,9 +128,9 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                        39. relative humidity (rh)
                        40. thickness of the viscous layer (delta)
                        41. lv latent heat of vaporization (Jkg−1)
-                       40. flag ("n": normal, "o": out of nominal range,
+                       42. flag ("n": normal, "o": out of nominal range,
                                  "u": u10n<0, "q":q10n<0
-                                 "m": missing, 
+                                 "m": missing,
                                  "l": Rib<-0.5 or Rib>0.2 or z/L>1000,
                                  "r" : rh>100%,
                                  "i": convergence fail at n)
@@ -180,9 +180,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                  np.round(np.nanmedian(qair), 7))
     if (np.all(np.isnan(qsea)) or np.all(np.isnan(qair))):
         print("qsea and qair cannot be nan")
-    if (hum == None):
-        rh = np.ones(sst.shape)*80
-    elif (hum[0] == 'rh'):
+    if ((hum[0] == 'rh') or (hum[0] == 'no')):
         rh = hum[1]
     elif (hum[0] == 'Td'):
         Td = hum[1] # dew point temperature (K)
@@ -193,8 +191,11 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
         rh = 100*esd/es
     flag = np.empty(spd.shape, dtype="object")
     flag[:] = "n"
-    flag = np.where(np.isnan(spd+T+SST+hum[1]+P+Rs+Rl), "m", flag)
-    flag = np.where(rh > 100, "r", flag)
+    if (hum[0] == 'no'):
+        flag = np.where(np.isnan(spd+T+SST+P+Rs+Rl), "m", flag)
+    else:
+        flag = np.where(np.isnan(spd+T+SST+hum[1]+P+Rs+Rl), "m", flag)
+        flag = np.where(rh > 100, "r", flag)
 
     dt = Ta - sst
     dq = qair - qsea
@@ -530,6 +531,14 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     if (((cskin == 0) and (wl == 0)) and
         (np.all(Rl == 370) and np.all(Rs == 150))):
         Rl, Rs, Rnl = Rl*np.nan, Rs*np.nan, Rnl*np.nan
+    # Do not calculate lhf if a measure of humidity is not input
+    if (hum[0] == 'no'):
+        latent = np.ones(sst.shape)*np.nan
+        qsr = np.ones(sst.shape)*np.nan
+        q10n = np.ones(sst.shape)*np.nan
+        qref = np.ones(sst.shape)*np.nan
+        qair = np.ones(sst.shape)*np.nan
+        rh = np.ones(sst.shape)*np.nan
 
     res = np.zeros((41, len(spd)))
     res[0][:] = tau
@@ -577,8 +586,9 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     if (out == 0):
         res[:, ind] = np.nan
         # set missing values where data have non acceptable values
-        res = np.asarray([np.where(q10n < 0, np.nan,
-                                   res[i][:]) for i in range(41)])
+        if (hum[0] != 'no'):
+            res = np.asarray([np.where(q10n < 0, np.nan,
+                                        res[i][:]) for i in range(41)])
         res = np.asarray([np.where(u10n < 0, np.nan,
                                    res[i][:]) for i in range(41)])
     # output with pandas

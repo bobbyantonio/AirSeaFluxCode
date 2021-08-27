@@ -108,7 +108,7 @@ def get_init(spd, T, SST, lat, hum, P, Rl, Rs, cskin, skin, wl, gust, L, tol,
         lat = np.ones(spd.shape)*np.copy(lat)
     if (hum == None):
         RH = np.ones(SST.shape)*80
-        hum = ['rh', RH]
+        hum = ['no', RH]
     else:
         hum = hum
     if ((np.all(P == None)) or np.all(np.isnan(P))):

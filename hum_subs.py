@@ -372,15 +372,14 @@ def get_hum(hum, T, sst, P, qmeth):
         specific humidity over sea surface
 
     """
-    if (hum[0] not in ['rh', 'q', 'Td']):
+    if (hum[0] not in ['rh', 'q', 'Td', 'no']):
         sys.exit("unknown humidity input")
         qair, qsea = np.nan, np.nan
-    elif (hum[0] == 'rh'):
+    elif ((hum[0] == 'rh') or (hum[0] == 'no')):
         RH = hum[1]
         if (np.all(RH < 1)):
             sys.exit("input relative humidity units should be \%")
             qair, qsea = np.nan, np.nan
-        # RH = np.where(RH > 100, np.nan, RH)  # ensure RH <=100
         qsea = qsat_sea(sst, P, qmeth)/1000    # surface water q (kg/kg)
         qair = qsat_air(T, P, RH, qmeth)/1000  # q of air (kg/kg)
     elif (hum[0] == 'q'):
