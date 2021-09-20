@@ -115,10 +115,6 @@ def get_init(spd, T, SST, lat, hum, P, Rl, Rs, cskin, skin, wl, gust, L, tol,
         P = np.ones(spd.shape)*1013
     elif (((np.all(P != None)) or np.all(~np.isnan(P))) and np.size(P) == 1):
         P = np.ones(spd.shape)*np.copy(P)
-    if (np.all(Rl == None) or np.all(np.isnan(Rl))):
-        Rl = np.ones(spd.shape)*370    # set to default for COARE3.5
-    if (np.all(Rs == None) or np.all(np.isnan(Rs))):
-        Rs = np.ones(spd.shape)*150  # set to default for COARE3.5
     if ((cskin == None) and (meth == "S80" or meth == "S88" or meth == "LP82"
                              or meth == "YT96" or meth == "UA" or
                              meth == "LY04")):
@@ -134,6 +130,15 @@ def get_init(spd, T, SST, lat, hum, P, Rl, Rs, cskin, skin, wl, gust, L, tol,
             skin = "Beljaars"
     if (wl == None):
         wl = 0
+    if ((cskin == 1 or wl == 1) and (np.all(Rl == None) or np.all(np.isnan(Rl)))
+        and ((np.all(Rs == None) or np.all(np.isnan(Rs))))):
+        sys.exit("Cool skin/warm layer is switched ON; Radiation input should not be"
+                 " empty")
+    elif (cskin == 0):
+        if (np.all(Rl == None)):
+            Rl = np.ones(spd.shape)*np.nan
+        if (np.all(Rs == None)):
+            Rs = np.ones(spd.shape)*np.nan
     if (np.all(gust == None) and (meth == "C30" or meth == "C35")):
         gust = [1, 1.2, 600]
     elif (np.all(gust == None) and (meth == "UA" or meth == "ecmwf" or

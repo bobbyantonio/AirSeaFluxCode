@@ -192,9 +192,15 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     flag = np.empty(spd.shape, dtype="object")
     flag[:] = "n"
     if (hum[0] == 'no'):
-        flag = np.where(np.isnan(spd+T+SST+P+Rs+Rl), "m", flag)
+        if (cskin == 1):
+            flag = np.where(np.isnan(spd+T+SST+P+Rs+Rl), "m", flag)
+        else:
+            flag = np.where(np.isnan(spd+T+SST+P), "m", flag)
     else:
-        flag = np.where(np.isnan(spd+T+SST+hum[1]+P+Rs+Rl), "m", flag)
+        if (cskin == 1):
+            flag = np.where(np.isnan(spd+T+SST+hum[1]+P+Rs+Rl), "m", flag)
+        else:
+            flag = np.where(np.isnan(spd+T+SST+hum[1]+P), "m", flag)
         flag = np.where(rh > 100, "r", flag)
 
     dt = Ta - sst
@@ -391,7 +397,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                                   np.power(get_gust(gust[1], tv[ind], usr[ind],
                                   tsrv[ind], gust[2], lat[ind]), 2)))
                                   # Zeng et al. 1998 (20)
-        elif (gust[0] == 1 and (meth == "C30" or meth == "C35")): # or meth == "C40"
+        elif (gust[0] == 1 and (meth == "C30" or meth == "C35")):
             wind[ind] = np.sqrt(np.power(np.copy(spd[ind]), 2) +
                                 np.power(get_gust(gust[1], Ta[ind], usr[ind],
                                 tsrv[ind], gust[2], lat[ind]), 2))
@@ -526,11 +532,6 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                                   (np.char.find(flag.astype(str), 'u') == -1) &
                                   (np.char.find(flag.astype(str), 'q') == -1)),
                                  flag+[","]+["o"], flag))
-    # Do not output radiation parameters if they are not input, unless the
-    # cs/wl is switched on
-    if (((cskin == 0) and (wl == 0)) and
-        (np.all(Rl == 370) and np.all(Rs == 150))):
-        Rl, Rs, Rnl = Rl*np.nan, Rs*np.nan, Rnl*np.nan
     # Do not calculate lhf if a measure of humidity is not input
     if (hum[0] == 'no'):
         latent = np.ones(sst.shape)*np.nan
