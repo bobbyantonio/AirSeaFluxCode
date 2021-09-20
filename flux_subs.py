@@ -28,9 +28,7 @@ def cdn_calc(u10n, usr, Ta, lat, meth="S80"):
     if (meth == "S80"):
         cdn = (0.61+0.063*u10n)*0.001
     elif (meth == "LP82"):
-       cdn = np.where(u10n < 4, 1.14*0.001,
-                       np.where((u10n < 11) & (u10n >= 4), 1.2*0.001,
-                                (0.49+0.065*u10n)*0.001))
+       cdn = np.where(u10n < 11, 1.2*0.001, (0.49+0.065*u10n)*0.001)
     elif (meth == "S88" or meth == "UA" or meth == "ecmwf" or meth == "C30" or
           meth == "C35" or meth == "Beljaars"): #  or meth == "C40"
         cdn = cdn_from_roughness(u10n, usr, Ta, lat, meth)
