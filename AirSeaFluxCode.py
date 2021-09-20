@@ -512,7 +512,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                                   (np.char.find(flag.astype(str), 'q') == -1)),
                                  flag+[","]+["o"], flag))
     elif (meth == "YT96"):
-        flag = np.where(((utmp < 3) | (utmp > 26)) & (flag == "n"), "o",
+        flag = np.where(((utmp < 0) | (utmp > 26)) & (flag == "n"), "o",
                         np.where(((utmp < 3) | (utmp > 26)) &
                                  ((flag != "n") &
                                   (np.char.find(flag.astype(str), 'u') == -1) &
