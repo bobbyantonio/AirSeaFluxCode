@@ -507,7 +507,7 @@ start_time = time.perf_counter()
 #------------------------------------------------------------------------------
 inF = input("Give input file name (data_all.csv or era5_r360x180.nc): \n")
 meth = input("Give prefered method: \n")
-while meth not in ["S80", "S88", "LP82", "YT96", "UA", "LY04", "C30", "C35",
+while meth not in ["S80", "S88", "LP82", "YT96", "UA", "NCAR", "C30", "C35",
                    "ecmwf","Beljaars"]:
     print("method unknown")
     meth = input("Give prefered method: \n")
@@ -545,7 +545,7 @@ if (cskinIn == ''):
     cskinIn = None
     if ((cskinIn == None) and (meth == "S80" or meth == "S88" or meth == "LP82"
                                or meth == "YT96" or meth == "UA"
-                               or meth == "LY04")):
+                               or meth == "NCAR")):
         cskinIn = 0
         ext = ext+'noskin_'
     elif ((cskinIn == None) and (meth == "C30" or meth == "C35"
@@ -641,7 +641,7 @@ print("run_ASFC.py took ", np.round((time.perf_counter()-start_time)/60, 2),
 #%% generate txt file with statistics
 if ((cskinIn == None) and (meth == "S80" or meth == "S88" or meth == "LP82"
                            or meth == "YT96" or meth == "UA" or
-                           meth == "LY04")):
+                           meth == "NCAR")):
    cskinIn = 0
 elif ((cskinIn == None) and (meth == "C30" or meth == "C35"
                              or meth == "ecmwf" or meth == "Beljaars")):

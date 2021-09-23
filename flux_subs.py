@@ -36,7 +36,7 @@ def cdn_calc(u10n, usr, Ta, lat, meth="S80"):
         # convert usr in eq. 21 to cdn to expand for low wind speeds
         cdn = np.power((0.10038+u10n*2.17e-3+np.power(u10n, 2)*2.78e-3 -
                         np.power(u10n, 3)*4.4e-5)/u10n, 2)
-    elif (meth == "LY04"):
+    elif (meth == "NCAR"):
         cdn = np.where(u10n > 0.5, (0.142+2.7/u10n+u10n/13.09 -
                                     3.14807e-10*np.power(u10n, 6))*1e-3,
                        (0.142+2.7/0.5+0.5/13.09 -
@@ -156,7 +156,7 @@ def ctcqn_calc(zol, cdn, usr, zo, Ta, meth="S80"):
     elif (meth == "LP82"):
         cqn = np.where((zol <= 0), 1.15*0.001, 1*0.001)
         ctn = np.where((zol <= 0), 1.13*0.001, 0.66*0.001)
-    elif (meth == "LY04"):
+    elif (meth == "NCAR"):
         cqn = np.maximum(34.6*0.001*np.sqrt(cdn), 0.1e-3)
         ctn = np.maximum(np.where(zol <= 0, 32.7*0.001*np.sqrt(cdn),
                                   18*0.001*np.sqrt(cdn)), 0.1e-3)
@@ -242,7 +242,7 @@ def get_stabco(meth="S80"):
     coeffs : float
     """
     alpha, beta, gamma = 0, 0, 0
-    if (meth == "S80" or meth == "S88" or meth == "LY04" or
+    if (meth == "S80" or meth == "S88" or meth == "NCAR" or
         meth == "UA" or meth == "ecmwf" or meth == "C30" or
         meth == "C35" or meth == "Beljaars"):
         alpha, beta, gamma = 16, 0.25, 5  # Smith 1980, from Dyer (1974)
@@ -883,7 +883,7 @@ def get_L(L, lat, usr, tsr, qsr, hin, Ta, sst, qair, qsea, wind, monob, zo,
     ----------
     L : str
         Monin-Obukhov length definition options
-        "tsrv"  : default for S80, S88, LP82, YT96, UA, C30, C35 and LY04
+        "tsrv"  : default for S80, S88, LP82, YT96, UA, C30, C35 and NCAR
         "Rb" : following ecmwf (IFS Documentation cy46r1), default for ecmwf
                and Beljaars
     lat : float
@@ -916,7 +916,7 @@ def get_L(L, lat, usr, tsr, qsr, hin, Ta, sst, qair, qsea, wind, monob, zo,
         momentum stability function
     meth : str
         bulk parameterisation method option: "S80", "S88", "LP82", "YT96",
-        "UA", "LY04", "C30", "C35", "ecmwf", "Beljaars"
+        "UA", "NCAR", "C30", "C35", "ecmwf", "Beljaars"
 
     Returns
     -------
@@ -997,7 +997,7 @@ def get_strs(hin, monob, wind, zo, zot, zoq, dt, dq, dter, dqer, dtwl, ct, cq,
         warm layer correction switch
     meth : str
         bulk parameterisation method option: "S80", "S88", "LP82", "YT96", "UA",
-        "LY04", "C30", "C35", "ecmwf", "Beljaars"
+        "NCAR", "C30", "C35", "ecmwf", "Beljaars"
 
     Returns
     -------

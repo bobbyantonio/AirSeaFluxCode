@@ -58,7 +58,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
             default for UA, ecmwf [1, 1, 1000]
             default else [1, 1.2, 800]
         meth : str
-            "S80", "S88", "LP82", "YT96", "UA", "LY04", "C30", "C35",
+            "S80", "S88", "LP82", "YT96", "UA", "NCAR", "C30", "C35",
             "ecmwf", "Beljaars"
         qmeth : str
             is the saturation evaporation method to use amongst
@@ -80,7 +80,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
             set 1 to keep points
         L : str
            Monin-Obukhov length definition options
-           "tsrv"  : default for "S80", "S88", "LP82", "YT96", "UA", "LY04",
+           "tsrv"  : default for "S80", "S88", "LP82", "YT96", "UA", "NCAR",
                      "C30", "C35"
            "Rb" : following ecmwf (IFS Documentation cy46r1), default for
                   "ecmwf", "Beljaars"
@@ -155,10 +155,10 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     h_in = get_heights(hin, len(spd))  # heights of input measurements/fields
     h_out = get_heights(hout, 1)       # desired height of output variables
     logging.info('method %s, inputs: lat: %s | P: %s | Rl: %s |'
-                 ' Rs: %s | gust: %s | cskin: %s | L : %s', meth,
-                 np.nanmedian(lat), np.round(np.nanmedian(P), 2),
-                 np.round(np.nanmedian(Rl),2 ), np.round(np.nanmedian(Rs), 2),
-                 gust, cskin, L)
+                  ' Rs: %s | gust: %s | cskin: %s | L : %s', meth,
+                  np.nanmedian(lat), np.round(np.nanmedian(P), 2),
+                  np.round(np.nanmedian(Rl),2 ), np.round(np.nanmedian(Rs), 2),
+                  gust, cskin, L)
     #  set up/calculate temperatures and specific humidities
     th = np.where(T < 200, (np.copy(T)+CtoK) *
                   np.power(1000/P,287.1/1004.67),
@@ -291,7 +291,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
         ct[ind], cq[ind] = ctcq_calc(cd10n[ind], cd[ind], ct10n[ind], cq10n[ind],
                                       h_in[:, ind], [ref_ht, ref_ht, ref_ht],
                                       psit[ind], psiq[ind])
-        if (meth == "LY04"):
+        if (meth == "NCAR"):
             cd = np.maximum(np.copy(cd), 1e-4)
             ct = np.maximum(np.copy(ct), 1e-4)
             cq = np.maximum(np.copy(cq), 1e-4)
@@ -525,7 +525,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                                   (np.char.find(flag.astype(str), 'u') == -1) &
                                   (np.char.find(flag.astype(str), 'q') == -1)),
                                  flag+[","]+["o"], flag))
-    elif (meth == "LY04"):
+    elif (meth == "NCAR"):
         flag = np.where((utmp < 0.5) & (flag == "n"), "o",
                         np.where((utmp < 0.5) &
                                  ((flag != "n") &

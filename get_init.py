@@ -49,7 +49,7 @@ def get_init(spd, T, SST, lat, hum, P, Rl, Rs, cskin, skin, wl, gust, L, tol,
     n : int
         number of iterations
     meth : str
-        "S80","S88","LP82","YT96","UA","LY04","C30","C35","ecmwf",
+        "S80","S88","LP82","YT96","UA","NCAR","C30","C35","ecmwf",
         "Beljaars"
     qmeth : str
         is the saturation evaporation method to use amongst
@@ -93,7 +93,7 @@ def get_init(spd, T, SST, lat, hum, P, Rl, Rs, cskin, skin, wl, gust, L, tol,
           (SST.dtype not in ['float64', 'float32'])):
         sys.exit("input dtype of spd, T and SST should be float")
     # if input values are nan break
-    if meth not in ["S80", "S88", "LP82", "YT96", "UA", "LY04", "C30", "C35",
+    if meth not in ["S80", "S88", "LP82", "YT96", "UA", "NCAR", "C30", "C35",
                     "ecmwf", "Beljaars"]:
         sys.exit("unknown method")
     if qmeth not in ["HylandWexler", "Hardy", "Preining", "Wexler",
@@ -117,7 +117,7 @@ def get_init(spd, T, SST, lat, hum, P, Rl, Rs, cskin, skin, wl, gust, L, tol,
         P = np.ones(spd.shape)*np.copy(P)
     if ((cskin == None) and (meth == "S80" or meth == "S88" or meth == "LP82"
                              or meth == "YT96" or meth == "UA" or
-                             meth == "LY04")):
+                             meth == "NCAR")):
         cskin = 0
     elif ((cskin == None) and (meth == "C30" or meth == "C35"
                                or meth == "ecmwf" or meth == "Beljaars")):
