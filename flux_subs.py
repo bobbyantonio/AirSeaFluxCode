@@ -25,10 +25,11 @@ def cdn_calc(u10n, usr, Ta, lat, meth="S80"):
     cdn : float
     """
     cdn = np.zeros(Ta.shape)*np.nan
-    if (meth == "S80"):
+    if (meth == "S80"): # eq. 14 Smith 1980
         cdn = (0.61+0.063*u10n)*0.001
     elif (meth == "LP82"):
-       cdn = np.where(u10n < 11, 1.2*0.001, (0.49+0.065*u10n)*0.001)
+        #  Large & Pond 1981 u10n <11m/s & eq. 21 Large & Pond 1982
+        cdn = np.where(u10n < 11, 1.2*0.001, (0.49+0.065*u10n)*0.001)
     elif (meth == "S88" or meth == "UA" or meth == "ecmwf" or meth == "C30" or
           meth == "C35" or meth == "Beljaars"): #  or meth == "C40"
         cdn = cdn_from_roughness(u10n, usr, Ta, lat, meth)
@@ -36,7 +37,7 @@ def cdn_calc(u10n, usr, Ta, lat, meth="S80"):
         # convert usr in eq. 21 to cdn to expand for low wind speeds
         cdn = np.power((0.10038+u10n*2.17e-3+np.power(u10n, 2)*2.78e-3 -
                         np.power(u10n, 3)*4.4e-5)/u10n, 2)
-    elif (meth == "NCAR"):
+    elif (meth == "NCAR"): # eq. 11 Large and Yeager 2009
         cdn = np.where(u10n > 0.5, (0.142+2.7/u10n+u10n/13.09 -
                                     3.14807e-10*np.power(u10n, 6))*1e-3,
                        (0.142+2.7/0.5+0.5/13.09 -
@@ -82,12 +83,12 @@ def cdn_from_roughness(u10n, usr, Ta, lat, meth="S88"):
         elif (meth == "UA"):
             # valid for 0<u<18m/s # Zeng et al. 1998 (24)
             zo = 0.013*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr
-        elif (meth == "C30"):
+        elif (meth == "C30"): # eq. 25 Fairall et al. 1996a
             a = 0.011*np.ones(Ta.shape)
             a = np.where(u10n > 10, 0.011+(u10n-10)*(0.018-0.011)/(18-10),
                          np.where(u10n > 18, 0.018, a))
             zo = a*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr
-        elif (meth == "C35"):
+        elif (meth == "C35"): # eq.6-11 Edson et al. (2013)
             zo = (0.11*visc_air(Ta)/usr +
                   np.minimum(0.0017*19-0.0050, 0.0017*u10n-0.0050) *
                   np.power(usr, 2)/g)
