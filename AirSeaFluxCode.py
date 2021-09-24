@@ -76,7 +76,8 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
         n : int
             number of iterations (defautl = 10)
         out : int
-            set 0 to set points that have not converged to missing (default)
+            set 0 to set points that have not converged, negative values of
+                  u10n and q10n to missing (default)
             set 1 to keep points
         L : str
            Monin-Obukhov length definition options
@@ -592,6 +593,9 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                                         res[i][:]) for i in range(41)])
         res = np.asarray([np.where(u10n < 0, np.nan,
                                    res[i][:]) for i in range(41)])
+    elif (out == 1):
+        print("Warning: the output will contain values for points that have"
+              " not converged and negative values (if any) for u10n/q10n")
     # output with pandas
     resAll = pd.DataFrame(data=res.T, index=range(len(spd)),
                           columns=["tau", "shf", "lhf", "L", "cd", "cdn", "ct",
