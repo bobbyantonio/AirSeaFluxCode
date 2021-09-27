@@ -500,7 +500,7 @@ def toy_ASFC(inF, outF, outS, gustIn, cskinIn, tolIn, meth, qmIn, LIn, stdIn):
         res.insert(loc=0, column='date', value=date)
         res.insert(loc=1, column='lon', value=lon)
         res.insert(loc=2, column='lat', value=lat)
-        res.to_csv(outF)
+        res.to_csv(outF, float_format='%.3f')
     return res, lon, lat
 #%% run function
 start_time = time.perf_counter()
@@ -619,9 +619,9 @@ print("run_ASFC.py took ", np.round((time.perf_counter()-start_time)/60, 2),
 #     for i in range(3):
 #         plt.figure()
 #         plt.contourf(lon, lat,
-#                      np.nanmean(res[:, :, i], axis=0).reshape(len(lat),
+#                       np.nanmean(res[:, :, i], axis=0).reshape(len(lat),
 #                                                               len(lon)),
-#                      100, cmap=cm)
+#                       100, cmap=cm)
 #         plt.colorbar()
 #         plt.tight_layout()
 #         plt.xlabel("Longitude")
