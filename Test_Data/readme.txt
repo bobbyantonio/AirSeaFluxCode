@@ -1,0 +1,33 @@
+ERA5 data Hersbach, H. et al., (2018) was downloaded from the Copernicus Climate Change Service (C3S) Climate Data Store.:
+The results contain modified Copernicus Climate Change Service information 2020. Neither the European Commission nor ECMWF is responsible for any use that may be made of the Copernicus information or data it contains.
+Hersbach, H., Bell, B., Berrisford, P., Biavati, G., Horányi, A., Muñoz Sabater, J., Nicolas, J., Peubey, C., Radu, R., Rozum, I., Schepers, D., Simmons, A., Soci, C., Dee, D., Thépaut, J-N. (2018): ERA5 hourly data on single levels from 1979 to present. Copernicus Climate Change Service (C3S) Climate Data Store (CDS). (Accessed on 14-AUG-2020), 10.24381/cds.adbb2d47
+
+
+SAMOS data are downloaded from:
+Smith, S. R., J. J. Rolph, K. Briggs, M. A. Bourassa, 2019: Quality Controlled Shipboard Automated Meteorological and Oceanographic System (SAMOS) Data. Center for Ocean-Atmospheric Prediction Studies, The Florida State University, Tallahassee, FL, USA. http://samos.coaps.fsu.edu. Accessed† 15 11 2019.
+
+Disclaimer copy from https://www.coaps.fsu.edu/disclaimer
+
+Disclaimer
+PLEASE READ THESE TERMS OF USE CAREFULLY BEFORE USING THIS SITE. BY USING THIS SITE, YOU AGREE TO THESE TERMS OF USE. IF YOU DO NOT AGREE TO THESE TERMS OF USE, PLEASE DO NOT USE THIS SITE OR ANY INFORMATION PROVIDED HEREIN.
+
+General. This site is owned and operated by FLORIDA STATE UNIVERSITY and reflects research work being conducted by the Center for Ocean-Atmospheric Prediction Studies (COAPS). This information is provided as a public service. FSU has the right at any time to change or discontinue any aspect or feature of the site, including, without limitation, the content, hours of availability, and equipment needed for access or use of the site.
+
+Equipment. You shall be responsible for obtaining and maintaining all telephone, computer hardware and other equipment needed for access to and use of the site and all charges related thereto.
+
+Restrictions on Use. You shall use the site for lawful purposes only. You shall not post or transmit through the site any material which violates or infringes in any way upon the rights of others, which is unlawful, threatening, abusive, defamatory, invasive of privacy or publicity rights, vulgar, obscene, profane or otherwise objectionable, which encourages conduct that would constitute a criminal offense, gives rise to civil liability or otherwise violate any law. Without FSU's express prior approval, you shall not post or transmit through the site any material which contains advertising or any solicitation with respect to products or services. You shall not use the site to advertise or perform any commercial solicitation, including, without limitation, the solicitation of users to become subscribers of other on-line information services competitive with the site. Any conduct by you that in FSU's discretion restricts or inhibits any other user from using or enjoying the site will not be permitted.
+
+Disclaimer of Warranty; Limitation of Liability.
+A. YOU EXPRESSLY AGREE THAT USE OF THE SITE IS AT YOUR SOLE RISK. NEITHER FSU, ITS PARTNERS NOR ANY OF THEIR RESPECTIVE EMPLOYEES, AGENTS, THIRD PARTY CONTENT PROVIDERS OR LICENSORS WARRANT THAT THE SITE WILL BE UNINTERRUPTED OR ERROR FREE; NOR DO THEY MAKE ANY WARRANTY AS TO THE RESULTS THAT MAY BE OBTAINED FROM USE OF THE SITE, OR FROM THE INFORMATION CONTAINED THEREIN, OR AS TO THE ACCURACY OR RELIABILITY OF ANY INFORMATION, SERVICE OR MERCHANDISE PROVIDED THROUGH THE SITE.
+
+THE SITE IS PROVIDED ON AN "AS IS" BASIS WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, WARRANTIES OF ACCURACY, ADEQUACY, COMPLETENESS, THAT THE INFORMATION IS ERROR-FREE OR CONTINUOUSLY AVAILABLE, WARRANTIES OF TITLE OR IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE, OTHER THAN THOSE WARRANTIES WHICH ARE IMPLIED BY AND INCAPABLE OF EXCLUSION, RESTRICTION OR MODIFICATION UNDER APPLICABLE LAW. ADDITIONALLY, THERE ARE NO WARRANTIES AS TO THE RESULTS OBTAINED FROM THE USE OF THE SITE.
+
+THIS DISCLAIMER OF LIABILITY APPLIES TO ANY DAMAGES OR INJURY CAUSED BY ANY FAILURE OF PERFORMANCE, ERROR, OMISSION, INACCURACY, INTERRUPTION, DELETION, DEFECT, DELAY IN OPERATION OR TRANSMISSION, COMPUTER VIRUS, COMMUNICATION LINE FAILURE, THEFT OR DESTRUCTION OR UNAUTHORIZED ACCESS TO, ALTERATION OF, OR USE OF THIS SITE, WHETHER FOR BREACH OF CONTRACT, TORTIOUS BEHAVIOR (INCLUDING STRICT LIABILITY), NEGLIGENCE, OR UNDER ANY OTHER CAUSE OF ACTION, TO THE FULLEST EXTENT PERMISSIBLE BY LAW. THIS DOES NOT AFFECT ANY STATUTORY RIGHTS WHICH MAY NOT BE DISCLAIMED. YOU SPECIFICALLY ACKNOWLEDGE THAT FSU IS NOT LIABLE FOR THE DEFAMATORY, OFFENSIVE OR ILLEGAL CONDUCT OF OTHER USERS OR THIRD-PARTIES OVER WHICH IT HAS NO CONTROL.
+
+TO THE FULLEST EXTENT PERMISSIBLE BY LAW, IN NO EVENT SHALL FSU OR THE MEMBERS OF THE CENTER FOR OCEAN-ATMOSPHERIC PREDICTION STUDIES BE LIABLE TO YOU FOR ANY INCIDENTAL, CONSEQUENTIAL, OR INDIRECT DAMAGES (INCLUDING, BUT NOT LIMITED TO, DAMAGES FOR LOSS OF DATA, LOSS OF PROGRAMS, COST OF PROCUREMENT OF SUBSTITUTE SERVICES OR SERVICE INTERRUPTIONS) ARISING OUT OF THE USE OR INABILITY TO USE THE WEBSITE. IN NO EVENT SHALL FSU'S TOTAL LIABILITY TO YOU FOR ALL DAMAGES, LOSSES AND CAUSES OF ACTION WHETHER IN CONTRACT, TORT (INCLUDING ITS OWN NEGLIGENCE) OR UNDER ANY OTHER LEGAL THEORY (INCLUDING STRICT LIABILITY) EXCEED THE AMOUNT PAID BY YOU, IF ANY, FOR ACCESSING THIS SITE. THIS DOES NOT AFFECT ANY STATUTORY RIGHTS WHICH MAY NOT BE DISCLAIMED.
+
+Monitoring. FSU shall have the right in its sole discretion to refuse to post or remove any material submitted to or posted on the site. Without limiting the foregoing, FSU shall have the right to remove any material that FSU, in its sole discretion, finds to be in violation of the provisions hereof or otherwise objectionable.
+
+Indemnification. You agree to defend, indemnify and hold harmless FSU, the members of the Center for Ocean-Atmospheric Prediction Studies, and their affiliates and their respective directors, officers, employees and agents from and against any and all claims, actions, demands, damages, costs, liabilities, losses and expenses (including reasonable attorneys' fees) arising out of your use of the site.
+
+By use of the website and/or any of its services or products, you agree to abide by the terms of this Disclaimer.
