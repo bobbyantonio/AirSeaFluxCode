@@ -4,7 +4,7 @@ Hersbach, H., Bell, B., Berrisford, P., Biavati, G., Horányi, A., Muñoz Sabate
 
 
 SAMOS data are downloaded from:
-Smith, S. R., J. J. Rolph, K. Briggs, M. A. Bourassa, 2019: Quality Controlled Shipboard Automated Meteorological and Oceanographic System (SAMOS) Data. Center for Ocean-Atmospheric Prediction Studies, The Florida State University, Tallahassee, FL, USA. http://samos.coaps.fsu.edu. Accessed† 15 11 2019.
+Smith, S. R., J. J. Rolph, K. Briggs, M. A. Bourassa, 2019: Quality Controlled Shipboard Automated Meteorological and Oceanographic System (SAMOS) Data. Center for Ocean-Atmospheric Prediction Studies, The Florida State University, Tallahassee, FL, USA. http://samos.coaps.fsu.edu. Accessed 15 11 2019.
 
 Disclaimer copy from https://www.coaps.fsu.edu/disclaimer
 
