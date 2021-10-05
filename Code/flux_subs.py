@@ -102,45 +102,6 @@ def cdn_from_roughness(u10n, usr, Ta, lat, meth="S88"):
 # ---------------------------------------------------------------------
 
 
-def rough(Ta, usr, u10n, cd10n, lat, meth):
-    """
-    calculates momentum roughness lengths
-
-    Returns
-    -------
-    None.
-
-    """
-    g = gc(lat)
-    if (meth == "S88"):
-        # Charnock roughness length (eq. 4 in Smith 88)
-        zc = 0.011*np.power(usr, 2)/g
-        #  smooth surface roughness length (eq. 6 in Smith 88)
-        zs = 0.11*visc_air(Ta)/usr
-        zo = zc + zs  #  eq. 7 & 8 in Smith 88
-    elif (meth == "UA"):
-        # valid for 0<u<18m/s # Zeng et al. 1998 (24)
-        zo = 0.013*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr
-    elif (meth == "C30"): # eq. 25 Fairall et al. 1996a
-        a = 0.011*np.ones(Ta.shape)
-        a = np.where(u10n > 10, 0.011+(u10n-10)*(0.018-0.011)/(18-10),
-                     np.where(u10n > 18, 0.018, a))
-        zo = a*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr
-    elif (meth == "C35"): # eq.6-11 Edson et al. (2013)
-        zo = (0.11*visc_air(Ta)/usr +
-              np.minimum(0.0017*19-0.0050, 0.0017*u10n-0.0050) *
-              np.power(usr, 2)/g)
-    elif ((meth == "ecmwf" or meth == "Beljaars")):
-        # eq. (3.26) p.38 over sea IFS Documentation cy46r1
-        zo = 0.018*np.power(usr, 2)/g+0.11*visc_air(Ta)/usr
-    elif (meth == "S80" or meth == "LP82" or meth == "YT96" or meth == "NCAR"):
-        zo = 10/np.exp(kappa/np.sqrt(cd10n))
-    else:
-        print("unknown method for cdn_from_roughness "+meth)
-    return zo
-# ---------------------------------------------------------------------
-
-
 def cd_calc(cdn, hin, hout, psim):
     """
     Calculates drag coefficient at reference height

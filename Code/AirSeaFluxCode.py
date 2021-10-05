@@ -235,33 +235,30 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     elif (gust[0] == 0):
         wind = np.copy(spd)
     u10n = wind*np.log(10/1e-4)/np.log(hin[0]/1e-4)
-    usr = 0.06*np.ones(spd.shape)
+    usr = 0.035*u10n
     cd10n = cdn_calc(u10n, usr, Ta, lat, meth)
     psim, psit, psiq = (np.zeros(spd.shape)*msk, np.zeros(spd.shape)*msk,
                         np.zeros(spd.shape)*msk)
     cd = cd_calc(cd10n, h_in[0], ref_ht, psim)
     tsr, tsrv, qsr = (np.zeros(spd.shape)*msk, np.zeros(spd.shape)*msk,
                       np.zeros(spd.shape)*msk)
-    #  loop to obtain initial and good usr and zo
-    for i in range(6):
-        zo = rough(Ta, usr, u10n, cd10n, lat, meth)
-        usr = kappa*wind/np.log(h_in[0]/zo)
-    zot, zoq = 1e-4*np.ones(spd.shape)*msk, 1e-4*np.ones(spd.shape)*msk
+    usr = np.sqrt(cd*np.power(wind, 2))
+    zo, zot, zoq = (1e-4*np.ones(spd.shape)*msk, 1e-4*np.ones(spd.shape)*msk,
+                    1e-4*np.ones(spd.shape)*msk)
     ct10n = np.power(kappa, 2)/(np.log(h_in[0]/zo)*np.log(h_in[1]/zot))
     cq10n = np.power(kappa, 2)/(np.log(h_in[0]/zo)*np.log(h_in[2]/zoq))
     ct = np.power(kappa, 2)/((np.log(h_in[0]/zo)-psim) *
                              (np.log(h_in[1]/zot)-psit))
     cq = np.power(kappa, 2)/((np.log(h_in[0]/zo)-psim) *
                              (np.log(h_in[2]/zoq)-psiq))
-    Rb = g*dtv*hin[0]/(tv*np.power(wind, 2))
-    zol = np.where(Rb >= 0, Rb*np.log(h_in[0]/zo)/(1-5*np.minimum(Rb, 0.19)),
-                   Rb*np.log(h_in[0]/zo))
-    monob = h_in[0]/zol
+    
+    Rb = g*10*(dtv)/(np.where(T < 200, np.copy(T)+CtoK, np.copy(T)) *
+                     np.power(wind, 2))  # Rb eq. 11 Grachev & Fairall 1997
+    monob = 1/Rb  # eq. 12 Grachev & Fairall 1997
     tsr = (dt-dter*cskin-dtwl*wl)*kappa/(np.log(h_in[1]/zot) -
                                          psit_calc(h_in[1]/monob, meth))
     qsr = (dq-dqer*cskin)*kappa/(np.log(h_in[2]/zoq) -
                                  psit_calc(h_in[2]/monob, meth))
-    
     it, ind = 0, np.where(spd > 0)
     ii, itera = True, -1*np.ones(spd.shape)*msk
     tau = 0.05*np.ones(spd.shape)*msk
@@ -424,7 +421,7 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
         tau = rho*np.power(usr, 2)*(spd/wind)
         sensible = rho*cp*usr*tsr
         latent = rho*lv*usr*qsr
-        
+
         if (tol[0] == 'flux'):
             new = np.array([np.copy(tau), np.copy(sensible), np.copy(latent)])
         elif (tol[0] == 'ref'):
