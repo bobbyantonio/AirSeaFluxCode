@@ -1,18 +1,586 @@
+import warnings
 import numpy as np
 import pandas as pd
 import logging
-from get_init import get_init
 from hum_subs import (get_hum, gamma)
-from util_subs import (kappa, CtoK, get_heights, gc)
-from flux_subs import (cs_C35, cs_Beljaars, cs_ecmwf, wl_ecmwf,
-                       get_gust, get_L, get_strs, rough, psim_calc,
-                       psit_calc, cdn_calc, cd_calc, ctcq_calc, ctcqn_calc)
+from util_subs import *
+from flux_subs import *
+from cs_wl_subs import *
+
+class S88:
+
+    def _wind_iterate(self,ind):
+        if(self.gust[0] == 1):
+            self.wind[ind] = np.sqrt(np.power(np.copy(self.spd[ind]), 2) +
+                                np.power(get_gust(self.gust[1], self.theta[ind], self.usr[ind],
+                                            self.tsrv[ind], self.gust[2], self.grav[ind]), 2))
+            self.GustFact[ind] = self.wind[ind]/self.spd[ind]   # ratio of gusty to horizontal wind
+            # if we update wind, also need to update u10n
+            # remove effect of gustiness following Fairall et al. (2003)
+            # usr is divided by (GustFact)^0.5
+            self.u10n[ind] = self.wind[ind]-self.usr[ind]/kappa/np.power(self.GustFact[ind],0.5)*(np.log(self.h_in[0, ind]/self.ref10) - self.psim[ind])
+            # option to not remove GustFact
+            #self.u10n[ind] = self.wind[ind]-self.usr[ind]/kappa*(np.log(self.h_in[0, ind]/self.ref10) - self.psim[ind])
+            # these lines integrate up from the surface - doesn't work when gustiness is on
+            #self.u10n[ind] = self.usr[ind]/kappa/np.power(self.GustFact[ind],0.5)*(np.log(self.ref10/self.zo[ind]))
+            #self.u10n[ind] = self.usr[ind]/kappa*(np.log(self.ref10/self.zo[ind]))
+        else:
+            # not sure this is needed - perhaps only to remove effects of initalisation of wind
+            self.wind[ind] = np.copy(self.spd[ind])
+
+    def get_heights(self, hin, hout=10):
+        self.hout = hout
+        self.hin = hin
+        self.h_in = get_heights(hin, len(self.spd))
+        self.h_out = get_heights(self.hout,1)
+
+    def get_specHumidity(self,qmeth="Buck2"):
+        self.qair, self.qsea = get_hum(self.hum, self.T, self.SST, self.P, qmeth)
+        if (np.all(np.isnan(self.qsea)) or np.all(np.isnan(self.qair))):
+            raise ValueError("qsea and qair cannot be nan")
+        self.dq_in = self.qair - self.qsea
+        self.dq_full = self.qair - self.qsea
+        
+        # Set lapse rate and Potential Temperature (now we have humdity)
+        self.cp = 1004.67*(1+0.00084*self.qsea)
+        self.tlapse = gamma("dry", self.SST, self.T, self.qair/1000, self.cp)
+        self.theta = np.copy(self.T)+self.tlapse*self.h_in[1]
+        self.dt_in = self.theta - self.SST
+        self.dt_full = self.theta - self.SST
+
+    def _fix_coolskin_warmlayer(self, wl, cskin, skin, Rl, Rs):
+        assert wl in [0,1], "wl not valid"
+        assert cskin in [0,1], "cskin not valid"
+        assert skin in ["C35", "ecmwf", "Beljaars"], "Skin value not valid"
+
+        if ((cskin == 1 or wl == 1) and (np.all(Rl == None) or np.all(np.isnan(Rl)))
+            and ((np.all(Rs == None) or np.all(np.isnan(Rs))))):
+            print("Cool skin/warm layer is switched ON; Radiation input should not be empty")
+            raise 
+        
+        self.wl = wl            
+        self.cskin = cskin
+        self.skin = skin
+        self.Rs = np.full(self.spd.shape,np.nan) if Rs is None else Rs
+        self.Rl = np.full(self.spd.shape,np.nan) if Rl is None else Rl
+
+    def set_coolskin_warmlayer(self, wl=0, cskin=0, skin="C35", Rl=None, Rs=None):
+        wl = 0 if wl is None else wl
+        self._fix_coolskin_warmlayer(wl, cskin, skin, Rl, Rs)
+
+    def _update_coolskin_warmlayer(self,ind):
+        if ((self.cskin == 1) and (self.wl == 0)):
+            if (self.skin == "C35"):
+                self.dter[ind], self.dqer[ind], self.tkt[ind] = cs_C35(np.copy(self.SST[ind]),
+                                                                       self.qsea[ind],
+                                                                       self.rho[ind], self.Rs[ind],
+                                                                       self.Rnl[ind],
+                                                                       self.cp[ind], self.lv[ind],
+                                                                       np.copy(self.tkt[ind]),
+                                                                       self.usr[ind], self.tsr[ind],
+                                                                       self.qsr[ind], self.lat[ind])
+            elif (self.skin == "ecmwf" ):
+                self.dter[ind] = cs_ecmwf(self.rho[ind], self.Rs[ind], self.Rnl[ind], self.cp[ind],
+                                          self.lv[ind], self.usr[ind], self.tsr[ind], self.qsr[ind],
+                                          np.copy(self.SST[ind]), self.lat[ind])
+                self.dqer[ind] = (self.dter[ind]*0.622*self.lv[ind]*self.qsea[ind] /
+                                  (287.1*np.power(self.SST[ind], 2)))
+            elif (self.skin == "Beljaars"):
+                self.Qs[ind], self.dter[ind] = cs_Beljaars(self.rho[ind], self.Rs[ind], self.Rnl[ind],
+                                                           self.cp[ind], self.lv[ind], self.usr[ind],
+                                                           self.tsr[ind], self.qsr[ind], self.lat[ind],
+                                                           np.copy(self.Qs[ind]))
+                self.dqer = self.dter*0.622*self.lv*self.qsea/(287.1*np.power(self.SST, 2))
+            self.skt[ind] = np.copy(self.SST[ind])+self.dter[ind]
+            self.skq[ind] = np.copy(self.qsea[ind])+self.dqer[ind]
+        elif ((self.cskin == 1) and (self.wl == 1)):
+            if (self.skin == "C35"):
+                self.dter[ind], self.dqer[ind], self.tkt[ind] = cs_C35(self.SST[ind], self.qsea[ind],
+                                                                       self.rho[ind], self.Rs[ind],
+                                                                       self.Rnl[ind],
+                                                                       self.cp[ind], self.lv[ind],
+                                                                       np.copy(self.tkt[ind]),
+                                                                       self.usr[ind], self.tsr[ind],
+                                                                       self.qsr[ind], self.lat[ind])
+                self.dtwl[ind] = wl_ecmwf(self.rho[ind], self.Rs[ind], self.Rnl[ind], self.cp[ind],
+                                          self.lv[ind], self.usr[ind], self.tsr[ind], self.qsr[ind],
+                                          np.copy(self.SST[ind]), np.copy(self.skt[ind]),
+                                          np.copy(self.dter[ind]), self.lat[ind])
+                self.skt[ind] = np.copy(self.SST[ind])+self.dter[ind]+self.dtwl[ind]
+                self.skq[ind] = np.copy(self.qsea[ind])+self.dqer[ind]
+            elif (self.skin == "ecmwf" ):
+                self.dter[ind] = cs_ecmwf(self.rho[ind], self.Rs[ind], self.Rnl[ind], self.cp[ind],
+                                          self.lv[ind], self.usr[ind], self.tsr[ind], self.qsr[ind],
+                                          self.SST[ind], self.lat[ind])
+                self.dtwl[ind] = wl_ecmwf(self.rho[ind], self.Rs[ind], self.Rnl[ind], self.cp[ind],
+                                          self.lv[ind], self.usr[ind], self.tsr[ind], self.qsr[ind],
+                                          np.copy(self.SST[ind]), np.copy(self.skt[ind]),
+                                          np.copy(self.dter[ind]), self.lat[ind])
+                self.skt[ind] = np.copy(self.SST[ind])+self.dter[ind]+self.dtwl[ind]
+                self.dqer[ind] = (self.dter[ind]*0.622*self.lv[ind]*self.qsea[ind] /
+                             (287.1*np.power(self.skt[ind], 2)))
+                self.skq[ind] = np.copy(self.qsea[ind])+self.dqer[ind]
+            elif (self.skin == "Beljaars"):
+                self.Qs[ind], self.dter[ind] = cs_Beljaars(self.rho[ind], self.Rs[ind], self.Rnl[ind],
+                                                           self.cp[ind], self.lv[ind], self.usr[ind],
+                                                           self.tsr[ind], self.qsr[ind], self.lat[ind],
+                                                           np.copy(self.Qs[ind]))
+                self.dtwl[ind] = wl_ecmwf(self.rho[ind], self.Rs[ind], self.Rnl[ind], self.cp[ind],
+                                     self.lv[ind], self.usr[ind], self.tsr[ind], self.qsr[ind],
+                                     np.copy(self.SST[ind]), np.copy(self.skt[ind]),
+                                     np.copy(self.dter[ind]), self.lat[ind])
+                self.skt[ind] = np.copy(self.SST[ind])+self.dter[ind]+self.dtwl[ind]
+                self.dqer[ind] = self.dter[ind]*0.622*self.lv[ind]*self.qsea[ind]/(287.1*np.power(self.skt[ind], 2))
+                self.skq[ind] = np.copy(self.qsea[ind])+self.dqer[ind]
+        else:
+            self.dter[ind] = np.zeros(self.SST[ind].shape)
+            self.dqer[ind] = np.zeros(self.SST[ind].shape)
+            self.dtwl[ind] = np.zeros(self.SST[ind].shape)
+            self.tkt[ind] = np.zeros(self.SST[ind].shape)
+
+    def _first_guess(self):
+
+        # reference height1
+        self.ref10 = 10
+
+        #  first guesses
+        self.t10n, self.q10n = np.copy(self.theta), np.copy(self.qair)
+        self.rho = self.P*100/(287.1*self.t10n*(1+0.6077*self.q10n))
+        self.lv = (2.501-0.00237*(self.SST-CtoK))*1e6  # J/kg
+
+        #  Zeng et al. 1998
+        self.tv = self.theta*(1+0.6077*self.qair)   # virtual potential T
+        self.dtv = self.dt_in*(1+0.6077*self.qair)+0.6077*self.theta*self.dq_in
+
+        # Set the wind array
+        #self.wind = np.maximum(np.copy(self.spd), 3)
+        self.wind = np.power((np.power(np.copy(self.spd),2) + 0.25),0.5)
+        self.GustFact = self.wind*0+1
+
+        # Rb eq. 11 Grachev & Fairall 1997, use air temp height
+        # use self.tv??  adjust wind to T-height?
+        Rb = self.grav*self.h_in[1]*self.dtv/(self.T * np.power(self.wind, 2))
+        self.monob = self.h_in[1]/12.0/Rb  # eq. 12 Grachev & Fairall 1997   # DO.THIS
+
+        # ------------
+
+        dummy_array = lambda val : np.full(self.T.shape, val)*self.msk
+        if self.cskin + self.wl > 0:
+            self.dter, self.tkt, self.dtwl = [dummy_array(x) for x in (-0.3, 0.001, 0.3)]
+            self.dqer = self.dter*0.622*self.lv*self.qsea/(287.1*np.power(self.SST, 2))
+            self.Rnl = 0.97*(self.Rl-5.67e-8*np.power(self.SST-0.3*self.cskin, 4))
+            self.Qs = 0.945*self.Rs
+        else:
+            self.dter, self.dqer,self.dtwl = [dummy_array(x) for x in (0.0, 0.0, 0.0)]
+            self.Rnl, self.Qs, self.tkt = [np.empty(self.arr_shp)*self.msk for _ in range(3)]
+        self.skt = np.copy(self.SST)
+        self.skq = np.copy(self.qsea)
+
+        self.u10n = np.copy(self.wind)
+        self.usr = 0.035*self.u10n
+        self.cd10n, self.zo = cdn_calc(self.u10n, self.usr, self.theta, self.grav, self.meth)
+        self.psim = psim_calc(self.h_in[0]/self.monob, self.meth)
+        self.cd = cd_calc(self.cd10n, self.h_in[0], self.ref10, self.psim)
+        self.usr = np.sqrt(self.cd*np.power(self.wind, 2))
+        self.zot, self.zoq, self.tsr, self.qsr, self.ct10n, self.cq10n, self.ct, self.cq = [np.empty(self.arr_shp)*self.msk for _ in range(8)]
+        self.tv10n = self.zot  # remove from output
+
+    def iterate(self, maxiter=10, tol=None):
+
+        if maxiter < 5:
+            warnings.warn("Iteration number <5 - resetting to 5.")
+            maxiter = 5
+
+        # Decide which variables to use in tolerances based on tolerance specification
+        tol = ['all', 0.01, 0.01, 1e-05, 1e-3, 0.1, 0.1] if tol is None else tol
+        assert tol[0] in ['flux', 'ref', 'all'], "unknown tolerance input"
+
+        old_vars = {"flux":["tau","sensible","latent"], "ref":["u10n","t10n","q10n"]}
+        old_vars["all"] = old_vars["ref"] + old_vars["flux"]
+        old_vars = old_vars[tol[0]]
+
+        new_vars = {"flux":["tau","sensible","latent"], "ref":["u10n","t10n","q10n"]}
+        new_vars["all"] = new_vars["ref"] + new_vars["flux"]
+        new_vars = new_vars[tol[0]]
+        # I'm sure there are better ways of doing this
+        # extract tolerance values by deleting flag from tol
+        tvals = np.delete(np.copy(tol), 0)
+        tol_vals = list([float(tt) for tt in tvals])
+
+        ind = np.where(self.spd > 0)
+        it = 0
+
+        # Setup empty arrays
+        self.tsrv, self.psim, self.psit, self.psiq = [np.zeros(self.arr_shp)*self.msk for _ in range(4)]
+
+        # extreme values for first comparison
+        dummy_array = lambda val : np.full(self.arr_shp,val)*self.msk
+        self.itera, self.tau, self.sensible, self.latent = [dummy_array(x) for x in (-1,1e+99,1e+99,1e+99)]
+
+        # Generate the first guess values
+        self._first_guess()
+
+        #  iteration loop
+        ii = True
+        while ii & (it < maxiter):
+            it += 1
+
+            # Set the old variables (for comparison against "new")
+            old = np.array([np.copy(getattr(self,i)) for i in old_vars])
+
+            # Calculate cdn
+            self.cd10n[ind], self.zo[ind] = cdn_calc(self.u10n[ind], self.usr[ind], self.theta[ind], self.grav[ind], self.meth)
+            
+            if (np.all(np.isnan(self.cd10n))):
+                break
+                logging.info('break %s at iteration %s cd10n<0', meth, it)
+                
+            self.psim[ind] = psim_calc(self.h_in[0, ind]/self.monob[ind], self.meth)
+            self.cd[ind] = cd_calc(self.cd10n[ind], self.h_in[0, ind], self.ref10, self.psim[ind])
+            # remove effect of gustiness following Fairall et al. (2003)
+            # usr is divided by (GustFact)^0.5 (updated in wind_iterate)
+            # these 2 equations integrating from surface should be equivalent - but they are not due to gustiness
+            #self.u10n[ind] = self.usr[ind]/kappa/np.power(self.GustFact[ind],0.5)*(np.log(self.ref10/self.zo[ind]))
+            #self.u10n[ind] = self.usr[ind]/kappa*(np.log(self.ref10/self.zo[ind]))
+            # lines below with and without gustfactor
+            self.u10n[ind] = self.wind[ind]-self.usr[ind]/kappa/np.power(self.GustFact[ind],0.5)*(np.log(self.h_in[0, ind]/self.ref10) - self.psim[ind])
+            #self.u10n[ind] = self.wind[ind]-self.usr[ind]/kappa*(np.log(self.h_in[0, ind]/self.ref10) - self.psim[ind])
 
 
+            # temperature
+            self.ct10n[ind], self.zot[ind] = ctqn_calc("ct", self.h_in[1, ind]/self.monob[ind], self.cd10n[ind], self.usr[ind], self.zo[ind], self.theta[ind], self.meth)
+            self.psit[ind] = psit_calc(self.h_in[1, ind]/self.monob[ind], self.meth)
+            self.ct[ind] = ctq_calc(self.cd10n[ind], self.cd[ind], self.ct10n[ind], self.h_in[1, ind], self.ref10, self.psit[ind])
+            # wind
+            self.cq10n[ind], self.zoq[ind] = ctqn_calc("cq", self.h_in[2, ind]/self.monob[ind], self.cd10n[ind], self.usr[ind], self.zo[ind], self.theta[ind], self.meth)
+            self.psiq[ind] = psit_calc(self.h_in[2, ind]/self.monob[ind], self.meth)
+            self.cq[ind] = ctq_calc(self.cd10n[ind], self.cd[ind], self.cq10n[ind], self.h_in[2, ind], self.ref10, self.psiq[ind])
 
+
+            # Some parameterizations set a minimum on parameters
+            try:
+                self._minimum_params()
+            except AttributeError:
+                pass
+            
+            self.dt_full[ind] = self.dt_in[ind] - self.dter[ind]*self.cskin - self.dtwl[ind]*self.wl
+            self.dq_full[ind] = self.dq_in[ind] - self.dqer[ind]*self.cskin
+            self.usr[ind], self.tsr[ind], self.qsr[ind] = get_strs(self.h_in[:, ind], self.monob[ind],
+                                                self.wind[ind], self.zo[ind], self.zot[ind],
+                                                self.zoq[ind], self.dt_full[ind], self.dq_full[ind],
+                                                self.cd[ind], self.ct[ind], self.cq[ind], self.meth)
+
+            # Update CS/WL parameters
+            self._update_coolskin_warmlayer(ind)
+            
+            # Logging output
+            log_vars = {"dter":2,"dqer":7,"tkt":2,"Rnl":2,"usr":3,"tsr":4,"qsr":7}
+            log_vars = [np.round(np.nanmedian(getattr(self,V)),R) for V,R in log_vars.items()]
+            log_vars.insert(0,self.meth)
+            logging.info('method {} | dter = {} | dqer = {} | tkt = {} | Rnl = {} | usr = {} | tsr = {} | qsr = {}'.format(*log_vars))
+
+            if self.cskin + self.wl > 0:
+                self.Rnl[ind] = 0.97*(self.Rl[ind]-5.67e-8*np.power(self.SST[ind] + self.dter[ind]*self.cskin, 4))
+            # not sure how to handle lapse/potemp
+            # well-mixed in potential temperature ...
+            self.t10n[ind] = (self.theta[ind] - self.tlapse[ind]*self.ref10 - self.tsr[ind]/kappa*(np.log(self.h_in[1, ind]/self.ref10)-self.psit[ind]))
+            self.q10n[ind] = (self.qair[ind] - self.qsr[ind]/kappa*(np.log(self.h_in[2, ind]/self.ref10)-self.psiq[ind]))
+
+            # update stability info
+            self.tsrv[ind] = get_tsrv(self.tsr[ind], self.qsr[ind], self.theta[ind], self.qair[ind])
+            self.Rb[ind] = get_Rb(self.grav[ind], self.usr[ind], self.h_in[0, ind], self.h_in[1, ind], self.tv[ind], self.dtv[ind], self.wind[ind], self.monob[ind], self.meth)
+            if self.L == "tsrv":
+                self.monob[ind] = get_Ltsrv(self.tsrv[ind], self.grav[ind], self.tv[ind], self.usr[ind])
+            else:
+                self.monob[ind] = get_LRb(self.Rb[ind], self.h_in[1,ind], self.monob[ind], self.zo[ind], self.zot[ind], self.meth)
+
+            # Update the wind values
+            self._wind_iterate(ind)
+                
+            # make sure you allow small negative values convergence
+            if (it == 1):  self.u10n = np.where(self.u10n < 0, 0.5, self.u10n)
+
+            self.itera[ind] = np.full(1,it)
+            # remove effect of gustiness following Fairall et al. (2003)
+            # usr is divided by (GustFact)^0.5 (here applied to sensible and latent as well as tau)
+            # GustFact should be 1 if gust is OFF
+            self.tau = self.rho*np.power(self.usr, 2)/self.GustFact
+            self.sensible = self.rho*self.cp*self.usr/np.power(self.GustFact,0.5)*self.tsr
+            self.latent = self.rho*self.lv*self.usr/np.power(self.GustFact,0.5)*self.qsr
+            # or leave as it is - gusty wind speed, or no gust
+            #self.tau = self.rho*np.power(self.usr, 2)
+            #self.sensible = self.rho*self.cp*self.usr*self.tsr
+            #self.latent = self.rho*self.lv*self.usr*self.qsr
+
+            # Set the new variables (for comparison against "old")
+            new = np.array([np.copy(getattr(self,i)) for i in new_vars])
+
+            if (it > 2):  # force at least three iterations
+                d = np.abs(new-old)                 # change over this iteration
+                for ii in range(0,len(tol_vals)):
+                     d[ii,] = d[ii,]/tol_vals[ii]   # ratio to tolerance
+                ind = np.where(d.max(axis=0)>=1)    # identifies non-convergence
+
+            self.ind = np.copy(ind)
+            ii = False if (ind[0].size == 0) else True
+            # End of iteration loop
+
+        self.itera[ind] = -1
+        self.itera = np.where(self.itera > maxiter, -1, self.itera)
+        logging.info('method %s | # of iterations:%s', self.meth, it)
+        logging.info('method %s | # of points that did not converge :%s \n', self.meth, self.ind[0].size)
+
+
+    def _get_humidity(self):
+        "RH only used for flagging purposes"
+        if ((self.hum[0] == 'rh') or (self.hum[0] == 'no')):
+            self.rh = self.hum[1]
+        elif (self.hum[0] == 'Td'):
+            Td = self.hum[1]  # dew point temperature (K)
+            Td = np.where(Td < 200, np.copy(Td)+CtoK, np.copy(Td))
+            T = np.where(self.T < 200, np.copy(self.T)+CtoK, np.copy(self.T))
+            #T = np.copy(self.T)
+            esd = 611.21*np.exp(17.502*((Td-CtoK)/(Td-32.19)))
+            es = 611.21*np.exp(17.502*((T-CtoK)/(T-32.19)))
+            self.rh = 100*esd/es
+        
+    def _flag(self,out=0):
+        "Set the general flags"
+        
+        flag = np.full(self.arr_shp, "n",dtype="object")
+
+        if (self.hum[0] == 'no'):
+            if (self.cskin == 1):
+                flag = np.where(np.isnan(self.spd+self.T+self.SST+self.P+self.Rs+self.Rl), "m", flag)
+            else:
+                flag = np.where(np.isnan(self.spd+self.T+self.SST+self.P), "m", flag)
+        else:
+            if (self.cskin == 1):
+                flag = np.where(np.isnan(self.spd+self.T+self.SST+self.hum[1]+self.P+self.Rs+self.Rl), "m", flag)
+            else:
+                flag = np.where(np.isnan(self.spd+self.T+self.SST+self.hum[1]+self.P), "m", flag)
+
+            flag = np.where(self.rh > 100, "r", flag)
+        
+
+        # u10n flag
+        flag = np.where(((self.u10n < 0)  | (self.u10n > 200)) & (flag == "n"), "u",
+                             np.where(((self.u10n < 0)  | (self.u10n > 200) ) &
+                                      (np.char.find(flag.astype(str), 'u') == -1),
+                                      flag+[","]+["u"], flag))
+        # q10n flag
+        flag = np.where(((self.q10n < 0) | (self.q10n > 40*0.001)) & (flag == "n"), "q",
+                             np.where(((self.q10n < 0) | (self.q10n > 40*0.001)) & (flag != "n"), flag+[","]+["q"],
+                                      flag))
+
+        # t10n flag
+        flag = np.where(((self.t10n < 173) | (self.t10n > 373))  & (flag == "n"), "t",
+                             np.where(((self.t10n < 173) | (self.t10n > 373)) & (flag != "n"), flag+[","]+["t"],
+                                      flag))
+
+        flag = np.where(((self.Rb < -0.5) | (self.Rb > 0.2) | ((self.hin[0]/self.monob) > 1000)) &
+                             (flag == "n"), "l",
+                             np.where(((self.Rb < -0.5) | (self.Rb > 0.2) |
+                                       ((self.hin[0]/self.monob) > 1000)) &
+                                      (flag != "n"), flag+[","]+["l"], flag))
+
+        if (out == 1):
+            flag = np.where((self.itera == -1) & (flag == "n"), "i",
+                                 np.where((self.itera == -1) &
+                                          ((flag != "n") &
+                                           (np.char.find(flag.astype(str), 'm') == -1)),
+                                          flag+[","]+["i"], flag))
+        else:
+            flag = np.where((self.itera == -1) & (flag == "n"), "i",
+                                 np.where((self.itera == -1) &
+                                          ((flag != "n") &
+                                           (np.char.find(flag.astype(str), 'm') == -1) &
+                                           (np.char.find(flag.astype(str), 'u') == -1)),
+                                          flag+[","]+["i"], flag))
+        self.flag = flag
+            
+    def get_output(self,out=0):
+
+        assert out in [0,1], "out must be either 0 or 1"
+
+        self._get_humidity() # Get the Relative humidity
+        self._flag(out=out)  # Get flags
+
+        # remove effect of gustiness following Fairall et al. (2003)
+        # usr is divided by (GustFact)^0.5
+        self.uref = (self.spd-self.usr/kappa/np.power(self.GustFact,0.5)*(np.log(self.h_in[0]/self.h_out[0])-self.psim + psim_calc(self.h_out[0]/self.monob, self.meth)))
+        # include lapse rate adjustment as theta is well-mixed
+        self.tref = (self.theta-self.tlapse*self.h_out[1] - self.tsr/kappa*(np.log(self.h_in[1]/self.h_out[1])-self.psit + psit_calc(self.h_out[1]/self.monob, self.meth)))
+        self.qref = (self.qair-self.qsr/kappa*(np.log(self.h_in[2]/self.h_out[2]) - self.psiq+psit_calc(self.h_out[2]/self.monob, self.meth)))
+
+        if (self.wl == 0): self.dtwl = np.zeros(self.T.shape)*self.msk  # reset to zero if not used
+
+        # Do not calculate lhf if a measure of humidity is not input
+        # This gets filled into a pd dataframe and so no need to specify y dimension of array
+        if (self.hum[0] == 'no'):
+            self.latent, self.qsr, self.q10n, self.qref, self.qair, self.rh = np.empty(6)
+
+        # Set the final wind speed values
+        # this seems to be gust (was wind_speed)
+        self.ug = np.sqrt(np.power(self.wind, 2)-np.power(self.spd, 2))
+
+        # Get class specific flags (will only work if self.u_hi and self.u_lo have been set in the class)
+        try:
+            self._class_flag()
+        except AttributeError:
+            pass
+
+        # Combine all output variables into a pandas array
+        res_vars = ("tau","sensible","latent","monob","cd","cd10n","ct","ct10n","cq","cq10n","tsrv","tsr","qsr","usr","psim","psit",
+                    "psiq","u10n","t10n","tv10n","q10n","zo","zot","zoq","uref","tref","qref","itera","dter","dqer","dtwl",
+                    "qair","qsea","Rl","Rs","Rnl","ug","Rb","rh","tkt","lv")
+
+        res = np.zeros((len(res_vars), len(self.spd)))
+        for i, value in enumerate(res_vars): res[i][:] = getattr(self, value)
+
+        if (out == 0):
+            res[:, self.ind] = np.nan
+            # set missing values where data have non acceptable values
+            if (self.hum[0] != 'no'): res = np.asarray([np.where(self.q10n < 0, np.nan, res[i][:]) for i in range(len(res_vars))]) # FIXME: why 41?
+            res = np.asarray([np.where(self.u10n < 0, np.nan, res[i][:]) for i in range(len(res_vars))])
+        else:
+            warnings.warn("Warning: the output will contain values for points that have not converged and negative values (if any) for u10n/q10n")
+
+        resAll = pd.DataFrame(data=res.T, index=range(self.nlen), columns=res_vars)
+    
+        resAll["flag"] = self.flag
+
+        return resAll
+
+    def add_variables(self, spd, T, SST, lat=None, hum=None, P=None, L=None):
+
+        # Add the mandatory variables
+        assert type(spd)==type(T)==type(SST)==np.ndarray, "input type of spd, T and SST should be numpy.ndarray"
+        self.L="tsrv" if L is None else L
+        self.arr_shp = spd.shape
+        self.nlen = len(spd)
+        self.spd = spd
+        #self.T = T
+        self.T = np.where(T < 200, np.copy(T)+CtoK, np.copy(T))
+        self.hum = ['no', np.full(SST.shape,80)] if hum is None else hum
+        self.SST = np.where(SST < 200, np.copy(SST)+CtoK, np.copy(SST))
+        self.lat = np.full(self.arr_shp,45) if lat is None else lat
+        self.grav = gc(self.lat)
+        self.P = np.full(n, 1013) if P is None else P
+
+        # mask to preserve missing values when initialising variables
+        self.msk=np.empty(SST.shape)
+        self.msk = np.where(np.isnan(spd+T+SST), np.nan, 1)
+        self.Rb = np.empty(SST.shape)*self.msk
+        
+    def add_gust(self,gust=None):
+
+        if np.all(gust == None):
+            try:
+                gust = self.default_gust
+            except AttributeError:
+                gust = [1,1.2,800]
+        elif ((np.size(gust) < 3) and (gust == 0)):
+            gust = [0, 0, 0]
+            
+        assert np.size(gust) == 3, "gust input must be a 3x1 array"
+        assert gust[0] in [0,1], "gust at position 0 must be 0 or 1"
+        self.gust = gust
+
+    def _class_flag(self):
+        "A flag specific to this class - only used for certain classes where u_lo and u_hi are defined"
+        #flag.tmp<-np.where(((self.u10n < self.u_lo[0]) | (self.u10n > self.u_hi[0])),"o","")
+        #self.flag = np.where(self.flag == "n" & flag.tmp == "o", "o", self.flag)
+        #self.flag = np.where(flag.tmp == "o" & self.flag != "n" & self.flag != "o" & self.flag != "m", self.flag+[","]+["o"], self.flag)
+        #flag.add = ["u","q","t"]
+        #self.flag = np.where(flag.tmp == "o" & (np.char.find(self.flag.astype(str), 'u') == -1 | np.char.find(self.flag.astype(str), 'q') == -1 | np.char.find(self.flag.astype(str), 't') == -1), self.flag+[","]+["o"], self.flag))
+        self.flag = np.where(((self.u10n < self.u_lo[0]) | (self.u10n > self.u_hi[0])) & (self.flag == "n"), "o",
+                             np.where(((self.u10n < self.u_lo[1]) | (self.u10n > self.u_hi[1])) &
+                                      ((self.flag != "n") &
+                                       (np.char.find(self.flag.astype(str), 'u') == -1) &
+                                       (np.char.find(self.flag.astype(str), 'q') == -1)),
+                                      self.flag+[","]+["o"], self.flag))
+
+    def __init__(self):
+        self.meth = "S88"
+
+class S80(S88):
+
+    def __init__(self):
+        self.meth = "S80"
+        self.u_lo = [6,6]
+        self.u_hi = [22,22]
+        
+class YT96(S88):
+
+    def __init__(self):
+        self.meth = "YT96"
+        self.u_lo = [0,3]
+        self.u_hi = [26,26]
+
+class LP82(S88):
+    
+    def __init__(self):
+        self.meth = "LP82"
+        self.u_lo = [3,3]
+        self.u_hi = [25,25]
+
+
+class NCAR(S88):
+
+
+    def _minimum_params(self):
+        self.cd = np.maximum(np.copy(self.cd), 1e-4)
+        self.ct = np.maximum(np.copy(self.ct), 1e-4)
+        self.cq = np.maximum(np.copy(self.cq), 1e-4)
+        self.zo = np.minimum(np.copy(self.zo), 0.0025)
+    
+    def __init__(self):
+        self.meth = "NCAR"
+        self.u_lo = [0.5,0.5]
+        self.u_hi = [999,999]
+
+class UA(S88):
+    
+    def __init__(self):
+        self.meth = "UA"
+        self.default_gust = [1,1,1000]
+        self.u_lo = [-999,-999]
+        self.u_hi = [18,18]
+
+
+class C30(S88):
+    def set_coolskin_warmlayer(self, wl=0, cskin=1, skin="C35", Rl=None, Rs=None):
+        self._fix_coolskin_warmlayer(wl, cskin, skin, Rl, Rs)
+
+    def __init__(self):
+        self.meth = "C30"
+        self.default_gust = [1,1.2,600]
+
+class C35(C30):
+    def __init__(self):
+        self.meth = "C35"
+        self.default_gust = [1,1.2,600]
+
+class ecmwf(C30):
+    def set_coolskin_warmlayer(self, wl=0, cskin=1, skin="ecmwf", Rl=None, Rs=None):
+        self._fix_coolskin_warmlayer(wl, cskin, skin, Rl, Rs)
+
+    def __init__(self):
+        self.meth = "ecmwf"
+        self.default_gust = [1,1,1000]
+
+class Beljaars(C30):
+    def set_coolskin_warmlayer(self, wl=0, cskin=1, skin="Beljaars", Rl=None, Rs=None):
+        self._fix_coolskin_warmlayer(wl, cskin, skin, Rl, Rs)
+        
+    def __init__(self):
+        self.meth = "Beljaars"
+        self.default_gust = [1,1,1000]
+        
 def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                    Rl=None, Rs=None, cskin=None, skin="C35", wl=0, gust=None,
-                   meth="S88", qmeth="Buck2", tol=None, n=10, out=0, L=None):
+                   meth="S88", qmeth="Buck2", tol=None, maxiter=10, out=0, L=None):
     """
     Calculates turbulent surface fluxes using different parameterizations
     Calculates height adjusted values for spd, T, q
@@ -73,8 +641,8 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
            option : 'all' to set tolerance limits for both fluxes and height
                     adjustment lim1-6
            default is tol=['all', 0.01, 0.01, 1e-05, 1e-3, 0.1, 0.1]
-        n : int
-            number of iterations (defautl = 10)
+        maxiter : int
+            number of iterations (default = 10)
         out : int
             set 0 to set points that have not converged, negative values of
                   u10n and q10n to missing (default)
@@ -93,11 +661,11 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                        3. latent heat         (W/m^2)
                        4. Monin-Obhukov length (m)
                        5. drag coefficient (cd)
-                       6. neutral drag coefficient (cdn)
+                       6. neutral drag coefficient (cd10n)
                        7. heat exchange coefficient (ct)
-                       8. neutral heat exchange coefficient (ctn)
+                       8. neutral heat exchange coefficient (ct10n)
                        9. moisture exhange coefficient (cq)
-                       10. neutral moisture exchange coefficient (cqn)
+                       10. neutral moisture exchange coefficient (cq10n)
                        11. star virtual temperatcure (tsrv)
                        12. star temperature (tsr)
                        13. star specific humidity (qsr)
@@ -141,470 +709,14 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     logging.basicConfig(filename='flux_calc.log', filemode="w",
                         format='%(asctime)s %(message)s', level=logging.INFO)
     logging.captureWarnings(True)
-    #  check input values and set defaults where appropriate
-    lat, hum, P, Rl, Rs, cskin, skin, wl, gust, tol, L, n = get_init(spd, T,
-                                                                     SST, lat,
-                                                                     hum, P,
-                                                                     Rl, Rs,
-                                                                     cskin,
-                                                                     skin,
-                                                                     wl, gust,
-                                                                     L, tol, n,
-                                                                     meth,
-                                                                     qmeth)
-    ref_ht = 10        # reference height
-    h_in = get_heights(hin, len(spd))  # heights of input measurements/fields
-    h_out = get_heights(hout, 1)       # desired height of output variables
-    logging.info('method %s, inputs: lat: %s | P: %s | Rl: %s |'
-                 ' Rs: %s | gust: %s | cskin: %s | L : %s', meth,
-                 np.nanmedian(lat), np.round(np.nanmedian(P), 2),
-                 np.round(np.nanmedian(Rl), 2), np.round(np.nanmedian(Rs), 2),
-                 gust, cskin, L)
-    #  set up/calculate temperatures and specific humidities
-    sst = np.where(SST < 200, np.copy(SST)+CtoK, np.copy(SST))
-    qair, qsea = get_hum(hum, T, sst, P, qmeth)
-    # mask to preserve missing values when initialising variables
-    msk = np.empty(sst.shape)
-    msk = np.where(np.isnan(spd+T+SST), np.nan, 1)
-    Rb = np.empty(sst.shape)*msk
-    g = gc(lat)
-    # specific heat
-    cp = 1004.67*(1+0.00084*qsea)
-    th = np.where(T < 200, (np.copy(T)+CtoK) *
-                  np.power(1000/P, 287.1/cp),
-                  np.copy(T)*np.power(1000/P, 287.1/cp))  # potential T
-    # lapse rate
-    tlapse = gamma("dry", SST, T, qair/1000, cp)
-    Ta = np.where(T < 200, np.copy(T)+CtoK+tlapse*h_in[1],
-                  np.copy(T)+tlapse*h_in[1])  # convert to Kelvin if needed
-    logging.info('method %s and q method %s | qsea:%s, qair:%s', meth, qmeth,
-                 np.round(np.nanmedian(qsea), 7),
-                 np.round(np.nanmedian(qair), 7))
-    if (np.all(np.isnan(qsea)) or np.all(np.isnan(qair))):
-        print("qsea and qair cannot be nan")
-    if ((hum[0] == 'rh') or (hum[0] == 'no')):
-        rh = hum[1]
-    elif (hum[0] == 'Td'):
-        Td = hum[1]  # dew point temperature (K)
-        Td = np.where(Td < 200, np.copy(Td)+CtoK, np.copy(Td))
-        T = np.where(T < 200, np.copy(T)+CtoK, np.copy(T))
-        esd = 611.21*np.exp(17.502*((Td-CtoK)/(Td-32.19)))
-        es = 611.21*np.exp(17.502*((T-CtoK)/(T-32.19)))
-        rh = 100*esd/es
-    flag = np.empty(spd.shape, dtype="object")
-    flag[:] = "n"
-    if (hum[0] == 'no'):
-        if (cskin == 1):
-            flag = np.where(np.isnan(spd+T+SST+P+Rs+Rl), "m", flag)
-        else:
-            flag = np.where(np.isnan(spd+T+SST+P), "m", flag)
-    else:
-        if (cskin == 1):
-            flag = np.where(np.isnan(spd+T+SST+hum[1]+P+Rs+Rl), "m", flag)
-        else:
-            flag = np.where(np.isnan(spd+T+SST+hum[1]+P), "m", flag)
-        flag = np.where(rh > 100, "r", flag)
 
-    dt = Ta - sst
-    dq = qair - qsea
+    iclass = globals()[meth]()
+    iclass.add_gust(gust=gust)
+    iclass.add_variables(spd, T, SST, lat=lat, hum=hum, P=P, L=L)
+    iclass.get_heights(hin, hout)
+    iclass.get_specHumidity(qmeth=qmeth)
+    iclass.set_coolskin_warmlayer(wl=wl, cskin=cskin,skin=skin,Rl=Rl,Rs=Rs)
+    iclass.iterate(tol=tol,maxiter=maxiter)
+    resAll = iclass.get_output(out=out)
 
-    #  first guesses
-    t10n, q10n = np.copy(Ta), np.copy(qair)
-    tv10n = t10n*(1+0.6077*q10n)
-    #  Zeng et al. 1998
-    tv = th*(1+0.6077*qair)   # virtual potential T
-    dtv = dt*(1+0.6077*qair)+0.6077*th*dq
-    # ------------
-    rho = P*100/(287.1*tv10n)
-    lv = (2.501-0.00237*(sst-CtoK))*1e6  # J/kg
-
-    # cskin parameters
-    tkt = 0.001*np.ones(T.shape)*msk
-    dter = -0.3*np.ones(T.shape)*msk
-    dqer = dter*0.622*lv*qsea/(287.1*np.power(sst, 2))
-    Rnl = 0.97*(Rl-5.67e-8*np.power(sst-0.3*cskin, 4))
-    Qs = 0.945*Rs
-    dtwl = np.ones(T.shape)*0.3*msk
-    skt = np.copy(sst)
-    # gustiness adjustment
-    if (gust[0] == 1 and meth == "UA"):
-        wind = np.where(dtv >= 0, np.where(spd > 0.1, spd, 0.1),
-                        np.sqrt(np.power(np.copy(spd), 2)+np.power(0.5, 2)))
-    elif (gust[0] == 1):
-        wind = np.sqrt(np.power(np.copy(spd), 2)+np.power(0.5, 2))
-    elif (gust[0] == 0):
-        wind = np.copy(spd)
-    u10n = wind*np.log(10/1e-4)/np.log(hin[0]/1e-4)
-    usr = 0.035*u10n
-    cd10n = cdn_calc(u10n, usr, Ta, lat, meth)
-    psim, psit, psiq = (np.zeros(spd.shape)*msk, np.zeros(spd.shape)*msk,
-                        np.zeros(spd.shape)*msk)
-    cd = cd_calc(cd10n, h_in[0], ref_ht, psim)
-    tsr, tsrv, qsr = (np.zeros(spd.shape)*msk, np.zeros(spd.shape)*msk,
-                      np.zeros(spd.shape)*msk)
-    usr = np.sqrt(cd*np.power(wind, 2))
-    zo, zot, zoq = (1e-4*np.ones(spd.shape)*msk, 1e-4*np.ones(spd.shape)*msk,
-                    1e-4*np.ones(spd.shape)*msk)
-    ct10n = np.power(kappa, 2)/(np.log(h_in[0]/zo)*np.log(h_in[1]/zot))
-    cq10n = np.power(kappa, 2)/(np.log(h_in[0]/zo)*np.log(h_in[2]/zoq))
-    ct = np.power(kappa, 2)/((np.log(h_in[0]/zo)-psim) *
-                             (np.log(h_in[1]/zot)-psit))
-    cq = np.power(kappa, 2)/((np.log(h_in[0]/zo)-psim) *
-                             (np.log(h_in[2]/zoq)-psiq))
-    
-    Rb = g*10*(dtv)/(np.where(T < 200, np.copy(T)+CtoK, np.copy(T)) *
-                     np.power(wind, 2))  # Rb eq. 11 Grachev & Fairall 1997
-    monob = 1/Rb  # eq. 12 Grachev & Fairall 1997
-    tsr = (dt-dter*cskin-dtwl*wl)*kappa/(np.log(h_in[1]/zot) -
-                                         psit_calc(h_in[1]/monob, meth))
-    qsr = (dq-dqer*cskin)*kappa/(np.log(h_in[2]/zoq) -
-                                 psit_calc(h_in[2]/monob, meth))
-    it, ind = 0, np.where(spd > 0)
-    ii, itera = True, -1*np.ones(spd.shape)*msk
-    tau = 0.05*np.ones(spd.shape)*msk
-    sensible = -5*np.ones(spd.shape)*msk
-    latent = -65*np.ones(spd.shape)*msk
-    #  iteration loop
-    while np.any(ii):
-        it += 1
-        if it > n:
-            break
-        if (tol[0] == 'flux'):
-            old = np.array([np.copy(tau), np.copy(sensible), np.copy(latent)])
-        elif (tol[0] == 'ref'):
-            old = np.array([np.copy(u10n), np.copy(t10n), np.copy(q10n)])
-        elif (tol[0] == 'all'):
-            old = np.array([np.copy(u10n), np.copy(t10n), np.copy(q10n),
-                            np.copy(tau), np.copy(sensible), np.copy(latent)])
-        cd10n[ind] = cdn_calc(u10n[ind], usr[ind], Ta[ind], lat[ind], meth)
-        if (np.all(np.isnan(cd10n))):
-            break
-            logging.info('break %s at iteration %s cd10n<0', meth, it)
-        zo[ind] = ref_ht/np.exp(kappa/np.sqrt(cd10n[ind]))
-        psim[ind] = psim_calc(h_in[0, ind]/monob[ind], meth)
-        cd[ind] = cd_calc(cd10n[ind], h_in[0, ind], ref_ht, psim[ind])
-        ct10n[ind], cq10n[ind] = ctcqn_calc(h_in[1, ind]/monob[ind],
-                                            cd10n[ind], usr[ind], zo[ind],
-                                            Ta[ind], meth)
-        zot[ind] = ref_ht/(np.exp(np.power(kappa, 2) /
-                           (ct10n[ind]*np.log(ref_ht/zo[ind]))))
-        zoq[ind] = ref_ht/(np.exp(np.power(kappa, 2) /
-                           (cq10n[ind]*np.log(ref_ht/zo[ind]))))
-        psit[ind] = psit_calc(h_in[1, ind]/monob[ind], meth)
-        psiq[ind] = psit_calc(h_in[2, ind]/monob[ind], meth)
-        ct[ind], cq[ind] = ctcq_calc(cd10n[ind], cd[ind], ct10n[ind],
-                                     cq10n[ind], h_in[:, ind],
-                                     [ref_ht, ref_ht, ref_ht], psit[ind],
-                                     psiq[ind])
-        if (meth == "NCAR"):
-            cd = np.maximum(np.copy(cd), 1e-4)
-            ct = np.maximum(np.copy(ct), 1e-4)
-            cq = np.maximum(np.copy(cq), 1e-4)
-            zo = np.minimum(np.copy(zo), 0.0025)
-        usr[ind], tsr[ind], qsr[ind] = get_strs(h_in[:, ind], monob[ind],
-                                                wind[ind], zo[ind], zot[ind],
-                                                zoq[ind], dt[ind], dq[ind],
-                                                dter[ind], dqer[ind],
-                                                dtwl[ind], ct[ind], cq[ind],
-                                                cskin, wl, meth)
-        if ((cskin == 1) and (wl == 0)):
-            if (skin == "C35"):
-                dter[ind], dqer[ind], tkt[ind] = cs_C35(np.copy(sst[ind]),
-                                                        qsea[ind],
-                                                        rho[ind], Rs[ind],
-                                                        Rnl[ind],
-                                                        cp[ind], lv[ind],
-                                                        np.copy(tkt[ind]),
-                                                        usr[ind], tsr[ind],
-                                                        qsr[ind], lat[ind])
-            elif (skin == "ecmwf"):
-                dter[ind] = cs_ecmwf(rho[ind], Rs[ind], Rnl[ind], cp[ind],
-                                     lv[ind], usr[ind], tsr[ind], qsr[ind],
-                                     np.copy(sst[ind]), lat[ind])
-                dqer[ind] = (dter[ind]*0.622*lv[ind]*qsea[ind] /
-                             (287.1*np.power(sst[ind], 2)))
-            elif (skin == "Beljaars"):
-                Qs[ind], dter[ind] = cs_Beljaars(rho[ind], Rs[ind], Rnl[ind],
-                                                 cp[ind], lv[ind], usr[ind],
-                                                 tsr[ind], qsr[ind], lat[ind],
-                                                 np.copy(Qs[ind]))
-                dqer = dter*0.622*lv*qsea/(287.1*np.power(sst, 2))
-            skt = np.copy(sst)+dter
-        elif ((cskin == 1) and (wl == 1)):
-            if (skin == "C35"):
-                dter[ind], dqer[ind], tkt[ind] = cs_C35(sst[ind], qsea[ind],
-                                                        rho[ind], Rs[ind],
-                                                        Rnl[ind],
-                                                        cp[ind], lv[ind],
-                                                        np.copy(tkt[ind]),
-                                                        usr[ind], tsr[ind],
-                                                        qsr[ind], lat[ind])
-                dtwl[ind] = wl_ecmwf(rho[ind], Rs[ind], Rnl[ind], cp[ind],
-                                     lv[ind], usr[ind], tsr[ind], qsr[ind],
-                                     np.copy(sst[ind]), np.copy(skt[ind]),
-                                     np.copy(dter[ind]), lat[ind])
-                skt = np.copy(sst)+dter+dtwl
-            elif (skin == "ecmwf"):
-                dter[ind] = cs_ecmwf(rho[ind], Rs[ind], Rnl[ind], cp[ind],
-                                     lv[ind], usr[ind], tsr[ind], qsr[ind],
-                                     sst[ind], lat[ind])
-                dtwl[ind] = wl_ecmwf(rho[ind], Rs[ind], Rnl[ind], cp[ind],
-                                     lv[ind], usr[ind], tsr[ind], qsr[ind],
-                                     np.copy(sst[ind]), np.copy(skt[ind]),
-                                     np.copy(dter[ind]), lat[ind])
-                skt = np.copy(sst)+dter+dtwl
-                dqer[ind] = (dter[ind]*0.622*lv[ind]*qsea[ind] /
-                             (287.1*np.power(skt[ind], 2)))
-            elif (skin == "Beljaars"):
-                Qs[ind], dter[ind] = cs_Beljaars(rho[ind], Rs[ind], Rnl[ind],
-                                                 cp[ind], lv[ind], usr[ind],
-                                                 tsr[ind], qsr[ind], lat[ind],
-                                                 np.copy(Qs[ind]))
-                dtwl[ind] = wl_ecmwf(rho[ind], Rs[ind], Rnl[ind], cp[ind],
-                                     lv[ind], usr[ind], tsr[ind], qsr[ind],
-                                     np.copy(sst[ind]), np.copy(skt[ind]),
-                                     np.copy(dter[ind]), lat[ind])
-                skt = np.copy(sst)+dter+dtwl
-                dqer = dter*0.622*lv*qsea/(287.1*np.power(skt, 2))
-        else:
-            dter[ind] = np.zeros(sst[ind].shape)
-            dqer[ind] = np.zeros(sst[ind].shape)
-            tkt[ind] = 0.001*np.ones(T[ind].shape)
-        logging.info('method %s | dter = %s | dqer = %s | tkt = %s | Rnl = %s '
-                     '| usr = %s | tsr = %s | qsr = %s', meth,
-                     np.round(np.nanmedian(dter), 2),
-                     np.round(np.nanmedian(dqer), 7),
-                     np.round(np.nanmedian(tkt), 2),
-                     np.round(np.nanmedian(Rnl), 2),
-                     np.round(np.nanmedian(usr), 3),
-                     np.round(np.nanmedian(tsr), 4),
-                     np.round(np.nanmedian(qsr), 7))
-        Rnl[ind] = 0.97*(Rl[ind]-5.67e-8*np.power(sst[ind] +
-                                                  dter[ind]*cskin, 4))
-        t10n[ind] = (Ta[ind] -
-                     tsr[ind]/kappa*(np.log(h_in[1, ind]/ref_ht)-psit[ind]))
-        q10n[ind] = (qair[ind] -
-                     qsr[ind]/kappa*(np.log(h_in[2, ind]/ref_ht)-psiq[ind]))
-        tv10n[ind] = t10n[ind]*(1+0.6077*q10n[ind])
-        tsrv[ind], monob[ind], Rb[ind] = get_L(L, lat[ind], usr[ind], tsr[ind],
-                                               qsr[ind], h_in[:, ind], Ta[ind],
-                                               (sst[ind]+dter[ind]*cskin +
-                                                dtwl[ind]*wl), qair[ind],
-                                               qsea[ind], wind[ind],
-                                               np.copy(monob[ind]), zo[ind],
-                                               zot[ind], psim[ind], meth)
-        psim[ind] = psim_calc(h_in[0, ind]/monob[ind], meth)
-        psit[ind] = psit_calc(h_in[1, ind]/monob[ind], meth)
-        psiq[ind] = psit_calc(h_in[2, ind]/monob[ind], meth)
-        if (gust[0] == 1 and meth == "UA"):
-            wind[ind] = np.where(dtv[ind] >= 0, np.where(spd[ind] > 0.1,
-                                                         spd[ind], 0.1),
-                                 np.sqrt(np.power(np.copy(spd[ind]), 2) +
-                                         np.power(get_gust(gust[1], tv[ind],
-                                                           usr[ind], tsrv[ind],
-                                                           gust[2], lat[ind]),
-                                                  2)))  # Zeng et al. 1998 (20)
-        elif (gust[0] == 1):
-            wind[ind] = np.sqrt(np.power(np.copy(spd[ind]), 2) +
-                                np.power(get_gust(gust[1], Ta[ind], usr[ind],
-                                                  tsrv[ind], gust[2],
-                                                  lat[ind]), 2))
-        elif (gust[0] == 0):
-            wind[ind] = np.copy(spd[ind])
-        u10n[ind] = wind[ind]-usr[ind]/kappa*(np.log(h_in[0, ind]/10) -
-                                              psim[ind])
-        if (it < 4):  # make sure you allow small negative values convergence
-            u10n = np.where(u10n < 0, 0.5, u10n)
-        utmp = np.copy(u10n)
-        utmp = np.where(utmp < 0, np.nan, utmp)
-        itera[ind] = np.ones(1)*it
-        tau = rho*np.power(usr, 2)*(spd/wind)
-        sensible = rho*cp*usr*tsr
-        latent = rho*lv*usr*qsr
-
-        if (tol[0] == 'flux'):
-            new = np.array([np.copy(tau), np.copy(sensible), np.copy(latent)])
-        elif (tol[0] == 'ref'):
-            new = np.array([np.copy(utmp), np.copy(t10n), np.copy(q10n)])
-        elif (tol[0] == 'all'):
-            new = np.array([np.copy(utmp), np.copy(t10n), np.copy(q10n),
-                            np.copy(tau), np.copy(sensible), np.copy(latent)])
-        if (it > 2):  # force at least two iterations
-            d = np.abs(new-old)
-            if (tol[0] == 'flux'):
-                ind = np.where((d[0, :] > tol[1])+(d[1, :] > tol[2]) +
-                               (d[2, :] > tol[3]))
-            elif (tol[0] == 'ref'):
-                ind = np.where((d[0, :] > tol[1])+(d[1, :] > tol[2]) +
-                               (d[2, :] > tol[3]))
-            elif (tol[0] == 'all'):
-                ind = np.where((d[0, :] > tol[1])+(d[1, :] > tol[2]) +
-                               (d[2, :] > tol[3])+(d[3, :] > tol[4]) +
-                               (d[4, :] > tol[5])+(d[5, :] > tol[6]))
-        if (ind[0].size == 0):
-            ii = False
-        else:
-            ii = True
-    itera[ind] = -1
-    itera = np.where(itera > n, -1, itera)
-    logging.info('method %s | # of iterations:%s', meth, it)
-    logging.info('method %s | # of points that did not converge :%s \n', meth,
-                 ind[0].size)
-    # calculate output parameters
-    rho = (0.34838*P)/(tv10n)
-    t10n = t10n-(273.16+tlapse*ref_ht)
-    # solve for zo from cd10n
-    zo = ref_ht/np.exp(kappa/np.sqrt(cd10n))
-    # adjust neutral cdn at any output height
-    cdn = np.power(kappa/np.log(hout/zo), 2)
-    cd = cd_calc(cdn, h_out[0], h_out[0], psim)
-    # solve for zot, zoq from ct10n, cq10n
-    zot = ref_ht/(np.exp(kappa**2/(ct10n*np.log(ref_ht/zo))))
-    zoq = ref_ht/(np.exp(kappa**2/(cq10n*np.log(ref_ht/zo))))
-    # adjust neutral ctn, cqn at any output height
-    ctn = np.power(kappa, 2)/(np.log(h_out[0]/zo)*np.log(h_out[1]/zot))
-    cqn = np.power(kappa, 2)/(np.log(h_out[0]/zo)*np.log(h_out[2]/zoq))
-    ct, cq = ctcq_calc(cdn, cd, ctn, cqn, h_out, h_out, psit, psiq)
-    uref = (spd-usr/kappa*(np.log(h_in[0]/h_out[0])-psim +
-            psim_calc(h_out[0]/monob, meth)))
-    tref = (Ta-tsr/kappa*(np.log(h_in[1]/h_out[1])-psit +
-            psit_calc(h_out[0]/monob, meth)))
-    tref = tref-(CtoK+tlapse*h_out[1])
-    qref = (qair-qsr/kappa*(np.log(h_in[2]/h_out[2]) -
-            psit+psit_calc(h_out[2]/monob, meth)))
-    if (wl == 0):
-        dtwl = np.zeros(T.shape)*msk  # reset to zero if not used
-    flag = np.where((u10n < 0) & (flag == "n"), "u",
-                    np.where((u10n < 0) &
-                             (np.char.find(flag.astype(str), 'u') == -1),
-                             flag+[","]+["u"], flag))
-    flag = np.where((q10n < 0) & (flag == "n"), "q",
-                    np.where((q10n < 0) & (flag != "n"), flag+[","]+["q"],
-                             flag))
-    flag = np.where(((Rb < -0.5) | (Rb > 0.2) | ((hin[0]/monob) > 1000)) &
-                    (flag == "n"), "l",
-                    np.where(((Rb < -0.5) | (Rb > 0.2) |
-                              ((hin[0]/monob) > 1000)) &
-                             (flag != "n"), flag+[","]+["l"], flag))
-    if (out == 1):
-        flag = np.where((itera == -1) & (flag == "n"), "i",
-                        np.where((itera == -1) &
-                                 ((flag != "n") &
-                                  (np.char.find(flag.astype(str), 'm') == -1)),
-                                 flag+[","]+["i"], flag))
-    else:
-        flag = np.where((itera == -1) & (flag == "n"), "i",
-                        np.where((itera == -1) &
-                                 ((flag != "n") &
-                                  (np.char.find(flag.astype(str), 'm') == -1) &
-                                  (np.char.find(flag.astype(str), 'u') == -1)),
-                                 flag+[","]+["i"], flag))
-    if (meth == "S80"):
-        flag = np.where(((utmp < 6) | (utmp > 22)) & (flag == "n"), "o",
-                        np.where(((utmp < 6) | (utmp > 22)) &
-                                 ((flag != "n") &
-                                  (np.char.find(flag.astype(str), 'u') == -1) &
-                                  (np.char.find(flag.astype(str), 'q') == -1)),
-                                 flag+[","]+["o"], flag))
-    elif (meth == "LP82"):
-        flag = np.where(((utmp < 3) | (utmp > 25)) & (flag == "n"), "o",
-                        np.where(((utmp < 3) | (utmp > 25)) &
-                                 ((flag != "n") &
-                                  (np.char.find(flag.astype(str), 'u') == -1) &
-                                  (np.char.find(flag.astype(str), 'q') == -1)),
-                                 flag+[","]+["o"], flag))
-    elif (meth == "YT96"):
-        flag = np.where(((utmp < 0) | (utmp > 26)) & (flag == "n"), "o",
-                        np.where(((utmp < 3) | (utmp > 26)) &
-                                 ((flag != "n") &
-                                  (np.char.find(flag.astype(str), 'u') == -1) &
-                                  (np.char.find(flag.astype(str), 'q') == -1)),
-                                 flag+[","]+["o"], flag))
-    elif (meth == "UA"):
-        flag = np.where((utmp > 18) & (flag == "n"), "o",
-                        np.where((utmp > 18) &
-                                 ((flag != "n") &
-                                  (np.char.find(flag.astype(str), 'u') == -1) &
-                                  (np.char.find(flag.astype(str), 'q') == -1)),
-                                 flag+[","]+["o"], flag))
-    elif (meth == "NCAR"):
-        flag = np.where((utmp < 0.5) & (flag == "n"), "o",
-                        np.where((utmp < 0.5) &
-                                 ((flag != "n") &
-                                  (np.char.find(flag.astype(str), 'u') == -1) &
-                                  (np.char.find(flag.astype(str), 'q') == -1)),
-                                 flag+[","]+["o"], flag))
-    # Do not calculate lhf if a measure of humidity is not input
-    if (hum[0] == 'no'):
-        latent = np.ones(sst.shape)*np.nan
-        qsr = np.ones(sst.shape)*np.nan
-        q10n = np.ones(sst.shape)*np.nan
-        qref = np.ones(sst.shape)*np.nan
-        qair = np.ones(sst.shape)*np.nan
-        rh = np.ones(sst.shape)*np.nan
-
-    res = np.zeros((41, len(spd)))
-    res[0][:] = tau
-    res[1][:] = sensible
-    res[2][:] = latent
-    res[3][:] = monob
-    res[4][:] = cd
-    res[5][:] = cdn
-    res[6][:] = ct
-    res[7][:] = ctn
-    res[8][:] = cq
-    res[9][:] = cqn
-    res[10][:] = tsrv
-    res[11][:] = tsr
-    res[12][:] = qsr
-    res[13][:] = usr
-    res[14][:] = psim
-    res[15][:] = psit
-    res[16][:] = psiq
-    res[17][:] = u10n
-    res[18][:] = t10n
-    res[19][:] = tv10n
-    res[20][:] = q10n
-    res[21][:] = zo
-    res[22][:] = zot
-    res[23][:] = zoq
-    res[24][:] = uref
-    res[25][:] = tref
-    res[26][:] = qref
-    res[27][:] = itera
-    res[28][:] = dter
-    res[29][:] = dqer
-    res[30][:] = dtwl
-    res[31][:] = qair
-    res[32][:] = qsea
-    res[33][:] = Rl
-    res[34][:] = Rs
-    res[35][:] = Rnl
-    res[36][:] = np.sqrt(np.power(wind, 2)-np.power(spd, 2))
-    res[37][:] = Rb
-    res[38][:] = rh
-    res[39][:] = tkt
-    res[40][:] = lv
-
-    if (out == 0):
-        res[:, ind] = np.nan
-        # set missing values where data have non acceptable values
-        if (hum[0] != 'no'):
-            res = np.asarray([np.where(q10n < 0, np.nan,
-                                       res[i][:]) for i in range(41)])
-        res = np.asarray([np.where(u10n < 0, np.nan,
-                                   res[i][:]) for i in range(41)])
-    elif (out == 1):
-        print("Warning: the output will contain values for points that have"
-              " not converged and negative values (if any) for u10n/q10n")
-    # output with pandas
-    resAll = pd.DataFrame(data=res.T, index=range(len(spd)),
-                          columns=["tau", "shf", "lhf", "L", "cd", "cdn", "ct",
-                                   "ctn", "cq", "cqn", "tsrv", "tsr", "qsr",
-                                   "usr", "psim", "psit", "psiq", "u10n",
-                                   "t10n", "tv10n", "q10n", "zo", "zot", "zoq",
-                                   "uref", "tref", "qref", "iteration", "dter",
-                                   "dqer", "dtwl", "qair", "qsea", "Rl", "Rs",
-                                   "Rnl", "ug", "Rib", "rh", "delta", "lv"])
-    resAll["flag"] = flag
     return resAll
