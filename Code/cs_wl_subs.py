@@ -1,10 +1,12 @@
-import numpy as np
+﻿import numpy as np
 from util_subs import (CtoK, kappa)
 
-def cs_C35(sst, rho, Rs, Rnl, cp, lv, delta, usr, tsr, qsr, g):
+
+def cs_C35(sst, rho, Rs, Rnl, cp, lv, delta, usr, tsr, qsr, grav):
     """
-    Computes cool skin
-    following COARE3.5 (Fairall et al. 1996, Edson et al. 2013)
+    Compute cool skin.
+
+    Based on COARE3.5 (Fairall et al. 1996, Edson et al. 2013)
 
     Parameters
     ----------
@@ -30,7 +32,7 @@ def cs_C35(sst, rho, Rs, Rnl, cp, lv, delta, usr, tsr, qsr, g):
        star temperature              [K]
     qsr : float
        star humidity                 [g/kg]
-    g : float
+    grav : float
        gravity                      [ms^-2]
 
     Returns
@@ -43,7 +45,7 @@ def cs_C35(sst, rho, Rs, Rnl, cp, lv, delta, usr, tsr, qsr, g):
        cool skin thickness           [m]
     """
     # coded following Saunders (1967) with lambda = 6
-    if (np.nanmin(sst) > 200):  # if sst in Kelvin convert to Celsius
+    if np.nanmin(sst) > 200:  # if sst in Kelvin convert to Celsius
         sst = sst-CtoK
     # ************  cool skin constants  *******
     # density of water, specific heat capacity of water, water viscosity,
@@ -51,7 +53,7 @@ def cs_C35(sst, rho, Rs, Rnl, cp, lv, delta, usr, tsr, qsr, g):
     rhow, cpw, visw, tcw = 1022, 4000, 1e-6, 0.6
     for i in range(4):
         aw = 2.1e-5*np.power(np.maximum(sst+3.2, 0), 0.79)
-        bigc = 16*g*cpw*np.power(rhow*visw, 3)/(np.power(tcw, 2)*np.power(
+        bigc = 16*grav*cpw*np.power(rhow*visw, 3)/(np.power(tcw, 2)*np.power(
             rho, 2))
         Rns = 0.945*Rs  # albedo correction
         shf = rho*cp*usr*tsr
@@ -69,9 +71,10 @@ def cs_C35(sst, rho, Rs, Rnl, cp, lv, delta, usr, tsr, qsr, g):
 # ---------------------------------------------------------------------
 
 
-def delta(aw, Q, usr, g):
+def delta(aw, Q, usr, grav):
     """
-    Computes the thickness (m) of the viscous skin layer.
+    Compute the thickness (m) of the viscous skin layer.
+
     Based on Fairall et al., 1996 and cited in IFS Documentation Cy46r1
     eq. 8.155 p. 164
 
@@ -83,7 +86,7 @@ def delta(aw, Q, usr, g):
         part of the net heat flux actually absorbed in the warm layer [W/m^2]
     usr : float
         friction velocity in the air (u*) [m/s]
-    g : float
+    grav : float
        gravity                      [ms^-2]
 
     Returns
@@ -95,7 +98,7 @@ def delta(aw, Q, usr, g):
     rhow, visw, tcw = 1025, 1e-6, 0.6
     # u* in the water
     usr_w = np.maximum(usr, 1e-4)*np.sqrt(1.2/rhow)  # rhoa=1.2
-    rcst_cs = 16*g*np.power(visw, 3)/np.power(tcw, 2)
+    rcst_cs = 16*grav*np.power(visw, 3)/np.power(tcw, 2)
     lm = 6*(1+np.maximum(Q*aw*rcst_cs/np.power(usr_w, 4), 0)**0.75)**(-1/3)
     ztmp = visw/usr_w
     delta = np.where(Q > 0, np.minimum(6*ztmp, 0.007), lm*ztmp)
@@ -104,7 +107,7 @@ def delta(aw, Q, usr, g):
 
 # version that doesn't output dqer or import/output delta
 # should be very similar to cs_ecmwf
-# def cs_C35(sst, rho, Rs, Rnl, cp, lv, usr, tsr, qsr, g):
+# def cs_C35(sst, rho, Rs, Rnl, cp, lv, usr, tsr, qsr, grav):
 #     """
 #     Compute cool skin.
 
@@ -132,7 +135,7 @@ def delta(aw, Q, usr, g):
 #         star temperature              [K]
 #     qsr : float
 #         star humidity                 [g/kg]
-#     g : float
+#     grav : float
 #         gravity                      [ms^-2]
 
 #     Returns
@@ -150,13 +153,13 @@ def delta(aw, Q, usr, g):
 #     # thermal conductivity of water
 #     rhow, cpw, visw, tcw = 1022, 4000, 1e-6, 0.6
 #     aw = 2.1e-5*np.power(np.maximum(sst+3.2, 0), 0.79)
-#     bigc = 16*g*cpw*np.power(rhow*visw, 3)/(np.power(tcw, 2)*np.power(
+#     bigc = 16*grav*cpw*np.power(rhow*visw, 3)/(np.power(tcw, 2)*np.power(
 #         rho, 2))
 #     Rns = 0.945*Rs  # albedo correction
 #     shf = rho*cp*usr*tsr
 #     lhf = rho*lv*usr*qsr
 #     Qnsol = shf+lhf+Rnl
-#     d = delta(aw, Qnsol, usr, g)
+#     d = delta(aw, Qnsol, usr, grav)
 #     for i in range(4):
 #         fs = 0.065+11*d-6.6e-5/d*(1-np.exp(-d/8.0e-4))
 #         qcol = Qnsol+Rns*fs
@@ -170,7 +173,7 @@ def delta(aw, Q, usr, g):
 # ---------------------------------------------------------------------
 
 
-def cs_ecmwf(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, sst, g):
+def cs_ecmwf(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, sst, grav):
     """
     cool skin adjustment based on IFS Documentation cy46r1
 
@@ -194,7 +197,7 @@ def cs_ecmwf(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, sst, g):
        star humidity                 [g/kg]
     sst : float
         sea surface temperature  [K]
-    g : float
+    grav : float
        gravity                      [ms^-2]
 
     Returns
@@ -203,28 +206,28 @@ def cs_ecmwf(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, sst, g):
         cool skin temperature correction [K]
 
     """
-    if (np.nanmin(sst) < 200):  # if sst in Celsius convert to Kelvin
+    if np.nanmin(sst) < 200:  # if sst in Celsius convert to Kelvin
         sst = sst+CtoK
     aw = np.maximum(1e-5, 1e-5*(sst-CtoK))
     Rns = 0.945*Rs  # (net solar radiation (albedo correction)
     shf = rho*cp*usr*tsr
     lhf = rho*lv*usr*qsr
     Qnsol = shf+lhf+Rnl  # eq. 8.152
-    d = delta(aw, Qnsol, usr, g)
+    d = delta(aw, Qnsol, usr, grav)
     for jc in range(4):  # because implicit in terms of delta...
         # # fraction of the solar radiation absorbed in layer delta eq. 8.153
         # and Eq.(5) Zeng & Beljaars, 2005
         fs = 0.065+11*d-6.6e-5/d*(1-np.exp(-d/8e-4))
         Q = Qnsol+fs*Rns
-        d = delta(aw, Q, usr, g)
+        d = delta(aw, Q, usr, grav)
     dtc = Q*d/0.6  # (rhow*cw*kw)eq. 8.151
     return dtc
 # ---------------------------------------------------------------------
 
 
-def wl_ecmwf(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, sst, skt, dtc, g):
+def wl_ecmwf(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, sst, skt, dtc, grav):
     """
-    warm layer correction following IFS Documentation cy46r1
+    Calculate warm layer correction following IFS Documentation cy46r1.
     and aerobulk (Brodeau et al., 2016)
 
     Parameters
@@ -251,7 +254,7 @@ def wl_ecmwf(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, sst, skt, dtc, g):
         skin sst from previous step [K]
     dtc : float
         cool skin correction        [K]
-    g : float
+    grav : float
        gravity                      [ms^-2]
 
     Returns
@@ -260,12 +263,13 @@ def wl_ecmwf(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, sst, skt, dtc, g):
         warm layer correction       [K]
 
     """
-    if (np.nanmin(sst) < 200):  # if sst in Celsius convert to Kelvin
+    if np.nanmin(sst) < 200:  # if sst in Celsius convert to Kelvin
         sst = sst+CtoK
     rhow, cpw, visw, rd0 = 1025, 4190, 1e-6, 3
     Rns = 0.945*Rs
     #  Previous value of dT / warm-layer, adapted to depth:
-    aw = 2.1e-5*np.power(np.maximum(sst-CtoK+3.2, 0), 0.79)  # thermal expansion coefficient of sea-water (SST accurate enough#)
+    # thermal expansion coefficient of sea-water (SST accurate enough#)
+    aw = 2.1e-5*np.power(np.maximum(sst-CtoK+3.2, 0), 0.79)
     # *** Rd = Fraction of solar radiation absorbed in warm layer (-)
     a1, a2, a3 = 0.28, 0.27, 0.45
     b1, b2, b3 = -71.5, -2.8, -0.06  # [m-1]
@@ -274,18 +278,18 @@ def wl_ecmwf(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, sst, skt, dtc, g):
     lhf = rho*lv*usr*qsr
     Qnsol = shf+lhf+Rnl
     usrw = np.maximum(usr, 1e-4)*np.sqrt(1.2/rhow)   # u* in the water
-    zc3 = rd0*kappa*g/np.power(1.2/rhow, 3/2)
+    zc3 = rd0*kappa*grav/np.power(1.2/rhow, 3/2)
     zc4 = (0.3+1)*kappa/rd0
     zc5 = (0.3+1)/(0.3*rd0)
-    for jwl in range(10):  # itteration to solve implicitely equation for warm layer
+    for jwl in range(10):  # iteration to solve implicitely eq. for warm layer
         dsst = skt-sst-dtc
         # Buoyancy flux and stability parameter (zdl = -z/L) in water
         ZSRD = (Qnsol+Rns*Rd)/(rhow*cpw)
         ztmp = np.maximum(dsst, 0)
         zdl = np.where(ZSRD > 0, 2*(np.power(usrw, 2) *
-                                    np.sqrt(ztmp/(5*rd0*g*aw/visw)))+ZSRD,
-                       np.power(usrw, 2)*np.sqrt(ztmp/(5*rd0*g*aw/visw)))
-        usr = np.maximum(usr, 1e-4 )
+                                    np.sqrt(ztmp/(5*rd0*grav*aw/visw)))+ZSRD,
+                       np.power(usrw, 2)*np.sqrt(ztmp/(5*rd0*grav*aw/visw)))
+        usr = np.maximum(usr, 1e-4)
         zdL = zc3*aw*zdl/np.power(usr, 3)
         # Stability function Phi_t(-z/L) (zdL is -z/L) :
         zphi = np.where(zdL > 0, (1+(5*zdL+4*np.power(zdL, 2)) /
@@ -299,7 +303,7 @@ def wl_ecmwf(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, sst, skt, dtc, g):
 # ----------------------------------------------------------------------
 
 
-def cs_Beljaars(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, g, Qs):
+def cs_Beljaars(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, grav, Qs):
     """
     cool skin adjustment based on Beljaars (1997)
     air-sea interaction in the ECMWF model
@@ -322,7 +326,7 @@ def cs_Beljaars(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, g, Qs):
        star temperature              [K]
     qsr : float
        star humidity                 [g/kg]
-    g : float
+    grav : float
        gravity                      [ms^-2]
     Qs : float
       radiation balance
@@ -344,8 +348,8 @@ def cs_Beljaars(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, g, Qs):
     shf = rho*cp*usr*tsr
     lhf = rho*lv*usr*qsr
     Q = Rnl+shf+lhf+Qs
-    xt = (16*Q*g*aw*cpw*np.power(rhow*visw, 3))/(np.power(usr, 4) *
-                                                 np.power(rho*tcw, 2))
+    xt = 16*Q*grav*aw*cpw*np.power(rhow*visw, 3)/(
+        np.power(usr, 4)*np.power(rho*tcw, 2))
     xt1 = 1+np.power(xt, 3/4)
     # Saunders const  eq. 22
     ls = np.where(Q > 0, 6/np.power(xt1, 1/3), 6)
@@ -382,9 +386,9 @@ def get_dqer(dter, sst, qsea, lv):
        humidity correction            [g/kg]
 
     """
-    if (np.nanmin(sst) < 200):  # if sst in Celsius convert to Kelvin
+    if np.nanmin(sst) < 200:  # if sst in Celsius convert to Kelvin
         sst = sst+CtoK
     wetc = 0.622*lv*qsea/(287.1*np.power(sst, 2))
     dqer = wetc*dter
     return dqer
-
+    
