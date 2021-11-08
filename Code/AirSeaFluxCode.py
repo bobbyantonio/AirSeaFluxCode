@@ -61,6 +61,7 @@ class S88:
         self.dt_full = self.theta-self.SST
 
     def _fix_coolskin_warmlayer(self, wl, cskin, skin, Rl, Rs):
+        skin = self.skin if skin is None else skin
         assert wl in [0, 1], "wl not valid"
         assert cskin in [0, 1], "cskin not valid"
         assert skin in ["C35", "ecmwf", "Beljaars"], "Skin value not valid"
@@ -78,10 +79,13 @@ class S88:
         self.Rs = np.full(self.spd.shape, np.nan) if Rs is None else Rs
         self.Rl = np.full(self.spd.shape, np.nan) if Rl is None else Rl
 
-    def set_coolskin_warmlayer(self, wl=0, cskin=0, skin="C35", Rl=None,
+    def set_coolskin_warmlayer(self, wl=0, cskin=0, skin=None, Rl=None,
                                Rs=None):
         wl = 0 if wl is None else wl
+        if hasattr(self, "skin") == False:
+            self.skin = "C35"
         self._fix_coolskin_warmlayer(wl, cskin, skin, Rl, Rs)
+
 
     def _update_coolskin_warmlayer(self, ind):
         if self.cskin == 1:
@@ -647,39 +651,43 @@ class UA(S88):
 
 
 class C30(S88):
-    def set_coolskin_warmlayer(self, wl=0, cskin=1, skin="C35", Rl=None, Rs=None):
-        self._fix_coolskin_warmlayer(wl, cskin, skin, Rl, Rs)
+    # def set_coolskin_warmlayer(self, wl=0, cskin=1, skin="C35", Rl=None, Rs=None):
+    #     self._fix_coolskin_warmlayer(wl, cskin, skin, Rl, Rs)
 
     def __init__(self):
         self.meth = "C30"
         self.default_gust = [1, 1.2, 600]
+        self.skin = "C35"
 
 class C35(C30):
     def __init__(self):
         self.meth = "C35"
         self.default_gust = [1, 1.2, 600]
+        self.skin = "C35"
 
 class ecmwf(C30):
-    def set_coolskin_warmlayer(self, wl=0, cskin=1, skin="ecmwf", Rl=None,
-                               Rs=None):
-        self._fix_coolskin_warmlayer(wl, cskin, skin, Rl, Rs)
+    # def set_coolskin_warmlayer(self, wl=0, cskin=1, skin="ecmwf", Rl=None,
+    #                            Rs=None):
+    #     self._fix_coolskin_warmlayer(wl, cskin, skin, Rl, Rs)
 
     def __init__(self):
         self.meth = "ecmwf"
         self.default_gust = [1, 1, 1000]
+        self.skin = "ecmwf"
 
 class Beljaars(C30):
-    def set_coolskin_warmlayer(self, wl=0, cskin=1, skin="Beljaars", Rl=None,
-                               Rs=None):
-        self._fix_coolskin_warmlayer(wl, cskin, skin, Rl, Rs)
+    # def set_coolskin_warmlayer(self, wl=0, cskin=1, skin="Beljaars", Rl=None,
+    #                            Rs=None):
+    #     self._fix_coolskin_warmlayer(wl, cskin, skin, Rl, Rs)
 
     def __init__(self):
         self.meth = "Beljaars"
         self.default_gust = [1, 1, 1000]
+        self.skin = "Beljaars"
 
 
 def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
-                   Rl=None, Rs=None, cskin=None, skin="C35", wl=0, gust=None,
+                   Rl=None, Rs=None, cskin=0, skin=None, wl=0, gust=None,
                    meth="S88", qmeth="Buck2", tol=None, maxiter=10, out=0,
                    L=None):
     """
