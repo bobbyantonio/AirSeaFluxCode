@@ -147,12 +147,13 @@ class S88:
 
         # ------------
 
-        dummy_array = lambda val : np.full(self.T.shape, val)*self.msk
+        # dummy_array = lambda val : np.full(self.T.shape, val)*self.msk
+        def dummy_array(val): return np.full(self.T.shape, val)*self.msk
         if self.cskin + self.wl > 0:
             self.dter, self.tkt, self.dtwl = [
                 dummy_array(x) for x in (-0.3, 0.001, 0.3)]
-            self.dqer = get_dqer(self.dter[ind], self.SST[ind], self.qsea[ind],
-                                 self.lv[ind])
+            self.dqer = get_dqer(self.dter, self.SST, self.qsea,
+                                 self.lv)
             self.Rnl = 0.97*(self.Rl-5.67e-8*np.power(
                 self.SST-0.3*self.cskin, 4))
             self.Qs = 0.945*self.Rs
@@ -210,7 +211,8 @@ class S88:
             np.zeros(self.arr_shp)*self.msk for _ in range(4)]
 
         # extreme values for first comparison
-        dummy_array = lambda val : np.full(self.arr_shp, val)*self.msk
+        dummy_array = lambda val: np.full(self.arr_shp, val)*self.msk
+        # you can use def instead of lambda
         # def dummy_array(val): return np.full(self.arr_shp, val)*self.msk
         self.itera, self.tau, self.sensible, self.latent = [
             dummy_array(x) for x in (-1, 1e+99, 1e+99, 1e+99)]
@@ -310,10 +312,10 @@ class S88:
                                                self.dter[ind]*self.cskin, 4))
             # not sure how to handle lapse/potemp
             # well-mixed in potential temperature ...
-            self.t10n[ind] = self.theta[ind] - self.tlapse[ind]*self.ref10 - \
+            self.t10n[ind] = self.theta[ind]-self.tlapse[ind]*self.ref10 - \
                 self.tsr[ind]/kappa * \
-                (np.log(self.h_in[1, ind]/self.ref10)-self.psit[ind])
-            self.q10n[ind] = self.qair[ind] - self.qsr[ind]/kappa * \
+                    (np.log(self.h_in[1, ind]/self.ref10)-self.psit[ind])
+            self.q10n[ind] = self.qair[ind]-self.qsr[ind]/kappa * \
                 (np.log(self.h_in[2, ind]/self.ref10)-self.psiq[ind])
 
             # update stability info
@@ -358,7 +360,7 @@ class S88:
             new = np.array([np.copy(getattr(self, i)) for i in new_vars])
 
             if it > 2:  # force at least three iterations
-                d = np.abs(new-old)                 # change over this iteration
+                d = np.abs(new-old)  # change over this iteration
                 for ii in range(0, len(tol_vals)):
                     d[ii, ] = d[ii, ]/tol_vals[ii]  # ratio to tolerance
                 # identifies non-convergence
@@ -376,22 +378,21 @@ class S88:
 
 
     def _get_humidity(self):
-        "RH used for flagging purposes & output"
+        """Calculate RH used for flagging purposes & output."""
         if self.hum[0] in ('rh', 'no'):
             self.rh = self.hum[1]
         elif self.hum[0] == 'Td':
             Td = self.hum[1]  # dew point temperature (K)
             Td = np.where(Td < 200, np.copy(Td)+CtoK, np.copy(Td))
             T = np.where(self.T < 200, np.copy(self.T)+CtoK, np.copy(self.T))
-            #T = np.copy(self.T)
+            # T = np.copy(self.T)
             esd = 611.21*np.exp(17.502*((Td-CtoK)/(Td-32.19)))
             es = 611.21*np.exp(17.502*((T-CtoK)/(T-32.19)))
             self.rh = 100*esd/es
 
-    def _flag(self,out=0):
-        "Set the general flags"
-
-        flag = np.full(self.arr_shp, "n",dtype="object")
+    def _flag(self, out=0):
+        """Set the general flags."""
+        flag = np.full(self.arr_shp, "n", dtype="object")
 
         if self.hum[0] == 'no':
             if self.cskin == 1:
@@ -404,8 +405,8 @@ class S88:
         else:
             if self.cskin == 1:
                 flag = np.where(np.isnan(
-                    self.spd+self.T+self.SST+self.hum[1]+self.P + \
-                        self.Rs+self.Rl), "m", flag)
+                    self.spd+self.T+self.SST+self.hum[1]+self.P +
+                    self.Rs+self.Rl), "m", flag)
             else:
                 flag = np.where(
                     np.isnan(self.spd+self.T+self.SST+self.hum[1]+self.P),
@@ -456,7 +457,7 @@ class S88:
 
         assert out in [0, 1], "out must be either 0 or 1"
 
-        self._get_humidity() # Get the Relative humidity
+        self._get_humidity()  # Get the Relative humidity
         self._flag(out=out)  # Get flags
 
         # remove effect of gustiness following Fairall et al. (2003)
@@ -498,9 +499,9 @@ class S88:
         res_vars = ("tau", "sensible", "latent", "monob", "cd", "cd10n", "ct",
                     "ct10n", "cq", "cq10n", "tsrv", "tsr", "qsr", "usr",
                     "psim", "psit", "psiq", "u10n", "t10n", "q10n", "zo",
-                    "zot", "zoq", "uref", "tref", "qref", "itera", "dter",
+                    "zot", "zoq", "uref", "tref", "qref", "dter",
                     "dqer", "dtwl", "qair", "qsea", "Rl", "Rs", "Rnl", "ug",
-                    "Rb", "rh", "tkt", "lv")
+                    "Rb", "rh", "tkt", "lv", "itera")
 
         res = np.zeros((len(res_vars), len(self.spd)))
         for i, value in enumerate(res_vars):
@@ -510,17 +511,19 @@ class S88:
             res[:, self.ind] = np.nan
             # set missing values where data have non acceptable values
             if self.hum[0] != 'no':
-                res = np.asarray([np.where(self.q10n < 0, np.nan, res[i][:])
-                                 for i in range(len(res_vars))])
-            res = np.asarray([np.where(self.u10n < 0, np.nan, res[i][:])
-                             for i in range(len(res_vars))])
+                res[:-1] = np.asarray([np.where(self.q10n < 0, np.nan, res[i][:])
+                                 for i in range(len(res_vars)-1)])
+                # len(res_vars)-1 instead of len(res_vars) in order to keep
+                # itera= -1 for no convergence
+            res[:-1] = np.asarray([np.where(self.u10n < 0, np.nan, res[i][:])
+                             for i in range(len(res_vars)-1)])
         else:
             warnings.warn("Warning: the output will contain values for points"
                           " that have not converged and negative values "
                           "(if any) for u10n/q10n")
 
-        resAll = pd.DataFrame(data=res.T, index=range(
-            self.nlen), columns=res_vars)
+        resAll = pd.DataFrame(data=res.T, index=range(self.nlen),
+                              columns=res_vars)
 
         resAll["flag"] = self.flag
 
@@ -550,7 +553,6 @@ class S88:
         self.Rb = np.empty(SST.shape)*self.msk
 
     def add_gust(self, gust=None):
-
         if np.all(gust is None):
             try:
                 gust = self.default_gust
@@ -592,6 +594,7 @@ class S88:
 
     def __init__(self):
         self.meth = "S88"
+        self.default_gust = [0, 0, 0]
 
 class S80(S88):
 
@@ -599,11 +602,14 @@ class S80(S88):
         self.meth = "S80"
         self.u_lo = [6, 6]
         self.u_hi = [22, 22]
+        self.default_gust = [0, 0, 0]
 
 class YT96(S88):
 
     def __init__(self):
         self.meth = "YT96"
+        self.default_gust = [0, 0, 0]
+        # no limits to u range as we use eq. 21 for cdn
         # self.u_lo = [0, 3]
         # self.u_hi = [26, 26]
 
@@ -611,6 +617,7 @@ class LP82(S88):
 
     def __init__(self):
         self.meth = "LP82"
+        self.default_gust = [0, 0, 0]
         self.u_lo = [3, 3]
         self.u_hi = [25, 25]
 
@@ -626,6 +633,7 @@ class NCAR(S88):
 
     def __init__(self):
         self.meth = "NCAR"
+        self.default_gust = [0, 0, 0]
         self.u_lo = [0.5, 0.5]
         self.u_hi = [999, 999]
 
@@ -713,12 +721,13 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
         wl : int
             warm layer correction default is 0, to switch on set to 1
         gust : int
-            3x1 [x, beta, zi] x=1 to include the effect of gustiness, else 0
+            4x1 [x, gf, beta, zi] x=1 to include the effect of gustiness,
+            else 0; gf="gfON" or "gfOFF" to use gustiness factor;
             beta gustiness parameter, beta=1 for UA, beta=1.2 for COARE
-            zi PBL height (m) 600 for COARE, 1000 for UA and ecmwf, 800 default
+            zi PBL height (m) 600 for COARE, 1000 for UA and ecmwf
             default for COARE [1, 1.2, 600]
             default for UA, ecmwf [1, 1, 1000]
-            default else [1, 1.2, 800]
+            else default is switched OFF
         meth : str
             "S80", "S88", "LP82", "YT96", "UA", "NCAR", "C30", "C35",
             "ecmwf", "Beljaars"
@@ -776,29 +785,31 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
                        24. wind speed at reference height (uref)
                        25. temperature at reference height (tref)
                        26. specific humidity at reference height (qref)
-                       27. number of iterations until convergence
-                       28. cool-skin temperature depression (dter)
-                       29. cool-skin humidity depression (dqer)
-                       30. warm layer correction (dtwl)
-                       31. specific humidity of air (qair)
-                       32. specific humidity at sea surface (qsea)
-                       33. downward longwave radiation (Rl)
-                       34. downward shortwave radiation (Rs)
-                       35. downward net longwave radiation (Rnl)
-                       36. gust wind speed (ug)
-                       37. Bulk Richardson number (Rib)
-                       38. relative humidity (rh)
-                       39. thickness of the viscous layer (delta)
-                       40. lv latent heat of vaporization (Jkg−1)
+                       27. cool-skin temperature depression (dter)
+                       28. cool-skin humidity depression (dqer)
+                       29. warm layer correction (dtwl)
+                       30. specific humidity of air (qair)
+                       31. specific humidity at sea surface (qsea)
+                       32. downward longwave radiation (Rl)
+                       33. downward shortwave radiation (Rs)
+                       34. downward net longwave radiation (Rnl)
+                       35. gust wind speed (ug)
+                       36. Bulk Richardson number (Rib)
+                       37. relative humidity (rh)
+                       38. thickness of the viscous layer (delta)
+                       39. lv latent heat of vaporization (Jkg−1)
+                       40. number of iterations until convergence
                        41. flag ("n": normal, "o": out of nominal range,
                                  "u": u10n<0, "q":q10n<0
                                  "m": missing,
                                  "l": Rib<-0.5 or Rib>0.2 or z/L>1000,
                                  "r" : rh>100%,
-                                 "t" : t10n < 173K or t10n > 373K
+                                 "t" : t10n<173K or t10n>373K
                                  "i": convergence fail at n)
 
     2021 / Author S. Biri
+    2021 / Restructured by R. Cornes
+    2021 / Simplified by E. Kent
     """
     logging.basicConfig(filename='flux_calc.log', filemode="w",
                         format='%(asctime)s %(message)s', level=logging.INFO)
