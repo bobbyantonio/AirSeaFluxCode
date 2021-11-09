@@ -1,4 +1,4 @@
-﻿import warnings
+import warnings
 import numpy as np
 import pandas as pd
 import logging
@@ -38,6 +38,7 @@ class S88:
             # not sure this is needed - perhaps only to remove effects of
             # initalisation of wind
             self.wind[ind] = np.copy(self.spd[ind])
+
 
     def get_heights(self, hin, hout=10):
         self.hout = hout
@@ -561,7 +562,8 @@ class S88:
             try:
                 gust = self.default_gust
             except AttributeError:
-                gust = [1, 1.2, 800]
+                gust = [0, 0, 0]  # gustiness OFF
+                # gust = [1, 1.2, 800]
         elif ((np.size(gust) < 3) and (gust == 0)):
             gust = [0, 0, 0]
 
@@ -598,7 +600,6 @@ class S88:
 
     def __init__(self):
         self.meth = "S88"
-        self.default_gust = [0, 0, 0]
 
 class S80(S88):
 
@@ -606,13 +607,12 @@ class S80(S88):
         self.meth = "S80"
         self.u_lo = [6, 6]
         self.u_hi = [22, 22]
-        self.default_gust = [0, 0, 0]
+
 
 class YT96(S88):
 
     def __init__(self):
         self.meth = "YT96"
-        self.default_gust = [0, 0, 0]
         # no limits to u range as we use eq. 21 for cdn
         # self.u_lo = [0, 3]
         # self.u_hi = [26, 26]
@@ -621,7 +621,6 @@ class LP82(S88):
 
     def __init__(self):
         self.meth = "LP82"
-        self.default_gust = [0, 0, 0]
         self.u_lo = [3, 3]
         self.u_hi = [25, 25]
 
@@ -637,7 +636,6 @@ class NCAR(S88):
 
     def __init__(self):
         self.meth = "NCAR"
-        self.default_gust = [0, 0, 0]
         self.u_lo = [0.5, 0.5]
         self.u_hi = [999, 999]
 
