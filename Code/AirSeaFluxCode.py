@@ -10,7 +10,7 @@ from cs_wl_subs import *
 
 class S88:
     def _wind_iterate(self, ind):
-        if self.gust[0] == 1:
+        if self.gust[0] in [1, 2]:
             self.wind[ind] = np.sqrt(np.power(np.copy(self.spd[ind]), 2) +
                                      np.power(get_gust(self.gust[1],
                                                        self.theta[ind],
@@ -22,16 +22,18 @@ class S88:
             # if we update wind, also need to update u10n
             # remove effect of gustiness following Fairall et al. (2003)
             # usr is divided by (GustFact)^0.5
-            self.u10n[ind] = self.wind[ind]-self.usr[ind]/kappa/np.power(
-                self.GustFact[ind],0.5)*(np.log(self.h_in[0, ind]/self.ref10) -
-                                         self.psim[ind])
-            # option to not remove GustFact
-            # self.u10n[ind] = self.wind[ind]-self.usr[ind]/kappa * \
-            #     (np.log(self.h_in[0, ind]/self.ref10) - self.psim[ind])
+            self.u10n[ind] = self.wind[ind]-self.usr[ind]/kappa/np.sqrt(
+                self.GustFact[ind])*(np.log(self.h_in[0, ind]/self.ref10) -
+                                     self.psim[ind])
+            if self.gust[0] == 2:
+                self.GustFact[ind] = 1
+                # option to not remove GustFact
+                self.u10n[ind] = self.wind[ind]-self.usr[ind]/kappa*(
+                    np.log(self.h_in[0, ind]/self.ref10)-self.psim[ind])
             # these lines integrate up from the surface - doesn't work when
             # gustiness is on
             # self.u10n[ind] = self.usr[ind]/kappa/np.power(
-            #     self.GustFact[ind],0.5)*(np.log(self.ref10/self.zo[ind]))
+            #     self.GustFact[ind], 0.5)*(np.log(self.ref10/self.zo[ind]))
             # self.u10n[ind] = self.usr[ind]/kappa * \
             #     (np.log(self.ref10/self.zo[ind]))
         else:
@@ -79,6 +81,7 @@ class S88:
         self.skin = skin
         self.Rs = np.full(self.spd.shape, np.nan) if Rs is None else Rs
         self.Rl = np.full(self.spd.shape, np.nan) if Rl is None else Rl
+        # print(self.meth, self.cskin, self.skin, self.wl)
 
     def set_coolskin_warmlayer(self, wl=0, cskin=0, skin=None, Rl=None,
                                Rs=None):
@@ -256,11 +259,15 @@ class S88:
             # self.u10n[ind] = self.usr[ind]/kappa*(
             #     np.log(self.ref10/self.zo[ind]))
             # lines below with and without gustfactor
-            self.u10n[ind] = self.wind[ind]-self.usr[ind]/kappa/np.power(
-                self.GustFact[ind], 0.5)*(
-                    np.log(self.h_in[0, ind]/self.ref10)-self.psim[ind])
-            # self.u10n[ind] = self.wind[ind]-self.usr[ind]/kappa*(
-            #     np.log(self.h_in[0, ind]/self.ref10)-self.psim[ind])
+            # if self.gust[0] == 1:
+            #     self.u10n[ind] = self.wind[ind]-self.usr[ind]/kappa/np.sqrt(
+            #         self.GustFact[ind], 0.5)*(np.log(
+            #             self.h_in[0, ind]/self.ref10)-self.psim[ind])
+            # elif self.gust[0] == 2:
+            #     self.u10n[ind] = self.wind[ind]-self.usr[ind]/kappa*(
+            #         np.log(self.h_in[0, ind]/self.ref10)-self.psim[ind])
+            # Update the wind values
+            self._wind_iterate(ind)
 
 
             # temperature
@@ -353,9 +360,9 @@ class S88:
             # GustFact should be 1 if gust is OFF
             self.tau = self.rho*np.power(self.usr, 2)/self.GustFact
             self.sensible = self.rho*self.cp*self.usr / \
-                np.power(self.GustFact, 0.5)*self.tsr
+                np.sqrt(self.GustFact)*self.tsr
             self.latent = self.rho*self.lv*self.usr / \
-                np.power(self.GustFact, 0.5)*self.qsr
+                np.sqrt(self.GustFact)*self.qsr
             # or leave as it is - gusty wind speed, or no gust
             # self.tau = self.rho*np.power(self.usr, 2)
             # self.sensible = self.rho*self.cp*self.usr*self.tsr
@@ -467,7 +474,7 @@ class S88:
 
         # remove effect of gustiness following Fairall et al. (2003)
         # usr is divided by (GustFact)^0.5
-        self.uref = self.spd-self.usr/kappa/np.power(self.GustFact, 0.5) * \
+        self.uref = self.spd-self.usr/kappa/np.sqrt(self.GustFact) * \
             (np.log(self.h_in[0]/self.h_out[0])-self.psim +
              psim_calc(self.h_out[0]/self.monob, self.meth))
         # include lapse rate adjustment as theta is well-mixed
@@ -516,12 +523,14 @@ class S88:
             res[:, self.ind] = np.nan
             # set missing values where data have non acceptable values
             if self.hum[0] != 'no':
-                res[:-1] = np.asarray([np.where(self.q10n < 0, np.nan, res[i][:])
-                                 for i in range(len(res_vars)-1)])
+                res[:-1] = np.asarray([
+                    np.where(self.q10n < 0, np.nan, res[i][:])
+                    for i in range(len(res_vars)-1)])
                 # len(res_vars)-1 instead of len(res_vars) in order to keep
                 # itera= -1 for no convergence
-            res[:-1] = np.asarray([np.where(self.u10n < 0, np.nan, res[i][:])
-                             for i in range(len(res_vars)-1)])
+            res[:-1] = np.asarray([
+                np.where(self.u10n < 0, np.nan, res[i][:])
+                for i in range(len(res_vars)-1)])
         else:
             warnings.warn("Warning: the output will contain values for points"
                           " that have not converged and negative values "
@@ -550,7 +559,7 @@ class S88:
         self.SST = np.where(SST < 200, np.copy(SST)+CtoK, np.copy(SST))
         self.lat = np.full(self.arr_shp, 45) if lat is None else lat
         self.grav = gc(self.lat)
-        self.P = np.full(n, 1013) if P is None else P
+        self.P = np.full(self.nlen, 1013) if P is None else P
 
         # mask to preserve missing values when initialising variables
         self.msk = np.empty(SST.shape)
@@ -568,7 +577,7 @@ class S88:
             gust = [0, 0, 0]
 
         assert np.size(gust) == 3, "gust input must be a 3x1 array"
-        assert gust[0] in [0, 1], "gust at position 0 must be 0 or 1"
+        assert gust[0] in [0, 1, 2], "gust at position 0 must be 0, 1 or 2"
         self.gust = gust
 
     def _class_flag(self):
@@ -727,8 +736,8 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
         wl : int
             warm layer correction default is 0, to switch on set to 1
         gust : int
-            4x1 [x, gf, beta, zi] x=1 to include the effect of gustiness,
-            else 0; gf="gfON" or "gfOFF" to use gustiness factor;
+            3x1 [x, beta, zi] x=0 gustiness is OFF, x=1 gustiness is ON and
+            use gustiness factor, x=2 gustiness is ON and gustiness factor=1;
             beta gustiness parameter, beta=1 for UA, beta=1.2 for COARE
             zi PBL height (m) 600 for COARE, 1000 for UA and ecmwf
             default for COARE [1, 1.2, 600]
