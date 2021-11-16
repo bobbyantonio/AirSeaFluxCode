@@ -24,7 +24,13 @@ class S88:
             # usr is divided by (GustFact)^0.5
             self.u10n[ind] = self.wind[ind]-self.usr[ind]/kappa/np.sqrt(
                 self.GustFact[ind])*(np.log(self.h_in[0, ind]/self.ref10) -
-                                     self.psim[ind])
+                                      self.psim[ind])
+            # temporary as in C35
+            # self.u10n[ind] = self.usr[ind]/kappa/self.GustFact[ind]*np.log(
+            #     self.ref10/self.zo[ind])
+            # temporary as in UA
+            # self.u10n[ind] = self.usr[ind]/kappa/np.log(
+            #     self.ref10/self.zo[ind])
             if self.gust[0] == 2:
                 self.GustFact[ind] = 1
                 # option to not remove GustFact
@@ -40,6 +46,12 @@ class S88:
             # not sure this is needed - perhaps only to remove effects of
             # initalisation of wind
             self.wind[ind] = np.copy(self.spd[ind])
+            self.u10n[ind] = self.wind[ind]-self.usr[ind]/kappa*(
+                    np.log(self.h_in[0, ind]/self.ref10)-self.psim[ind])
+        # temporary to check feed into iteration loop
+        # print('Mean GF: {} | Du {} | u10n {}'.format(
+        #     np.nanmean(self.GustFact), np.nanmean(self.spd-self.wind),
+        #     np.nanmean(self.u10n)))
 
 
     def get_heights(self, hin, hout=10):
@@ -367,6 +379,10 @@ class S88:
             # self.tau = self.rho*np.power(self.usr, 2)
             # self.sensible = self.rho*self.cp*self.usr*self.tsr
             # self.latent = self.rho*self.lv*self.usr*self.qsr
+            # temporary as in C35, UA
+            # self.tau = self.rho*np.power(self.usr, 2)/self.GustFact
+            # self.sensible = self.rho*self.cp*self.usr*self.tsr
+            # self.latent = self.rho*self.lv*self.usr*self.qsr
 
             # Set the new variables (for comparison against "old")
             new = np.array([np.copy(getattr(self, i)) for i in new_vars])
@@ -476,14 +492,47 @@ class S88:
         # usr is divided by (GustFact)^0.5
         self.uref = self.spd-self.usr/kappa/np.sqrt(self.GustFact) * \
             (np.log(self.h_in[0]/self.h_out[0])-self.psim +
-             psim_calc(self.h_out[0]/self.monob, self.meth))
+              psim_calc(self.h_out[0]/self.monob, self.meth))
         # include lapse rate adjustment as theta is well-mixed
         self.tref = self.theta-self.tlapse*self.h_out[1]-self.tsr/kappa * \
             (np.log(self.h_in[1]/self.h_out[1])-self.psit +
-             psit_calc(self.h_out[1]/self.monob, self.meth))
+              psit_calc(self.h_out[1]/self.monob, self.meth))
         self.qref = self.qair-self.qsr/kappa * \
             (np.log(self.h_in[2]/self.h_out[2])-self.psiq +
-             psit_calc(self.h_out[2]/self.monob, self.meth))
+              psit_calc(self.h_out[2]/self.monob, self.meth))
+        # temporary as in C35
+        # self.uref = self.spd+self.usr/kappa/self.GustFact*(
+        #     np.log(self.h_out[0]/self.h_in[0]) -
+        #     psim_calc(self.h_out[0]/self.monob, self.meth) +
+        #     psim_calc(self.h_in[0]/self.monob, self.meth))
+        # self.u10n = ((self.wind+self.usr/kappa*(
+        #     np.log(self.ref10/self.h_in[0]) -
+        #     psim_calc(self.ref10/self.monob, self.meth) +
+        #     psim_calc(self.h_in[0]/self.monob, self.meth)))/self.GustFact +
+        #     psim_calc(self.ref10/self.monob, self.meth) *
+        #     self.usr/kappa/self.GustFact)
+        # self.tref = (self.T+self.tsr/kappa*(
+        #     np.log(self.h_out[1]/self.h_in[1]) -
+        #     psit_calc(self.h_out[1]/self.monob, self.meth) +
+        #     psit_calc(self.h_in[1]/self.monob, self.meth)) +
+        #     self.tlapse*(self.h_in[1]-self.h_out[1]))
+        # self.t10n = self.tref + \
+        #     psit_calc(self.ref10/self.monob, self.meth)*self.tsr/kappa
+        # self.qref = self.qair+self.qsr/kappa*(
+        #     np.log(self.h_out[2]/self.h_in[2])-psit_calc(
+        #         self.h_out[2]/self.monob, self.meth)+psit_calc(
+        #             self.h_in[1]/self.monob, self.meth))
+        # self.q10n = self.qref + \
+        #     psit_calc(self.ref10/self.monob, self.meth)*self.qsr/kappa
+        # temporary as in UA
+        # self.uref = np.where(
+        #     self.ref10/self.monob < 0, self.spd+(self.usr/kappa)*(
+        #         np.log(self.ref10/self.h_in[0])-(psim_calc(
+        #             self.ref10/self.monob, self.meth) -
+        #             psim_calc(self.h_in[0]/self.monob, self.meth))),
+        #     self.spd+(self.usr/kappa)*(np.log(self.ref10/self.h_in[0]) +
+        #                                5*self.ref10/self.monob -
+        #                                5*self.h_in[0]/self.monob))
 
         if self.wl == 0:
             self.dtwl = np.zeros(self.T.shape)*self.msk
