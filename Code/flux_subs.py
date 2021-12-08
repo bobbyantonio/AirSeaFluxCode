@@ -163,14 +163,15 @@ def ctqn_calc(corq, zol, cdn, usr, zo, Ta, meth):
     elif meth == "LP82":
         cqn = np.where((zol <= 0), 1.15*0.001, 1*0.001)
         ctn = np.where((zol <= 0), 1.13*0.001, 0.66*0.001)
-        zot = 10/(np.exp(np.power(kappa, 2) / (ctn*np.log(10/zo))))
-        zoq = 10/(np.exp(np.power(kappa, 2) / (cqn*np.log(10/zo))))
+        zot = 10/(np.exp(np.power(kappa, 2)/(ctn*np.log(10/zo))))
+        zoq = 10/(np.exp(np.power(kappa, 2)/(cqn*np.log(10/zo))))
     elif meth == "NCAR":
+        # Eq. (9),(12), (13) Large & Yeager, 2009
         cqn = np.maximum(34.6*0.001*np.sqrt(cdn), 0.1e-3)
-        ctn = np.maximum(np.where(zol <= 0, 32.7*0.001*np.sqrt(cdn),
-                                  18*0.001*np.sqrt(cdn)), 0.1e-3)
-        zot = 10/(np.exp(np.power(kappa, 2) / (ctn*np.log(10/zo))))
-        zoq = 10/(np.exp(np.power(kappa, 2) / (cqn*np.log(10/zo))))
+        ctn = np.maximum(np.where(zol < 0, 32.7*1e-3*np.sqrt(cdn),
+                                  18*1e-3*np.sqrt(cdn)), 0.1e-3)
+        zot = 10/(np.exp(np.power(kappa, 2)/(ctn*np.log(10/zo))))
+        zoq = 10/(np.exp(np.power(kappa, 2)/(cqn*np.log(10/zo))))
     elif meth == "UA":
         # Zeng et al. 1998 (25)
         rr = usr*zo/visc_air(Ta)
@@ -679,7 +680,6 @@ def get_strs(hin, monob, wind, zo, zot, zoq, dt, dq, cd, ct, cq, meth):
         qsr = np.where(hol2 > 1, kappa*dq/(np.log(monob/zoq)+5-5*zoq/monob +
                                            5*np.log(hin[2]/monob) +
                                            hin[2]/monob-1), qsr)
-
     else:
         usr = wind*np.sqrt(cd)
         tsr = ct*wind*dt/usr
