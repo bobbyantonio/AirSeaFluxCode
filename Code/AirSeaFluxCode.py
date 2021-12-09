@@ -10,35 +10,28 @@ from cs_wl_subs import *
 
 class S88:
     def _wind_iterate(self, ind):
-        if self.gust[0] in [1, 2]:
+        if self.gust[0] in [1, 2, 3]:
             self.wind[ind] = np.sqrt(np.power(np.copy(self.spd[ind]), 2) +
                                      np.power(get_gust(self.gust[1],
                                                        self.theta[ind],
                                                        self.usr[ind],
-                                                       self.tsrv[ind], self.gust[2],
+                                                       self.tsrv[ind],
+                                                       self.gust[2],
                                                        self.grav[ind]), 2))
-           # ratio of gusty to horizontal wind
+            # ratio of gusty to horizontal wind
             self.GustFact[ind] = self.wind[ind]/self.spd[ind]
             # if we update wind, also need to update u10n
             # remove effect of gustiness following Fairall et al. (2003)
             # usr is divided by (GustFact)^0.5
-            self.u10n[ind] = self.wind[ind]-self.usr[ind]/kappa/np.sqrt(
+            self.u10n[ind] = self.spd[ind]-self.usr[ind]/kappa/np.sqrt(
                 self.GustFact[ind])*(np.log(self.h_in[0, ind]/self.ref10) -
                                      self.psim[ind])
             if self.gust[0] == 2:
                 self.GustFact[ind] = 1
                 # option to not remove GustFact
-                self.u10n[ind] = self.wind[ind]-self.usr[ind]/kappa*(
+                self.u10n[ind] = self.spd[ind]-self.usr[ind]/kappa*(
                     np.log(self.h_in[0, ind]/self.ref10)-self.psim[ind])
-            # these lines integrate up from the surface - doesn't work when
-            # gustiness is on
-            # self.u10n[ind] = self.usr[ind]/kappa/np.power(
-            #     self.GustFact[ind], 0.5)*(np.log(self.ref10/self.zo[ind]))
-            # self.u10n[ind] = self.usr[ind]/kappa * \
-            #     (np.log(self.ref10/self.zo[ind]))
         else:
-            # not sure this is needed - perhaps only to remove effects of
-            # initalisation of wind
             self.wind[ind] = np.copy(self.spd[ind])
             self.u10n[ind] = self.wind[ind]-self.usr[ind]/kappa*(
                 np.log(self.h_in[0, ind]/self.ref10)-self.psim[ind])
@@ -50,7 +43,6 @@ class S88:
         self.h_out = get_heights(self.hout, 1)
 
     def get_specHumidity(self, qmeth="Buck2"):
-        # input qair, qsea directly
         self.qair, self.qsea = get_hum(self.hum, self.T, self.SST, self.P,
                                        qmeth)
         if (np.all(np.isnan(self.qsea)) or np.all(np.isnan(self.qair))):
@@ -219,7 +211,7 @@ class S88:
             np.zeros(self.arr_shp)*self.msk for _ in range(4)]
 
         # extreme values for first comparison
-        def dummy_array(val): return np.full(self.arr_shp, val)*self.msk
+        dummy_array = lambda val : np.full(self.T.shape, val)*self.msk
         # you can use def instead of lambda
         # def dummy_array(val): return np.full(self.arr_shp, val)*self.msk
         self.itera, self.tau, self.sensible, self.latent = [
@@ -249,22 +241,6 @@ class S88:
                 self.h_in[0, ind]/self.monob[ind], self.meth)
             self.cd[ind] = cd_calc(
                 self.cd10n[ind], self.h_in[0, ind], self.ref10, self.psim[ind])
-            # remove effect of gustiness following Fairall et al. (2003)
-            # usr is divided by (GustFact)^0.5 (updated in wind_iterate)
-            # these 2 equations integrating from surface should be equivalent
-            # - but they are not due to gustiness
-            # self.u10n[ind] = self.usr[ind]/kappa/np.power(
-            #     self.GustFact[ind],0.5)*(np.log(self.ref10/self.zo[ind]))
-            # self.u10n[ind] = self.usr[ind]/kappa*(
-            #     np.log(self.ref10/self.zo[ind]))
-            # lines below with and without gustfactor
-            # if self.gust[0] == 1:
-            #     self.u10n[ind] = self.wind[ind]-self.usr[ind]/kappa/np.sqrt(
-            #         self.GustFact[ind], 0.5)*(np.log(
-            #             self.h_in[0, ind]/self.ref10)-self.psim[ind])
-            # elif self.gust[0] == 2:
-            #     self.u10n[ind] = self.wind[ind]-self.usr[ind]/kappa*(
-            #         np.log(self.h_in[0, ind]/self.ref10)-self.psim[ind])
             # Update the wind values
             self._wind_iterate(ind)
 
@@ -286,7 +262,7 @@ class S88:
             self.cq[ind] = ctq_calc(
                 self.cd10n[ind], self.cd[ind], self.cq10n[ind],
                 self.h_in[2, ind], self.ref10, self.psiq[ind])
-            
+
             # Some parameterizations set a minimum on parameters
             try:
                 self._minimum_params()
@@ -354,16 +330,16 @@ class S88:
             # remove effect of gustiness following Fairall et al. (2003)
             # usr is divided by (GustFact)^0.5 (here applied to sensible and
             # latent as well as tau)
-            # GustFact should be 1 if gust is OFF
+            # GustFact should be 1 if gust is OFF or gust[0]=2
             self.tau = self.rho*np.power(self.usr, 2)/self.GustFact
-            self.sensible = self.rho*self.cp*self.usr / \
-                np.sqrt(self.GustFact)*self.tsr
-            self.latent = self.rho*self.lv*self.usr / \
-                np.sqrt(self.GustFact)*self.qsr
-            # or leave as it is - gusty wind speed, or no gust
-            # self.tau = self.rho*np.power(self.usr, 2)
-            # self.sensible = self.rho*self.cp*self.usr*self.tsr
-            # self.latent = self.rho*self.lv*self.usr*self.qsr
+            if self.gust[0] == 3:
+                self.sensible = self.rho*self.cp*self.usr*self.tsr
+                self.latent = self.rho*self.lv*self.usr*self.qsr
+            else:
+                self.sensible = self.rho*self.cp*self.usr / \
+                    np.sqrt(self.GustFact)*self.tsr
+                self.latent = self.rho*self.lv*self.usr / \
+                    np.sqrt(self.GustFact)*self.qsr
 
             # Set the new variables (for comparison against "old")
             new = np.array([np.copy(getattr(self, i)) for i in new_vars])
@@ -571,12 +547,12 @@ class S88:
                 gust = self.default_gust
             except AttributeError:
                 gust = [0, 0, 0]  # gustiness OFF
-                # gust = [1, 1.2, 800]
         elif ((np.size(gust) < 3) and (gust == 0)):
             gust = [0, 0, 0]
 
         assert np.size(gust) == 3, "gust input must be a 3x1 array"
-        assert gust[0] in [0, 1, 2], "gust at position 0 must be 0, 1 or 2"
+        assert gust[0] in [
+            0, 1, 2, 3], "gust at position 0 must be 0, 1, 2 or 3"
         self.gust = gust
 
     def _class_flag(self):
@@ -740,19 +716,18 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
             downward shortwave radiation (W/m^2)
         cskin : int
             0 switch cool skin adjustment off, else 1
-            default is 1
+            default is 0
         skin : str
             cool skin method option "C35", "ecmwf" or "Beljaars"
         wl : int
             warm layer correction default is 0, to switch on set to 1
         gust : int
             3x1 [x, beta, zi] x=0 gustiness is OFF, x=1 gustiness is ON and
-            use gustiness factor, x=2 gustiness is ON and gustiness factor=1;
+            use gustiness factor, x=2 gustiness is ON and gustiness factor=1,
+            x=3 gustiness is ON and gustiness factor=1 for the heat fluxes;
             beta gustiness parameter, beta=1 for UA, beta=1.2 for COARE
             zi PBL height (m) 600 for COARE, 1000 for UA and ecmwf
-            default for COARE [1, 1.2, 600]
-            default for UA, ecmwf [1, 1, 1000]
-            else default is switched OFF
+            default is switched OFF
         meth : str
             "S80", "S88", "LP82", "YT96", "UA", "NCAR", "C30", "C35",
             "ecmwf", "Beljaars"
@@ -777,10 +752,9 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
             set 1 to keep points
         L : str
            Monin-Obukhov length definition options
-           "tsrv"  : default for "S80", "S88", "LP82", "YT96", "UA", "NCAR",
-                     "C30", "C35"
-           "Rb" : following ecmwf (IFS Documentation cy46r1), default for
-                  "ecmwf", "Beljaars"
+           "tsrv"  : default
+           "Rb" : following ecmwf (IFS Documentation cy46r1)
+
     Returns
     -------
         res : array that contains
