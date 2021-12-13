@@ -29,9 +29,12 @@ class S88:
             if self.gust[0] == 2:
                 self.GustFact[ind] = 1
                 # option to not remove GustFact
-                self.u10n[ind] = self.spd[ind]-self.usr[ind]/kappa*(
-                    np.log(self.h_in[0, ind]/self.ref10)-self.psim[ind])
+                # self.u10n[ind] = self.wind[ind]-self.usr[ind]/kappa*(
+                #     np.log(self.h_in[0, ind]/self.ref10)-self.psim[ind])
+                self.u10n[ind] = self.usr[ind]/kappa/np.log(
+                    self.ref10/self.zo[ind])
         else:
+            # initalisation of wind
             self.wind[ind] = np.copy(self.spd[ind])
             self.u10n[ind] = self.wind[ind]-self.usr[ind]/kappa*(
                 np.log(self.h_in[0, ind]/self.ref10)-self.psim[ind])
@@ -617,8 +620,7 @@ class NCAR(S88):
         self.cd = np.maximum(np.copy(self.cd), 1e-4)
         self.ct = np.maximum(np.copy(self.ct), 1e-4)
         self.cq = np.maximum(np.copy(self.cq), 1e-4)
-        self.zo = np.minimum(np.copy(self.zo), 0.0025)
-        # self.u10n = np.maximum(np.copy(self.u10n), 0.25)
+        # self.zo = np.minimum(np.copy(self.zo), 0.0025)
 
     def __init__(self):
         self.meth = "NCAR"
@@ -630,7 +632,7 @@ class UA(S88):
 
     def __init__(self):
         self.meth = "UA"
-        self.default_gust = [1, 1, 1000]
+        self.default_gust = [3, 1, 1000]
         self.u_lo = [-999, -999]
         self.u_hi = [18, 18]
 
@@ -641,14 +643,14 @@ class C30(S88):
 
     def __init__(self):
         self.meth = "C30"
-        self.default_gust = [1, 1.2, 600]
+        self.default_gust = [3, 1.2, 600]
         self.skin = "C35"
 
 
 class C35(C30):
     def __init__(self):
         self.meth = "C35"
-        self.default_gust = [1, 1.2, 600]
+        self.default_gust = [3, 1.2, 600]
         self.skin = "C35"
 
 
@@ -664,7 +666,7 @@ class ecmwf(C30):
 
     def __init__(self):
         self.meth = "ecmwf"
-        self.default_gust = [1, 1, 1000]
+        self.default_gust = [3, 1, 1000]
         self.skin = "ecmwf"
 
 
@@ -675,7 +677,7 @@ class Beljaars(C30):
 
     def __init__(self):
         self.meth = "Beljaars"
-        self.default_gust = [1, 1, 1000]
+        self.default_gust = [3, 1, 1000]
         self.skin = "Beljaars"
 
 
