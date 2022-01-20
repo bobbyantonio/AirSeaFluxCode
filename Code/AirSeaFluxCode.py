@@ -20,19 +20,15 @@ class S88:
                                                        self.grav[ind]), 2))
             # ratio of gusty to horizontal wind
             self.GustFact[ind] = self.wind[ind]/self.spd[ind]
-            # if we update wind, also need to update u10n
             # remove effect of gustiness following Fairall et al. (2003)
-            # usr is divided by (GustFact)^0.5
             self.u10n[ind] = self.spd[ind]-self.usr[ind]/kappa/np.sqrt(
                 self.GustFact[ind])*(np.log(self.h_in[0, ind]/self.ref10) -
                                      self.psim[ind])
             if self.gust[0] == 2:
                 self.GustFact[ind] = 1
                 # option to not remove GustFact
-                # self.u10n[ind] = self.wind[ind]-self.usr[ind]/kappa*(
-                #     np.log(self.h_in[0, ind]/self.ref10)-self.psim[ind])
-                self.u10n[ind] = self.usr[ind]/kappa/np.log(
-                    self.ref10/self.zo[ind])
+                self.u10n[ind] = self.wind[ind]-self.usr[ind]/kappa*(
+                     np.log(self.h_in[0, ind]/self.ref10)-self.psim[ind])
         else:
             # initalisation of wind
             self.wind[ind] = np.copy(self.spd[ind])
@@ -372,7 +368,6 @@ class S88:
             Td = self.hum[1]  # dew point temperature (K)
             Td = np.where(Td < 200, np.copy(Td)+CtoK, np.copy(Td))
             T = np.where(self.T < 200, np.copy(self.T)+CtoK, np.copy(self.T))
-            # T = np.copy(self.T)
             esd = 611.21*np.exp(17.502*((Td-CtoK)/(Td-32.19)))
             es = 611.21*np.exp(17.502*((T-CtoK)/(T-32.19)))
             self.rh = 100*esd/es
@@ -382,69 +377,18 @@ class S88:
             self.rh = 100*e/es
 
     def _flag(self, out=0):
-        """Set the general flags."""
-        flag = np.full(self.arr_shp, "n", dtype="object")
-
-        if self.hum[0] == 'no':
-            if self.cskin == 1:
-                flag = np.where(
-                    np.isnan(self.spd+self.T+self.SST+self.P+self.Rs+self.Rl),
-                    "m", flag)
-            else:
-                flag = np.where(
-                    np.isnan(self.spd+self.T+self.SST+self.P), "m", flag)
+        miss = np.copy(self.msk)  # define missing input points
+        if self.cskin == 1:
+            miss = np.where(np.isnan(self.msk+self.P+self.Rs+self.Rl),
+                            np.nan, 1)
         else:
-            if self.cskin == 1:
-                flag = np.where(np.isnan(
-                    self.spd+self.T+self.SST+self.hum[1]+self.P +
-                    self.Rs+self.Rl), "m", flag)
-            else:
-                flag = np.where(
-                    np.isnan(self.spd+self.T+self.SST+self.hum[1]+self.P),
-                    "m", flag)
+            miss = np.where(np.isnan(self.msk+self.P), np.nan, 1)
+        flag = set_flag(miss, self.rh, self.u10n, self.q10n, self.t10n,
+                        self.Rb, self.hin, self.monob, self.itera, out=out)
 
-            flag = np.where(self.rh > 100, "r", flag)
-
-        # u10n flag
-        flag = np.where(((self.u10n < 0) | (self.u10n > 200)) & (flag == "n"),
-                        "u",
-                        np.where(((self.u10n < 0) | (self.u10n > 200)) &
-                                 (np.char.find(flag.astype(str), 'u') == -1),
-                                 flag+[","]+["u"], flag))
-        # q10n flag
-        flag = np.where(
-            ((self.q10n < 0) | (self.q10n > 40*0.001)) & (flag == "n"), "q",
-            np.where(
-                ((self.q10n < 0) | (self.q10n > 40*0.001)) & (flag != "n"),
-                flag+[","]+["q"], flag))
-
-        # t10n flag
-        flag = np.where(
-            ((self.t10n < 173) | (self.t10n > 373)) & (flag == "n"), "t",
-            np.where(((self.t10n < 173) | (self.t10n > 373)) & (flag != "n"),
-                     flag+[","]+["t"], flag))
-
-        flag = np.where(
-            ((self.Rb < -0.5) | (self.Rb > 0.2) |
-             ((self.hin[0]/self.monob) > 1000)) & (flag == "n"), "l",
-            np.where(((self.Rb < -0.5) | (self.Rb > 0.2) |
-                      ((self.hin[0]/self.monob) > 1000)) &
-                     (flag != "n"), flag+[","]+["l"], flag))
-
-        if out == 1:
-            flag = np.where((self.itera == -1) & (flag == "n"), "i", np.where(
-                (self.itera == -1) &
-                ((flag != "n") & (np.char.find(flag.astype(str), 'm') == -1)),
-                flag+[","]+["i"], flag))
-        else:
-            flag = np.where((self.itera == -1) & (flag == "n"), "i", np.where(
-                (self.itera == -1) &
-                ((flag != "n") & (np.char.find(flag.astype(str), 'm') == -1) &
-                 (np.char.find(flag.astype(str), 'u') == -1)),
-                flag+[","]+["i"], flag))
         self.flag = flag
 
-    def get_output(self, out=0):
+    def get_output(self, out_var=None, out=0):
 
         assert out in [0, 1], "out must be either 0 or 1"
 
@@ -487,12 +431,15 @@ class S88:
             pass
 
         # Combine all output variables into a pandas array
+        if out_var == "limited":
+            out_var = ("tau", "sensible", "latent", "uref", "tref", "qref")
         res_vars = ("tau", "sensible", "latent", "monob", "cd", "cd10n", "ct",
                     "ct10n", "cq", "cq10n", "tsrv", "tsr", "qsr", "usr",
                     "psim", "psit", "psiq", "u10n", "t10n", "q10n", "zo",
-                    "zot", "zoq", "uref", "tref", "qref", "dter",
-                    "dqer", "dtwl", "qair", "qsea", "Rl", "Rs", "Rnl", "ug",
-                    "Rb", "rh", "rho", "cp", "tkt", "lv", "itera")
+                    "zot", "zoq", "uref", "tref", "qref", "dter", "dqer",
+                    "dtwl", "qair", "qsea", "Rl", "Rs", "Rnl", "ug", "Rb",
+                    "rh", "rho", "cp", "tkt", "lv",
+                    "itera") if out_var is None else out_var
 
         res = np.zeros((len(res_vars), len(self.spd)))
         for i, value in enumerate(res_vars):
@@ -561,19 +508,6 @@ class S88:
     def _class_flag(self):
         """A flag specific to this class - only used for certain classes where
          u_lo and u_hi are defined"""
-        # flag.tmp = np.where(
-        #     ((self.u10n < self.u_lo[0]) | (self.u10n > self.u_hi[0])),"o", "")
-        # self.flag = np.where(
-        #     self.flag == "n" & flag.tmp == "o", "o", self.flag)
-        # self.flag = np.where(
-        #     flag.tmp == "o" & self.flag != "n" & self.flag != "o" &
-        #     self.flag != "m", self.flag+[","]+["o"], self.flag)
-        # flag.add = ["u", "q", "t"]
-        # self.flag = np.where(
-        #     flag.tmp == "o" & (np.char.find(self.flag.astype(str), 'u') == -1 |
-        #                        np.char.find(self.flag.astype(str), 'q') == -1 |
-        #                        np.char.find(self.flag.astype(str), 't') == -1),
-        #     self.flag+[","]+["o"], self.flag))
         self.flag = np.where(((self.u10n < self.u_lo[0]) |
                               (self.u10n > self.u_hi[0])) &
                              (self.flag == "n"), "o",
@@ -681,10 +615,10 @@ class Beljaars(C30):
         self.skin = "Beljaars"
 
 
-def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
-                   Rl=None, Rs=None, cskin=0, skin=None, wl=0, gust=None,
-                   meth="S88", qmeth="Buck2", tol=None, maxiter=10, out=0,
-                   L=None):
+def AirSeaFluxCode(spd, T, SST, meth, lat=None, hum=None, P=None, hin=18,
+                   hout=10, Rl=None, Rs=None, cskin=0, skin=None, wl=0,
+                   gust=None, qmeth="Buck2", tol=None, maxiter=10, out=0,
+                   out_var=None, L=None):
     """
     Calculate turbulent surface fluxes using different parameterizations.
 
@@ -699,6 +633,9 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
             air temperature in K (will convert if < 200)
         SST : float
             sea surface temperature in K (will convert if < 200)
+        meth : str
+            "S80", "S88", "LP82", "YT96", "UA", "NCAR", "C30", "C35",
+            "ecmwf", "Beljaars"
         lat : float
             latitude (deg), default 45deg
         hum : float
@@ -730,9 +667,6 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
             beta gustiness parameter, beta=1 for UA, beta=1.2 for COARE
             zi PBL height (m) 600 for COARE, 1000 for UA and ecmwf
             default is switched OFF
-        meth : str
-            "S80", "S88", "LP82", "YT96", "UA", "NCAR", "C30", "C35",
-            "ecmwf", "Beljaars"
         qmeth : str
             is the saturation evaporation method to use amongst
             "HylandWexler","Hardy","Preining","Wexler","GoffGratch","WMO",
@@ -752,6 +686,19 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
             set 0 to set points that have not converged, negative values of
                   u10n and q10n to missing (default)
             set 1 to keep points
+        out_var : str
+           optional. user can define pandas array of variables to be output.
+           the default full pandas array is :
+               out_var = ("tau", "sensible", "latent", "monob", "cd", "cd10n",
+                          "ct", "ct10n", "cq", "cq10n", "tsrv", "tsr", "qsr",
+                          "usr", "psim", "psit", "psiq", "u10n", "t10n",
+                          "q10n", "zo", "zot", "zoq", "uref", "tref", "qref",
+                          "dter", "dqer", "dtwl", "qair", "qsea", "Rl", "Rs",
+                          "Rnl", "ug", "Rb", "rh", "rho", "cp", "tkt", "lv",
+                          "itera")
+            the "limited" pandas array is:
+                out_var = ("tau", "sensible", "latent", "uref", "tref", "qref")
+            the user can define a custom pandas array of variables to  output.
         L : str
            Monin-Obukhov length definition options
            "tsrv"  : default
@@ -825,6 +772,6 @@ def AirSeaFluxCode(spd, T, SST, lat=None, hum=None, P=None, hin=18, hout=10,
     iclass.get_specHumidity(qmeth=qmeth)
     iclass.set_coolskin_warmlayer(wl=wl, cskin=cskin, skin=skin, Rl=Rl, Rs=Rs)
     iclass.iterate(tol=tol, maxiter=maxiter)
-    resAll = iclass.get_output(out=out)
+    resAll = iclass.get_output(out_var=out_var, out=out)
 
     return resAll

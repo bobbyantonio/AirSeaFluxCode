@@ -94,3 +94,84 @@ def visc_air(T):
     visa = 1.326e-5*(1+6.542e-3*T+8.301e-6*np.power(T, 2) -
                      4.84e-9*np.power(T, 3))
     return visa
+# ---------------------------------------------------------------------
+
+
+def set_flag(miss, rh, u10n, q10n, t10n, Rb, hin, monob, itera, out=0):
+    """
+    Set general flags.
+
+    Parameters
+    ----------
+    miss : int
+        mask of missing input points
+    rh : float
+        relative humidity             [%]
+    u10n : float
+        10m neutral wind speed        [ms^{-1}]
+    q10n : float
+        10m neutral specific humidity [kg/kg]
+    t10n : float
+        10m neutral air temperature   [K]
+    Rb : float
+        bulk Richardson number
+    hin : float
+        measurement heights           [m]
+    monob : float
+        Monin-Obukhov length          [m]
+    itera : int
+        number of iteration
+    out : int, optional
+        output option for non converged points. The default is 0.
+
+    Returns
+    -------
+    flag : str
+
+    """
+    # set maximum/minimum acceptable values
+    u10max = 200
+    q10max = 40*0.001
+    t10min, t10max = 173, 373
+    Rbmin, Rbmax = -0.5, 0.2
+    flag = np.full(miss.shape, "n", dtype="object")
+    flag = np.where(np.isnan(miss), "m", flag)
+
+    # relative humidity flag
+    flag = np.where(rh > 100, "r", flag)
+
+    # u10n flag
+    flag = np.where(((u10n < 0) | (u10n > u10max)) & (flag == "n"), "u",
+                    np.where(((u10n < 0) | (u10n > u10max)) &
+                             (np.char.find(flag.astype(str), 'u') == -1),
+                             flag+[","]+["u"], flag))
+    # q10n flag
+    flag = np.where(((q10n < 0) | (q10n > q10max)) & (flag == "n"), "q",
+                    np.where(((q10n < 0) | (q10n > q10max)) & (flag != "n"),
+                             flag+[","]+["q"], flag))
+
+    # t10n flag
+    flag = np.where(((t10n < t10min) | (t10n > t10max)) & (flag == "n"), "t",
+                    np.where(
+                        ((t10n < t10min) | (t10n > t10max)) & (flag != "n"),
+                        flag+[","]+["t"], flag))
+    # stability flag
+    flag = np.where(((Rb < Rbmin) | (Rb > Rbmax) |
+                     ((hin[0]/monob) > 1000)) & (flag == "n"), "l",
+                    np.where(((Rb < Rbmin) | (Rb > Rbmax) |
+                              ((hin[0]/monob) > 1000)) &
+                             (flag != "n"), flag+[","]+["l"], flag))
+
+    if out == 1:
+        flag = np.where((itera == -1) & (flag == "n"), "i", np.where(
+            (itera == -1) & ((flag != "n") & (
+                np.char.find(flag.astype(str), 'm') == -1)),
+            flag+[","]+["i"], flag))
+    else:
+        flag = np.where((itera == -1) & (flag == "n"), "i", np.where(
+            (itera == -1) & ((flag != "n") & (
+                np.char.find(flag.astype(str), 'm') == -1) &
+                (np.char.find(flag.astype(str), 'u') == -1)),
+            flag+[","]+["i"], flag))
+
+    return flag
