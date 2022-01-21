@@ -10,7 +10,7 @@ from cs_wl_subs import *
 
 class S88:
     def _wind_iterate(self, ind):
-        if self.gust[0] in [1, 2, 3]:
+        if self.gust[0] in range(1, 5):
             self.wind[ind] = np.sqrt(np.power(np.copy(self.spd[ind]), 2) +
                                      np.power(get_gust(self.gust[1],
                                                        self.theta[ind],
@@ -19,16 +19,14 @@ class S88:
                                                        self.gust[2],
                                                        self.grav[ind]), 2))
             # ratio of gusty to horizontal wind
-            self.GustFact[ind] = self.wind[ind]/self.spd[ind]
-            # remove effect of gustiness following Fairall et al. (2003)
-            self.u10n[ind] = self.spd[ind]-self.usr[ind]/kappa/np.sqrt(
-                self.GustFact[ind])*(np.log(self.h_in[0, ind]/self.ref10) -
-                                     self.psim[ind])
-            if self.gust[0] == 2:
-                self.GustFact[ind] = 1
+            self.GustFact = apply_GF(self.gust, self.spd, self.wind, "u")
+            self.u10n[ind] = self.spd[ind]-self.usr[ind]/kappa / \
+                self.GustFact[ind]*(np.log(self.h_in[0, ind]/self.ref10) -
+                                    self.psim[ind])
+            if self.gust[0] == 3:
                 # option to not remove GustFact
                 self.u10n[ind] = self.wind[ind]-self.usr[ind]/kappa*(
-                     np.log(self.h_in[0, ind]/self.ref10)-self.psim[ind])
+                    np.log(self.h_in[0, ind]/self.ref10)-self.psim[ind])
         else:
             # initalisation of wind
             self.wind[ind] = np.copy(self.spd[ind])
@@ -330,15 +328,10 @@ class S88:
             # usr is divided by (GustFact)^0.5 (here applied to sensible and
             # latent as well as tau)
             # GustFact should be 1 if gust is OFF or gust[0]=2
-            self.tau = self.rho*np.power(self.usr, 2)/self.GustFact
-            if self.gust[0] == 3:
-                self.sensible = self.rho*self.cp*self.usr*self.tsr
-                self.latent = self.rho*self.lv*self.usr*self.qsr
-            else:
-                self.sensible = self.rho*self.cp*self.usr / \
-                    np.sqrt(self.GustFact)*self.tsr
-                self.latent = self.rho*self.lv*self.usr / \
-                    np.sqrt(self.GustFact)*self.qsr
+            self.GustFact = apply_GF(self.gust, self.spd, self.wind, "TSF")
+            self.tau = self.rho*np.power(self.usr, 2)/self.GustFact[0]
+            self.sensible = self.rho*self.cp*(self.usr/self.GustFact[1])*self.tsr
+            self.latent = self.rho*self.lv*(self.usr/self.GustFact[2])*self.qsr
 
             # Set the new variables (for comparison against "old")
             new = np.array([np.copy(getattr(self, i)) for i in new_vars])
@@ -395,9 +388,10 @@ class S88:
         self._get_humidity()  # Get the Relative humidity
         self._flag(out=out)  # Get flags
 
+        self.GustFact = apply_GF(self.gust, self.spd, self.wind, "u")
         # remove effect of gustiness following Fairall et al. (2003)
         # usr is divided by (GustFact)^0.5
-        self.uref = self.spd-self.usr/kappa/np.sqrt(self.GustFact) * \
+        self.uref = self.spd-self.usr/kappa/self.GustFact * \
             (np.log(self.h_in[0]/self.h_out[0])-self.psim +
              psim_calc(self.h_out[0]/self.monob, self.meth))
         # include lapse rate adjustment as theta is well-mixed
@@ -501,8 +495,7 @@ class S88:
             gust = [0, 0, 0]
 
         assert np.size(gust) == 3, "gust input must be a 3x1 array"
-        assert gust[0] in [
-            0, 1, 2, 3], "gust at position 0 must be 0, 1, 2 or 3"
+        assert gust[0] in range(6), "gust at position 0 must be 0 to 5"
         self.gust = gust
 
     def _class_flag(self):
