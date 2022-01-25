@@ -654,12 +654,13 @@ def AirSeaFluxCode(spd, T, SST, meth, lat=None, hum=None, P=None, hin=18,
         wl : int
             warm layer correction default is 0, to switch on set to 1
         gust : int
-            3x1 [x, beta, zi] x=0 gustiness is OFF, x=1 gustiness is ON and
-            use gustiness factor, x=2 gustiness is ON and gustiness factor=1,
-            x=3 gustiness is ON and gustiness factor=1 for the heat fluxes;
-            beta gustiness parameter, beta=1 for UA, beta=1.2 for COARE
-            zi PBL height (m) 600 for COARE, 1000 for UA and ecmwf
-            default is switched OFF
+            3x1 [x, beta, zi] x=0 gustiness is OFF, x=1-5 gustiness is ON and
+            use gustiness factor: 1. Fairall et al. 2003, 2. GF is removed
+            from TSFs u10n, uref, 3. GF=1, 4. following Zeng et al. 1998 or
+            Brodeau et al. 2006, 5. following C35 matlab code;
+            beta gustiness parameter, beta=1 for UA, ecmwf & Beljaars,
+            beta=1.2 for COARE, zi PBL height (m) 600 for COARE,
+            1000 for UA, ecmwf & Beljaars
         qmeth : str
             is the saturation evaporation method to use amongst
             "HylandWexler","Hardy","Preining","Wexler","GoffGratch","WMO",
@@ -743,7 +744,7 @@ def AirSeaFluxCode(spd, T, SST, meth, lat=None, hum=None, P=None, hin=18,
                        41. lv latent heat of vaporization (Jkg−1)
                        42. number of iterations until convergence
                        43. flag ("n": normal, "o": out of nominal range,
-                                 "u": u10n<0, "q":q10n<0
+                                 "u": u10n<0, "q":q10n<0 or q>0.04
                                  "m": missing,
                                  "l": Rib<-0.5 or Rib>0.2 or z/L>1000,
                                  "r" : rh>100%,
