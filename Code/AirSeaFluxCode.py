@@ -10,7 +10,7 @@ from cs_wl_subs import *
 
 class S88:
     def _wind_iterate(self, ind):
-        if self.gust[0] in range(1, 5):
+        if self.gust[0] in range(1, 6):
             self.wind[ind] = np.sqrt(np.power(np.copy(self.spd[ind]), 2) +
                                      np.power(get_gust(self.gust[1],
                                                        self.theta[ind],
