@@ -175,3 +175,38 @@ def set_flag(miss, rh, u10n, q10n, t10n, Rb, hin, monob, itera, out=0):
             flag+[","]+["i"], flag))
 
     return flag
+# ---------------------------------------------------------------------
+
+
+def get_outvars(out_var, cskin, gust):
+    if out_var is None:  # full output
+        if cskin == 1 and gust[0] == 0:  # skin ON and gust OFF
+            res_vars = ("tau", "sensible", "latent", "monob", "cd", "cd10n",
+                        "ct", "ct10n", "cq", "cq10n", "tsrv", "tsr", "qsr",
+                        "usr", "psim", "psit", "psiq", "psim_ref", "psit_ref",
+                        "psiq_ref", "u10n", "t10n", "q10n", "zo", "zot", "zoq",
+                        "uref", "tref", "qref", "dter", "dqer", "dtwl", "tkt",
+                        "qair", "qsea", "Rl", "Rs", "Rnl",  "Rb", "rh", "rho",
+                        "cp", "lv", "theta", "itera")
+        elif cskin == 0 and gust[0] != 0:  # skin OFF and gust ON
+            res_vars = ("tau", "sensible", "latent", "monob", "cd", "cd10n",
+                        "ct", "ct10n", "cq", "cq10n", "tsrv", "tsr", "qsr",
+                        "usr", "psim", "psit", "psiq", "psim_ref", "psit_ref",
+                        "psiq_ref", "u10n", "t10n", "q10n", "zo", "zot", "zoq",
+                        "uref", "tref", "qref", "qair", "qsea", "ug", "usrGF",
+                        "GustFact", "Rb", "rh", "rho", "cp", "lv", "theta",
+                        "itera")
+        else:
+            res_vars = ("tau", "sensible", "latent", "monob", "cd", "cd10n",
+                        "ct", "ct10n", "cq", "cq10n", "tsrv", "tsr", "qsr",
+                        "usr", "psim", "psit", "psiq", "psim_ref", "psit_ref",
+                        "psiq_ref", "u10n", "t10n", "q10n", "zo", "zot", "zoq",
+                        "uref", "tref", "qref", "dter", "dqer", "dtwl", "tkt",
+                        "qair", "qsea", "Rl", "Rs", "Rnl", "ug", "usrGF",
+                        "GustFact", "Rb", "rh", "rho", "cp", "lv", "theta",
+                        "itera")
+    elif out_var == "limited":
+        res_vars = ("tau", "sensible", "latent", "uref", "tref", "qref")
+    else:
+         res_vars = out_var
+    return res_vars

@@ -560,7 +560,7 @@ def psim_stab(zol, meth):
 # ---------------------------------------------------------------------
 
 
-def get_gust(beta, Ta, usr, tsrv, zi, grav):
+def get_gust(beta, zi, ustb, Ta, usr, tsrv, grav):
     """
     Compute gustiness.
 
@@ -568,14 +568,16 @@ def get_gust(beta, Ta, usr, tsrv, zi, grav):
     ----------
     beta : float
         constant
+    zi : int
+        scale height of the boundary layer depth [m]
+    ustb : float
+        gust wind in stable conditions   [m/s]
     Ta : float
         air temperature   [K]
     usr : float
         friction velocity [m/s]
     tsrv : float
         star virtual temperature of air [K]
-    zi : int
-        scale height of the boundary layer depth [m]
     grav : float
         gravity
 
@@ -587,8 +589,8 @@ def get_gust(beta, Ta, usr, tsrv, zi, grav):
         Ta = Ta+273.16
     # minus sign to allow cube root
     Bf = (-grav/Ta)*usr*tsrv
-    ug = np.ones(np.shape(Ta))*0.2
-    ug = np.where(Bf > 0, beta*np.power(Bf*zi, 1/3), 0.2)
+    ug = np.ones(np.shape(Ta))*ustb
+    ug = np.where(Bf > 0, np.maximum(beta*np.power(Bf*zi, 1/3), ustb), ustb)
     return ug
 # ---------------------------------------------------------------------
 
@@ -609,7 +611,7 @@ def apply_GF(gust, spd, wind, step):
         2: gustiness is switched ON and GF is removed from TSFs u10n, uref
         3: gustiness is switched ON and GF=1
         4: gustiness is switched ON following Zeng et al. 1998 or
-           Brodeau et al. 2006 for ECMWF
+           Brodeau et al. 2006
         5: gustiness is switched ON following C35 matlab code
     spd : float
         wind speed                      [ms^{-1}]
@@ -637,7 +639,7 @@ def apply_GF(gust, spd, wind, step):
     elif step == "TSF":
         # remove effect of gustiness  from TSFs
         # here it is a 3xspd.shape array
-        GustFact = np.empty([3, spd.shape[0]], dtype=float)*np.nan
+        GustFact = np.ones([3, spd.shape[0]], dtype=float)
         GustFact[0, :] = wind/spd
         GustFact[1:3, :] = wind*0+1
         # following Fairall et al. (2003)
@@ -673,6 +675,8 @@ def get_strs(hin, monob, wind, zo, zot, zoq, dt, dq, cd, ct, cq, meth):
         temperature difference       [K]
     dq : float
         specific humidity difference [g/kg]
+    cd : float
+       drag coefficient
     ct : float
         temperature exchange coefficient
     cq : float
@@ -767,7 +771,6 @@ def get_tsrv(tsr, qsr, Ta, qair):
         virtual star temperature (K)
 
     """
-    # as in aerobulk One_on_L in mod_phymbl.f90
     tsrv = tsr*(1+0.6077*qair)+0.6077*Ta*qsr
     return tsrv
 
@@ -796,8 +799,6 @@ def get_Rb(grav, usr, hin_u, hin_t, tv, dtv, wind, monob, meth):
         wind speed (m/s)
     monob : float
         Monin-Obukhov length from previous iteration step (m)
-    psim : float
-        momentum stability function
     meth : str
         bulk parameterisation method option: "S80", "S88", "LP82", "YT96",
         "UA", "NCAR", "C30", "C35", "ecmwf", "Beljaars"
@@ -880,10 +881,6 @@ def get_Ltsrv(tsrv, grav, tv, usr):
         M-O length (m)
 
     """
-    # tmp = (g*kappa*tsrv /
-    #        np.maximum(np.power(usr, 2)*Ta*(1+0.6077*qair), 1e-9))
-    # tmp = np.minimum(np.abs(tmp), 200)*np.sign(tmp)
-    # monob = 1/np.copy(tmp)
     tsrv = np.maximum(np.abs(tsrv), 1e-9)*np.sign(tsrv)
     monob = (np.power(usr, 2)*tv)/(grav*kappa*tsrv)
     return monob

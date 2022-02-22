@@ -12,14 +12,12 @@ class S88:
     def _wind_iterate(self, ind):
         if self.gust[0] in range(1, 6):
             self.wind[ind] = np.sqrt(np.power(np.copy(self.spd[ind]), 2) +
-                                     np.power(get_gust(self.gust[1],
-                                                       self.theta[ind],
-                                                       self.usr[ind],
-                                                       self.tsrv[ind],
-                                                       self.gust[2],
-                                                       self.grav[ind]), 2))
-            # ratio of gusty to horizontal wind
-            self.GustFact = apply_GF(self.gust, self.spd, self.wind, "u")
+                                     np.power(get_gust(
+                                         self.gust[1], self.gust[2],
+                                         self.gust[3], self.theta[ind],
+                                         self.usr[ind], self.tsrv[ind],
+                                         self.grav[ind]), 2))
+            self.GustFact = np.sqrt(self.wind/self.spd)
             self.u10n[ind] = self.spd[ind]-self.usr[ind]/kappa / \
                 self.GustFact[ind]*(np.log(self.h_in[0, ind]/self.ref10) -
                                     self.psim[ind])
@@ -140,7 +138,6 @@ class S88:
         Rb = self.grav*self.h_in[1]*self.dtv/(self.T*np.power(self.wind, 2))
         # eq. 12 Grachev & Fairall 1997   # DO.THIS
         self.monob = self.h_in[1]/12.0/Rb
-        # where does 12.0 come from??
 
         # ------------
 
@@ -195,7 +192,6 @@ class S88:
                     "ref": ["u10n", "t10n", "q10n"]}
         new_vars["all"] = new_vars["ref"] + new_vars["flux"]
         new_vars = new_vars[tol[0]]
-        # I'm sure there are better ways of doing this
         # extract tolerance values by deleting flag from tol
         tvals = np.delete(np.copy(tol), 0)
         tol_vals = list([float(tt) for tt in tvals])
@@ -324,14 +320,9 @@ class S88:
                 self.u10n = np.where(self.u10n < 0, 0.5, self.u10n)
 
             self.itera[ind] = np.full(1, it)
-            # remove effect of gustiness following Fairall et al. (2003)
-            # usr is divided by (GustFact)^0.5 (here applied to sensible and
-            # latent as well as tau)
-            # GustFact should be 1 if gust is OFF or gust[0]=2
-            self.GustFact = apply_GF(self.gust, self.spd, self.wind, "TSF")
-            self.tau = self.rho*np.power(self.usr, 2)/self.GustFact[0]
-            self.sensible = self.rho*self.cp*(self.usr/self.GustFact[1])*self.tsr
-            self.latent = self.rho*self.lv*(self.usr/self.GustFact[2])*self.qsr
+            self.tau = self.rho*np.power(self.usr, 2)
+            self.sensible = self.rho*self.cp*self.usr*self.tsr
+            self.latent = self.rho*self.lv*self.usr*self.qsr
 
             # Set the new variables (for comparison against "old")
             new = np.array([np.copy(getattr(self, i)) for i in new_vars])
@@ -388,9 +379,15 @@ class S88:
         self._get_humidity()  # Get the Relative humidity
         self._flag(out=out)  # Get flags
 
+        self.GustFact = apply_GF(self.gust, self.spd, self.wind, "TSF")
+        self.tau = self.rho*np.power(self.usr, 2)/self.GustFact[0]
+        self.sensible = self.rho*self.cp*(self.usr/self.GustFact[1])*self.tsr
+        self.latent = self.rho*self.lv*(self.usr/self.GustFact[2])*self.qsr
+
         self.GustFact = apply_GF(self.gust, self.spd, self.wind, "u")
-        # remove effect of gustiness following Fairall et al. (2003)
-        # usr is divided by (GustFact)^0.5
+        self.u10n = self.spd-self.usr/kappa/self.GustFact*(
+            np.log(self.h_in[0]/self.ref10)-self.psim) # C.4-7
+        self.usrGF = self.usr/self.GustFact
         self.uref = self.spd-self.usr/kappa/self.GustFact * \
             (np.log(self.h_in[0]/self.h_out[0])-self.psim +
              psim_calc(self.h_out[0]/self.monob, self.meth))
@@ -401,13 +398,16 @@ class S88:
         self.qref = self.qair-self.qsr/kappa * \
             (np.log(self.h_in[2]/self.h_out[2])-self.psiq +
              psit_calc(self.h_out[2]/self.monob, self.meth))
+        self.psim_ref = psim_calc(self.h_out[0]/self.monob, self.meth)
+        self.psit_ref = psit_calc(self.h_out[1]/self.monob, self.meth)
+        self.psiq_ref = psit_calc(self.h_out[2]/self.monob, self.meth)
 
         if self.wl == 0:
             self.dtwl = np.zeros(self.T.shape)*self.msk
             # reset to zero if not used
 
         # Do not calculate lhf if a measure of humidity is not input
-        # This gets filled into a pd dataframe and so no need to specify y
+        # This gets filled into a pd dataframe and so no need to specify
         # dimension of array
         if self.hum[0] == 'no':
             self.latent, self.qsr, self.q10n = np.empty(3)
@@ -425,15 +425,8 @@ class S88:
             pass
 
         # Combine all output variables into a pandas array
-        if out_var == "limited":
-            out_var = ("tau", "sensible", "latent", "uref", "tref", "qref")
-        res_vars = ("tau", "sensible", "latent", "monob", "cd", "cd10n", "ct",
-                    "ct10n", "cq", "cq10n", "tsrv", "tsr", "qsr", "usr",
-                    "psim", "psit", "psiq", "u10n", "t10n", "q10n", "zo",
-                    "zot", "zoq", "uref", "tref", "qref", "dter", "dqer",
-                    "dtwl", "qair", "qsea", "Rl", "Rs", "Rnl", "ug", "Rb",
-                    "rh", "rho", "cp", "tkt", "lv",
-                    "itera") if out_var is None else out_var
+        res_vars = get_outvars(out_var, self.cskin, self.gust)
+
 
         res = np.zeros((len(res_vars), len(self.spd)))
         for i, value in enumerate(res_vars):
@@ -443,14 +436,18 @@ class S88:
             res[:, self.ind] = np.nan
             # set missing values where data have non acceptable values
             if self.hum[0] != 'no':
-                res[:-1] = np.asarray([
+                res = np.asarray([
                     np.where(self.q10n < 0, np.nan, res[i][:])
-                    for i in range(len(res_vars)-1)])
+                    for i in range(len(res_vars))])
                 # len(res_vars)-1 instead of len(res_vars) in order to keep
                 # itera= -1 for no convergence
-            res[:-1] = np.asarray([
+            res = np.asarray([
                 np.where(self.u10n < 0, np.nan, res[i][:])
-                for i in range(len(res_vars)-1)])
+                for i in range(len(res_vars))])
+            res = np.asarray([
+                np.where(((self.t10n < 173) | (self.t10n > 373)), np.nan,
+                          res[i][:])
+                for i in range(len(res_vars))])
         else:
             warnings.warn("Warning: the output will contain values for points"
                           " that have not converged and negative values "
@@ -458,6 +455,8 @@ class S88:
 
         resAll = pd.DataFrame(data=res.T, index=range(self.nlen),
                               columns=res_vars)
+        if "itera" in res_vars:
+            resAll["itera"] = self.itera  # restore itera
 
         resAll["flag"] = self.flag
 
@@ -490,11 +489,12 @@ class S88:
             try:
                 gust = self.default_gust
             except AttributeError:
-                gust = [0, 0, 0]  # gustiness OFF
+                gust = [0, 0, 0, 0]  # gustiness OFF
+                # gust = [1, 1.2, 800]
         elif ((np.size(gust) < 3) and (gust == 0)):
-            gust = [0, 0, 0]
+            gust = [0, 0, 0, 0]
 
-        assert np.size(gust) == 3, "gust input must be a 3x1 array"
+        assert np.size(gust) == 4, "gust input must be a 4x1 array"
         assert gust[0] in range(6), "gust at position 0 must be 0 to 5"
         self.gust = gust
 
@@ -559,7 +559,7 @@ class UA(S88):
 
     def __init__(self):
         self.meth = "UA"
-        self.default_gust = [3, 1, 1000]
+        self.default_gust = [1, 1.2, 600]
         self.u_lo = [-999, -999]
         self.u_hi = [18, 18]
 
@@ -570,14 +570,14 @@ class C30(S88):
 
     def __init__(self):
         self.meth = "C30"
-        self.default_gust = [3, 1.2, 600]
+        self.default_gust = [1, 1.2, 600]
         self.skin = "C35"
 
 
 class C35(C30):
     def __init__(self):
         self.meth = "C35"
-        self.default_gust = [3, 1.2, 600]
+        self.default_gust = [1, 1.2, 600]
         self.skin = "C35"
 
 
@@ -593,7 +593,7 @@ class ecmwf(C30):
 
     def __init__(self):
         self.meth = "ecmwf"
-        self.default_gust = [3, 1, 1000]
+        self.default_gust = [1, 1.2, 600]
         self.skin = "ecmwf"
 
 
@@ -604,7 +604,7 @@ class Beljaars(C30):
 
     def __init__(self):
         self.meth = "Beljaars"
-        self.default_gust = [3, 1, 1000]
+        self.default_gust = [1, 1.2, 600]
         self.skin = "Beljaars"
 
 
@@ -654,13 +654,14 @@ def AirSeaFluxCode(spd, T, SST, meth, lat=None, hum=None, P=None, hin=18,
         wl : int
             warm layer correction default is 0, to switch on set to 1
         gust : int
-            3x1 [x, beta, zi] x=0 gustiness is OFF, x=1-5 gustiness is ON and
-            use gustiness factor: 1. Fairall et al. 2003, 2. GF is removed
+            4x1 [x, beta, zi, ustb] x=0 gustiness is OFF, x=1-5 gustiness is ON
+            and use gustiness factor: 1. Fairall et al. 2003, 2. GF is removed
             from TSFs u10n, uref, 3. GF=1, 4. following Zeng et al. 1998 or
             Brodeau et al. 2006, 5. following C35 matlab code;
-            beta gustiness parameter, beta=1 for UA, ecmwf & Beljaars,
-            beta=1.2 for COARE, zi PBL height (m) 600 for COARE,
-            1000 for UA, ecmwf & Beljaars
+            beta gustiness parameter, default is 1.2,
+            zi PBL height (m) default is 600,
+            min is the value for gust speed in stable conditions,
+            default is 0.01ms^{-1}
         qmeth : str
             is the saturation evaporation method to use amongst
             "HylandWexler","Hardy","Preining","Wexler","GoffGratch","WMO",
@@ -678,18 +679,19 @@ def AirSeaFluxCode(spd, T, SST, meth, lat=None, hum=None, P=None, hin=18,
             number of iterations (default = 10)
         out : int
             set 0 to set points that have not converged, negative values of
-                  u10n and q10n to missing (default)
+                  u10n, q10n or T10n out of limits to missing (default)
             set 1 to keep points
         out_var : str
            optional. user can define pandas array of variables to be output.
            the default full pandas array is :
                out_var = ("tau", "sensible", "latent", "monob", "cd", "cd10n",
-                          "ct", "ct10n", "cq", "cq10n", "tsrv", "tsr", "qsr",
-                          "usr", "psim", "psit", "psiq", "u10n", "t10n",
-                          "q10n", "zo", "zot", "zoq", "uref", "tref", "qref",
-                          "dter", "dqer", "dtwl", "qair", "qsea", "Rl", "Rs",
-                          "Rnl", "ug", "Rb", "rh", "rho", "cp", "tkt", "lv",
-                          "itera")
+                           "ct", "ct10n", "cq", "cq10n", "tsrv", "tsr", "qsr",
+                           "usr", "psim", "psit", "psiq", "psim_ref", "psit_ref",
+                           "psiq_ref", "u10n", "t10n", "q10n", "zo", "zot", "zoq",
+                           "uref", "tref", "qref", "dter", "dqer", "dtwl", "tkt",
+                           "qair", "qsea", "Rl", "Rs", "Rnl", "ug", "usrGF",
+                           "GustFact", "Rb", "rh", "rho", "cp", "lv", "theta",
+                           "itera")
             the "limited" pandas array is:
                 out_var = ("tau", "sensible", "latent", "uref", "tref", "qref")
             the user can define a custom pandas array of variables to  output.
@@ -718,32 +720,38 @@ def AirSeaFluxCode(spd, T, SST, meth, lat=None, hum=None, P=None, hin=18,
                        15. momentum stability function (psim)
                        16. heat stability function (psit)
                        17. moisture stability function (psiq)
-                       18. 10m neutral wind speed (u10n)
-                       19. 10m neutral temperature (t10n)
-                       20. 10m neutral specific humidity (q10n)
-                       21. surface roughness length (zo)
-                       22. heat roughness length (zot)
-                       23. moisture roughness length (zoq)
-                       24. wind speed at reference height (uref)
-                       25. temperature at reference height (tref)
-                       26. specific humidity at reference height (qref)
-                       27. cool-skin temperature depression (dter)
-                       28. cool-skin humidity depression (dqer)
-                       29. warm layer correction (dtwl)
-                       30. specific humidity of air (qair)
-                       31. specific humidity at sea surface (qsea)
-                       32. downward longwave radiation (Rl)
-                       33. downward shortwave radiation (Rs)
-                       34. downward net longwave radiation (Rnl)
-                       35. gust wind speed (ug)
-                       36. Bulk Richardson number (Rib)
-                       37. relative humidity (rh)
-                       38. air density (rho)
-                       39  specific heat of moist air (cp)
-                       40. thickness of the viscous layer (delta)
-                       41. lv latent heat of vaporization (Jkg−1)
-                       42. number of iterations until convergence
-                       43. flag ("n": normal, "o": out of nominal range,
+                       18. momentum stability function at hout (psim_ref)
+                       19. heat stability function at hout (psit_ref)
+                       20. moisture stability function at hout (psiq_ref)
+                       21. 10m neutral wind speed (u10n)
+                       22. 10m neutral temperature (t10n)
+                       23. 10m neutral specific humidity (q10n)
+                       24. surface roughness length (zo)
+                       25. heat roughness length (zot)
+                       26. moisture roughness length (zoq)
+                       27. wind speed at reference height (uref)
+                       28. temperature at reference height (tref)
+                       29. specific humidity at reference height (qref)
+                       30. cool-skin temperature depression (dter)
+                       31. cool-skin humidity depression (dqer)
+                       32. warm layer correction (dtwl)
+                       33. thickness of the viscous layer (delta)
+                       34. specific humidity of air (qair)
+                       35. specific humidity at sea surface (qsea)
+                       36. downward longwave radiation (Rl)
+                       37. downward shortwave radiation (Rs)
+                       38. downward net longwave radiation (Rnl)
+                       39. gust wind speed (ug)
+                       40. star wind speed/GustFact (usrGF)
+                       41. Gustiness Factor (GustFact)
+                       42. Bulk Richardson number (Rb)
+                       43. relative humidity (rh)
+                       44. air density (rho)
+                       45. specific heat of moist air (cp)
+                       46. lv latent heat of vaporization (Jkg−1)
+                       47. potential temperature (theta)
+                       48. number of iterations until convergence
+                       49. flag ("n": normal, "o": out of nominal range,
                                  "u": u10n<0, "q":q10n<0 or q>0.04
                                  "m": missing,
                                  "l": Rib<-0.5 or Rib>0.2 or z/L>1000,
