@@ -80,21 +80,11 @@ class S88:
 
     def _update_coolskin_warmlayer(self, ind):
         if self.cskin == 1:
-            if self.skin == "C35":
-                self.dter[ind], self.tkt[ind] = cs_C35(np.copy(
-                    self.SST[ind]), self.rho[ind], self.Rs[ind], self.Rnl[ind],
-                    self.cp[ind], self.lv[ind], np.copy(self.tkt[ind]),
-                    self.usr[ind], self.tsr[ind], self.qsr[ind], self.grav[ind])
-            elif self.skin == "ecmwf":
-                self.dter[ind] = cs_ecmwf(
-                    self.rho[ind], self.Rs[ind], self.Rnl[ind], self.cp[ind],
-                    self.lv[ind], self.usr[ind], self.tsr[ind], self.qsr[ind],
-                    np.copy(self.SST[ind]), self.grav[ind])
-            elif self.skin == "Beljaars":
-                self.Qs[ind], self.dter[ind] = cs_Beljaars(
-                    self.rho[ind], self.Rs[ind], self.Rnl[ind], self.cp[ind],
-                    self.lv[ind], self.usr[ind], self.tsr[ind], self.qsr[ind],
-                    self.grav[ind], np.copy(self.Qs[ind]))
+            self.dter[ind], self.tkt[ind] = cs(np.copy(
+                self.SST[ind]), np.copy(self.tkt[ind]), self.rho[ind],
+                self.Rs[ind], self.Rnl[ind], self.cp[ind], self.lv[ind],
+                self.usr[ind], self.tsr[ind], self.qsr[ind], self.grav[ind],
+                self.skin)
             self.dqer[ind] = get_dqer(self.dter[ind], self.SST[ind],
                                       self.qsea[ind], self.lv[ind])
             self.skt[ind] = np.copy(self.SST[ind])+self.dter[ind]
