@@ -17,14 +17,16 @@ class S88:
                                          self.gust[3], self.theta[ind],
                                          self.usr[ind], self.tsrv[ind],
                                          self.grav[ind]), 2))
-            self.GustFact = np.sqrt(self.wind/self.spd)
-            self.u10n[ind] = self.spd[ind]-self.usr[ind]/kappa / \
-                self.GustFact[ind]*(np.log(self.h_in[0, ind]/self.ref10) -
-                                    self.psim[ind])
-            if self.gust[0] == 3:
+            if self.gust[0] in [3, 4]:
+                # self.GustFact[ind] = 1
                 # option to not remove GustFact
                 self.u10n[ind] = self.wind[ind]-self.usr[ind]/kappa*(
                     np.log(self.h_in[0, ind]/self.ref10)-self.psim[ind])
+            else:
+                self.GustFact = np.sqrt(self.wind/self.spd)
+                self.u10n[ind] = self.spd[ind]-self.usr[ind]/kappa / \
+                    self.GustFact[ind]*(np.log(self.h_in[0, ind]/self.ref10) -
+                                        self.psim[ind])
         else:
             # initalisation of wind
             self.wind[ind] = np.copy(self.spd[ind])
@@ -375,12 +377,20 @@ class S88:
         self.latent = self.rho*self.lv*(self.usr/self.GustFact[2])*self.qsr
 
         self.GustFact = apply_GF(self.gust, self.spd, self.wind, "u")
-        self.u10n = self.spd-self.usr/kappa/self.GustFact*(
-            np.log(self.h_in[0]/self.ref10)-self.psim) # C.4-7
+        if self.gust[0] in [3, 4]:
+            self.u10n = self.wind-self.usr/kappa*(
+                np.log(self.h_in[0]/self.ref10)-self.psim)
+            self.uref = self.wind-self.usr/kappa*(
+                np.log(self.h_in[0]/self.h_out[0])-self.psim +
+                psim_calc(self.h_out[0]/self.monob, self.meth))
+        else:
+            self.u10n = self.spd-self.usr/kappa/self.GustFact*(
+                np.log(self.h_in[0]/self.ref10)-self.psim) 
+            self.uref = self.spd-self.usr/kappa/self.GustFact * \
+                (np.log(self.h_in[0]/self.h_out[0])-self.psim +
+                 psim_calc(self.h_out[0]/self.monob, self.meth))
+
         self.usrGF = self.usr/self.GustFact
-        self.uref = self.spd-self.usr/kappa/self.GustFact * \
-            (np.log(self.h_in[0]/self.h_out[0])-self.psim +
-             psim_calc(self.h_out[0]/self.monob, self.meth))
         # include lapse rate adjustment as theta is well-mixed
         self.tref = self.theta-self.tlapse*self.h_out[1]-self.tsr/kappa * \
             (np.log(self.h_in[1]/self.h_out[1])-self.psit +
@@ -549,7 +559,7 @@ class UA(S88):
 
     def __init__(self):
         self.meth = "UA"
-        self.default_gust = [1, 1.2, 600]
+        self.default_gust = [1, 1.2, 600, 0.01]
         self.u_lo = [-999, -999]
         self.u_hi = [18, 18]
 
@@ -560,14 +570,14 @@ class C30(S88):
 
     def __init__(self):
         self.meth = "C30"
-        self.default_gust = [1, 1.2, 600]
+        self.default_gust = [1, 1.2, 600, 0.01]
         self.skin = "C35"
 
 
 class C35(C30):
     def __init__(self):
         self.meth = "C35"
-        self.default_gust = [1, 1.2, 600]
+        self.default_gust = [1, 1.2, 600, 0.01]
         self.skin = "C35"
 
 
@@ -583,7 +593,7 @@ class ecmwf(C30):
 
     def __init__(self):
         self.meth = "ecmwf"
-        self.default_gust = [1, 1.2, 600]
+        self.default_gust = [1, 1.2, 600, 0.01]
         self.skin = "ecmwf"
 
 
@@ -594,8 +604,9 @@ class Beljaars(C30):
 
     def __init__(self):
         self.meth = "Beljaars"
-        self.default_gust = [1, 1.2, 600]
-        self.skin = "Beljaars"
+        self.default_gust = [1, 1.2, 600, 0.01]
+        self.skin = "ecmwf"
+        # self.skin = "Beljaars"
 
 
 def AirSeaFluxCode(spd, T, SST, meth, lat=None, hum=None, P=None, hin=18,
