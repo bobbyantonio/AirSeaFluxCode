@@ -186,25 +186,32 @@ def get_outvars(out_var, cskin, gust):
                         "usr", "psim", "psit", "psiq", "psim_ref", "psit_ref",
                         "psiq_ref", "u10n", "t10n", "q10n", "zo", "zot", "zoq",
                         "uref", "tref", "qref", "dter", "dqer", "dtwl", "tkt",
-                        "qair", "qsea", "Rl", "Rs", "Rnl",  "Rb", "rh", "rho",
+                        "Rl", "Rs", "Rnl""qair", "qsea", "Rb", "rh", "rho",
                         "cp", "lv", "theta", "itera")
         elif cskin == 0 and gust[0] != 0:  # skin OFF and gust ON
             res_vars = ("tau", "sensible", "latent", "monob", "cd", "cd10n",
                         "ct", "ct10n", "cq", "cq10n", "tsrv", "tsr", "qsr",
-                        "usr", "psim", "psit", "psiq", "psim_ref", "psit_ref",
+                        "usr", "usr_gust", "usr_nogust","ug", "GustFact",
+                        "psim", "psit", "psiq", "psim_ref", "psit_ref",
                         "psiq_ref", "u10n", "t10n", "q10n", "zo", "zot", "zoq",
-                        "uref", "tref", "qref", "qair", "qsea", "ug", "usrGF",
-                        "GustFact", "Rb", "rh", "rho", "cp", "lv", "theta",
-                        "itera")
-        else:
+                        "uref", "tref", "qref", "qair", "qsea",  "Rb", "rh",
+                        "rho", "cp", "lv", "theta", "itera")
+        elif cskin == 0 and gust[0] == 0:
             res_vars = ("tau", "sensible", "latent", "monob", "cd", "cd10n",
                         "ct", "ct10n", "cq", "cq10n", "tsrv", "tsr", "qsr",
                         "usr", "psim", "psit", "psiq", "psim_ref", "psit_ref",
                         "psiq_ref", "u10n", "t10n", "q10n", "zo", "zot", "zoq",
+                        "uref", "tref", "qref", "qair", "qsea", "Rb", "rh",
+                        "rho", "cp", "lv", "theta", "itera")
+        else:
+            res_vars = ("tau", "sensible", "latent", "monob", "cd", "cd10n",
+                        "ct", "ct10n", "cq", "cq10n", "tsrv", "tsr", "qsr",
+                        "usr", "usr_gust", "usr_nogust","ug", "GustFact",
+                        "psim", "psit", "psiq", "psim_ref", "psit_ref",
+                        "psiq_ref", "u10n", "t10n", "q10n", "zo", "zot", "zoq",
                         "uref", "tref", "qref", "dter", "dqer", "dtwl", "tkt",
-                        "qair", "qsea", "Rl", "Rs", "Rnl", "ug", "usrGF",
-                        "GustFact", "Rb", "rh", "rho", "cp", "lv", "theta",
-                        "itera")
+                        "Rl", "Rs", "Rnl", "qair", "qsea", "Rb", "rh", "rho",
+                        "cp", "lv", "theta", "itera")
     elif out_var == "limited":
         res_vars = ("tau", "sensible", "latent", "uref", "tref", "qref")
     else:

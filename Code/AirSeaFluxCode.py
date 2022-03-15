@@ -23,10 +23,10 @@ class S88:
                 self.u10n[ind] = self.wind[ind]-self.usr[ind]/kappa*(
                     np.log(self.h_in[0, ind]/self.ref10)-self.psim[ind])
             else:
-                self.GustFact = np.sqrt(self.wind/self.spd)
+                self.GustFact = self.wind/self.spd
                 self.u10n[ind] = self.spd[ind]-self.usr[ind]/kappa / \
-                    self.GustFact[ind]*(np.log(self.h_in[0, ind]/self.ref10) -
-                                        self.psim[ind])
+                    np.sqrt(self.GustFact[ind])*(
+                        np.log(self.h_in[0, ind]/self.ref10)-self.psim[ind])
         else:
             # initalisation of wind
             self.wind[ind] = np.copy(self.spd[ind])
@@ -82,11 +82,32 @@ class S88:
 
     def _update_coolskin_warmlayer(self, ind):
         if self.cskin == 1:
-            self.dter[ind], self.tkt[ind] = cs(np.copy(
-                self.SST[ind]), np.copy(self.tkt[ind]), self.rho[ind],
-                self.Rs[ind], self.Rnl[ind], self.cp[ind], self.lv[ind],
-                self.usr[ind], self.tsr[ind], self.qsr[ind], self.grav[ind],
-                self.skin)
+            # self.dter[ind], self.tkt[ind] = cs(np.copy(
+            #     self.SST[ind]), np.copy(self.tkt[ind]), self.rho[ind],
+            #     self.Rs[ind], self.Rnl[ind], self.cp[ind], self.lv[ind],
+            #     self.usr[ind], self.tsr[ind], self.qsr[ind], self.grav[ind],
+            #     self.skin)
+            if self.skin == "C35":
+                self.dter[ind], self.tkt[ind] = cs_C35(np.copy(
+                    self.SST[ind]), self.rho[ind], self.Rs[ind], self.Rnl[ind],
+                    self.cp[ind], self.lv[ind], np.copy(self.tkt[ind]),
+                    self.usr[ind], self.tsr[ind], self.qsr[ind], self.grav[ind])
+
+                # self.dter[ind] = cs_C35(np.copy(
+                #     self.skt[ind]), self.rho[ind], self.Rs[ind], self.Rnl[ind],
+                #     self.cp[ind], self.lv[ind], self.usr[ind], self.tsr[ind],
+                #     self.qsr[ind], self.grav[ind])
+            elif self.skin == "ecmwf":
+                self.dter[ind] = cs_ecmwf(
+                    self.rho[ind], self.Rs[ind], self.Rnl[ind], self.cp[ind],
+                    self.lv[ind], self.usr[ind], self.tsr[ind], self.qsr[ind],
+                    np.copy(self.SST[ind]), self.grav[ind])
+            elif self.skin == "Beljaars":
+                self.Qs[ind], self.dter[ind] = cs_Beljaars(
+                    self.rho[ind], self.Rs[ind], self.Rnl[ind], self.cp[ind],
+                    self.lv[ind], self.usr[ind], self.tsr[ind], self.qsr[ind],
+                    self.grav[ind], np.copy(self.Qs[ind]))
+
             self.dqer[ind] = get_dqer(self.dter[ind], self.SST[ind],
                                       self.qsea[ind], self.lv[ind])
             self.skt[ind] = np.copy(self.SST[ind])+self.dter[ind]
@@ -371,12 +392,12 @@ class S88:
         self._get_humidity()  # Get the Relative humidity
         self._flag(out=out)  # Get flags
 
-        self.GustFact = apply_GF(self.gust, self.spd, self.wind, "TSF")
-        self.tau = self.rho*np.power(self.usr, 2)/self.GustFact[0]
-        self.sensible = self.rho*self.cp*(self.usr/self.GustFact[1])*self.tsr
-        self.latent = self.rho*self.lv*(self.usr/self.GustFact[2])*self.qsr
+        self.GFo = apply_GF(self.gust, self.spd, self.wind, "TSF")
+        self.tau = self.rho*np.power(self.usr, 2)/self.GFo[0]
+        self.sensible = self.rho*self.cp*(self.usr/self.GFo[1])*self.tsr
+        self.latent = self.rho*self.lv*(self.usr/self.GFo[2])*self.qsr
 
-        self.GustFact = apply_GF(self.gust, self.spd, self.wind, "u")
+        self.GFo = apply_GF(self.gust, self.spd, self.wind, "u")
         if self.gust[0] in [3, 4]:
             self.u10n = self.wind-self.usr/kappa*(
                 np.log(self.h_in[0]/self.ref10)-self.psim)
@@ -384,13 +405,15 @@ class S88:
                 np.log(self.h_in[0]/self.h_out[0])-self.psim +
                 psim_calc(self.h_out[0]/self.monob, self.meth))
         else:
-            self.u10n = self.spd-self.usr/kappa/self.GustFact*(
-                np.log(self.h_in[0]/self.ref10)-self.psim) 
-            self.uref = self.spd-self.usr/kappa/self.GustFact * \
+            self.u10n = self.spd-self.usr/kappa/self.GFo*(
+                np.log(self.h_in[0]/self.ref10)-self.psim) # C.4-7
+            self.uref = self.spd-self.usr/kappa/self.GFo * \
                 (np.log(self.h_in[0]/self.h_out[0])-self.psim +
                  psim_calc(self.h_out[0]/self.monob, self.meth))
 
-        self.usrGF = self.usr/self.GustFact
+        self.GustFact = self.wind/self.spd
+        self.usr_gust = np.copy(self.usr)
+        self.usr_nogust = self.usr/self.GFo
         # include lapse rate adjustment as theta is well-mixed
         self.tref = self.theta-self.tlapse*self.h_out[1]-self.tsr/kappa * \
             (np.log(self.h_in[1]/self.h_out[1])-self.psit +
@@ -462,12 +485,19 @@ class S88:
 
         return resAll
 
-    def add_variables(self, spd, T, SST, lat=None, hum=None, P=None, L=None):
-
+    def add_variables(self, spd, T, SST, SST_fl, cskin=0, lat=None, hum=None,
+                      P=None, L=None):
         # Add the mandatory variables
         assert type(spd) == type(T) == type(
             SST) == np.ndarray, "input type of spd, T and SST should be"
         " numpy.ndarray"
+        if self.meth in ["S80", "S88", "LP82", "YT96", "UA", "NCAR"]:
+            assert SST_fl == "bulk", "input SST should be skin for method "+self.meth
+        if self.meth in ["C30", "C35", "ecmwf", "Beljaars"]:
+            if cskin == 1:
+                assert SST_fl == "bulk", "input SST should be bulk with cool skin correction switched on for method "+self.meth
+            else:
+                assert SST_fl == "skin", "input SST should be skin for method "+self.meth
         self.L = "tsrv" if L is None else L
         self.arr_shp = spd.shape
         self.nlen = len(spd)
@@ -609,8 +639,8 @@ class Beljaars(C30):
         # self.skin = "Beljaars"
 
 
-def AirSeaFluxCode(spd, T, SST, meth, lat=None, hum=None, P=None, hin=18,
-                   hout=10, Rl=None, Rs=None, cskin=0, skin=None, wl=0,
+def AirSeaFluxCode(spd, T, SST, SST_fl, meth, lat=None, hum=None, P=None,
+                   hin=18, hout=10, Rl=None, Rs=None, cskin=0, skin=None, wl=0,
                    gust=None, qmeth="Buck2", tol=None, maxiter=10, out=0,
                    out_var=None, L=None):
     """
@@ -627,6 +657,9 @@ def AirSeaFluxCode(spd, T, SST, meth, lat=None, hum=None, P=None, hin=18,
             air temperature in K (will convert if < 200)
         SST : float
             sea surface temperature in K (will convert if < 200)
+        SST_fl : str
+            provides information on the type of the input SST; "bulk" or
+            "skin"
         meth : str
             "S80", "S88", "LP82", "YT96", "UA", "NCAR", "C30", "C35",
             "ecmwf", "Beljaars"
@@ -770,7 +803,8 @@ def AirSeaFluxCode(spd, T, SST, meth, lat=None, hum=None, P=None, hin=18,
 
     iclass = globals()[meth]()
     iclass.add_gust(gust=gust)
-    iclass.add_variables(spd, T, SST, lat=lat, hum=hum, P=P, L=L)
+    iclass.add_variables(spd, T, SST, SST_fl, cskin=cskin, lat=lat, hum=hum,
+                         P=P, L=L)
     iclass.get_heights(hin, hout)
     iclass.get_specHumidity(qmeth=qmeth)
     iclass.set_coolskin_warmlayer(wl=wl, cskin=cskin, skin=skin, Rl=Rl, Rs=Rs)
