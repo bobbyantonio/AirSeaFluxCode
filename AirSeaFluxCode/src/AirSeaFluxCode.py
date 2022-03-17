@@ -641,7 +641,7 @@ class Beljaars(C30):
 
 def AirSeaFluxCode(spd, T, SST, SST_fl, meth, lat=None, hum=None, P=None,
                    hin=18, hout=10, Rl=None, Rs=None, cskin=0, skin=None, wl=0,
-                   gust=None, qmeth="Buck2", tol=None, maxiter=10, out=0,
+                   gust=None, qmeth="Buck2", tol=None, maxiter=30, out=0,
                    out_var=None, L=None):
     """
     Calculate turbulent surface fluxes using different parameterizations.
