@@ -159,7 +159,7 @@ def set_flag(miss, rh, u10n, q10n, t10n, Rb, hin, monob, itera, out=0):
     flag = np.where(((Rb < Rbmin) | (Rb > Rbmax) |
                      ((hin[0]/monob) > 1000)) & (flag == "n"), "l",
                     np.where(((Rb < Rbmin) | (Rb > Rbmax) |
-                              ((hin[0]/monob) > 1000)) &
+                              (np.abs(hin[0]/monob) > 1000)) &
                              (flag != "n"), flag+[","]+["l"], flag))
 
     if out == 1:
@@ -217,3 +217,29 @@ def get_outvars(out_var, cskin, gust):
     else:
          res_vars = out_var
     return res_vars
+# ---------------------------------------------------------------------
+
+
+def rho_air(T, qair, p):
+    """
+    Compute density of (moist) air using the eq. of state of the atmosphere.
+
+    as in aerobulk (https://github.com/brodeau/aerobulk/) Brodeau et al. (2016)
+
+    Parameters
+    ----------
+    T : float
+        absolute air temperature             [K]
+    qair : float
+        air specific humidity   [kg/kg]
+    p : float
+        pressure in                [Pa]
+
+    Returns
+    -------
+    rho_air : TYPE
+        density of moist air   [kg/m^3]
+
+    """
+    rho_air = np.maximum(p/(287.05*T*(1+(461.495/287.05-1)*qair)), 0.8)
+    return rho_air
