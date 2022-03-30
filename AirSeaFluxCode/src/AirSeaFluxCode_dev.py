@@ -4,7 +4,7 @@ import pandas as pd
 import logging
 from hum_subs import (get_hum, gamma)
 from util_subs import *
-from flux_subs import *
+from flux_subs_dev import *
 from cs_wl_subs import *
 
 
@@ -569,7 +569,7 @@ class S88:
             SST) == np.ndarray, "input type of spd, T and SST should be"
         " numpy.ndarray"
         if self.meth in ["S80", "S88", "LP82", "YT96", "UA", "NCAR"]:
-            assert SST_fl == "bulk", "input SST should be skin for method "+self.meth
+            assert SST_fl == "bulk", "input SST should be bulk for method "+self.meth
         if self.meth in ["C30", "C35", "ecmwf", "Beljaars"]:
             if cskin == 1:
                 assert SST_fl == "bulk", "input SST should be bulk with cool skin correction switched on for method "+self.meth

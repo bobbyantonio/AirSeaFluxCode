@@ -216,6 +216,7 @@ class S88:
         self.tsrv, self.psim, self.psit, self.psiq = [
             np.zeros(self.arr_shp)*self.msk for _ in range(4)]
 
+
         # extreme values for first comparison
         dummy_array = lambda val : np.full(self.T.shape, val)*self.msk
         # you can use def instead of lambda
@@ -259,6 +260,7 @@ class S88:
             self.ct[ind] = ctq_calc(
                 self.cd10n[ind], self.cd[ind], self.ct10n[ind],
                 self.h_in[1, ind], self.ref10, self.psit[ind])
+
             # humidity
             self.cq10n[ind], self.zoq[ind] = ctqn_calc(
                 "cq", self.h_in[2, ind]/self.monob[ind], self.cd10n[ind],
@@ -492,7 +494,7 @@ class S88:
             SST) == np.ndarray, "input type of spd, T and SST should be"
         " numpy.ndarray"
         if self.meth in ["S80", "S88", "LP82", "YT96", "UA", "NCAR"]:
-            assert SST_fl == "bulk", "input SST should be skin for method "+self.meth
+            assert SST_fl == "bulk", "input SST should be bulk for method "+self.meth
         if self.meth in ["C30", "C35", "ecmwf", "Beljaars"]:
             if cskin == 1:
                 assert SST_fl == "bulk", "input SST should be bulk with cool skin correction switched on for method "+self.meth
@@ -555,7 +557,6 @@ class S80(S88):
 
 
 class YT96(S88):
-
     def __init__(self):
         self.meth = "YT96"
         # no limits to u range as we use eq. 21 for cdn
