@@ -241,7 +241,7 @@ class S88:
                 self.meth)
 
             if np.all(np.isnan(self.cd10n)):
-                logging.info('break %s at iteration %s cd10n<0', meth, it)
+                logging.info('break %s at iteration %s cd10n<0', self.meth, it)
                 break
 
             self.psim[ind] = psim_calc(
