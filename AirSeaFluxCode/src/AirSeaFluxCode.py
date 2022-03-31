@@ -383,7 +383,7 @@ class S88:
         else:
             miss = np.where(np.isnan(self.msk+self.P), np.nan, 1)
         flag = set_flag(miss, self.rh, self.u10n, self.q10n, self.t10n,
-                        self.Rb, self.hin, self.monob, self.itera, out=out)
+                        self.Rb, self.h_in, self.monob, self.itera, out=out)
 
         self.flag = flag
 
