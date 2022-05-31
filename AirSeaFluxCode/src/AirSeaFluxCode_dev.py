@@ -25,7 +25,7 @@ class S88:
                 self.u10n[ind] = self.usr[ind]/kappa/self.GustFact[ind]*np.log(
                     self.ref10/self.zo[ind])
             elif self.meth == "ecmwf":
-                self.wind[ind] = np.maximum(self.wind[ind], 0.2)
+                # self.wind[ind] = np.maximum(self.wind[ind], 0.2)
                 self.u10n[ind] = self.usr[ind]/kappa*np.log(
                     self.ref10/self.zo[ind])
         else:
@@ -45,12 +45,12 @@ class S88:
                                        qmeth)
         if (np.all(np.isnan(self.qsea)) or np.all(np.isnan(self.qair))):
             raise ValueError("qsea and qair cannot be nan")
-        if self.meth in ["NCAR", "ecmwf"]:
-            self.qair = np.maximum(self.qair, 1e-6)
+        # if self.meth in ["NCAR", "ecmwf"]:
+        #     self.qair = np.maximum(self.qair, 1e-6)
         self.dq_in = self.qair-self.qsea
-        if self.meth in ["NCAR", "ecmwf"]:
-            self.dq_in = np.maximum(np.abs(self.dq_in), 1e-9)*np.sign(
-                self.dq_in)
+        # if self.meth in ["NCAR", "ecmwf"]:
+        #     self.dq_in = np.maximum(np.abs(self.dq_in), 1e-9)*np.sign(
+        #         self.dq_in)
         self.dq_full = self.qair-self.qsea
 
         # Set lapse rate and Potential Temperature (now we have humdity)
@@ -63,9 +63,9 @@ class S88:
         self.tlapse = gamma("dry", self.SST, self.T, self.qair/1000, self.cp)
         self.theta = np.copy(self.T)+self.tlapse*self.h_in[1]
         self.dt_in = self.theta-self.SST
-        if self.meth == "ecmwf":
-            self.dt_in = np.maximum(np.abs(self.dt_in), 1e-6)*np.sign(
-                self.dt_in)
+        # if self.meth == "ecmwf":
+        #     self.dt_in = np.maximum(np.abs(self.dt_in), 1e-6)*np.sign(
+        #         self.dt_in)
         self.dt_full = self.theta-self.SST
 
     def _fix_coolskin_warmlayer(self, wl, cskin, skin, Rl, Rs):
@@ -164,33 +164,6 @@ class S88:
         Rb = self.grav*self.h_in[1]*self.dtv/(self.T*np.power(self.wind, 2))
         # eq. 12 Grachev & Fairall 1997   # DO.THIS
         self.monob = self.h_in[1]/12.0/Rb
-        # if self.meth == "UA":
-        #     self.usr = 0.06
-        #     for i in range(6):
-        #         self.zo = 0.013*self.usr*self.usr/self.grav+0.11*visc_air(self.T)/self.usr
-        #         self.usr = kappa*self.wind/np.log(self.h_in[0]/self.zo)
-        #     Rb = self.grav*self.h_in[0]*self.dtv/(self.tv*self.wind*self.wind)
-        #     zol = np.where(Rb >= 0, Rb*np.log(self.h_in[0]/self.zo) /
-        #                    (1-5*np.minimum(Rb, 0.19)),
-        #                 Rb*np.log(self.h_in[0]/self.zo))
-        #     self.monob = self.h_in[0]/zol
-        # elif self.meth == "C35":
-        #     self.usr = 0.035*self.wind*np.log(10/1e-4)/np.log(self.h_in[0]/1e-4)
-        #     self.zo = 0.011*self.usr**2/self.grav+0.11*visc_air(self.T)/self.usr
-        #     Cd10 = (kappa/np.log(10/self.zo))**2
-        #     Ch10 = 0.00115
-        #     Ct10 = Ch10/np.sqrt(Cd10)
-        #     self.zot = 10/np.exp(kappa/Ct10)
-        #     Cd = (kappa/np.log(self.h_in[0]/self.zo))**2
-        #     Ct = kappa/np.log(self.h_in[1]/self.zot)
-        #     CC = kappa*Ct/Cd
-        #     Ribcu = -self.h_in[0]/self.gust[2]/0.004/self.gust[1]**3
-        #     Rb  = -1*self.grav*self.h_in[0]/(self.T)*(
-        #         (-self.dt_in)-0.61*(self.T)*self.dq_in)/self.wind**2
-        #     zol = CC*Rb*(1+27/9*Rb/CC)
-        #     k50 = np.where(zol > 50) # stable with very thin M-O length relative to zu
-        #     zol = np.where(Rb < 0, CC*Rb/(1+Rb/Ribcu), CC*Rb*(1+27/9*Rb/CC))
-        #     self.monob = self.h_in[0]/zol
         # ------------
 
         # dummy_array = lambda val : np.full(self.T.shape, val)*self.msk
@@ -376,10 +349,10 @@ class S88:
             self.itera[ind] = np.full(1, it)
             if self.meth in ["NCAR", "ecmwf"]:
                 self.rho = rho_air(self.theta-self.tlapse*self.h_in[0],
-                                   self.qair, self.P*100)
+                                    self.qair, self.P*100)
                 self.rho = rho_air(self.theta-self.tlapse*self.h_in[0],
-                                   self.qair,
-                                   self.P*100-self.rho*self.grav*self.h_in[0])
+                                    self.qair,
+                                    self.P*100-self.rho*self.grav*self.h_in[0])
                 self.zUrho = self.wind*np.maximum(self.rho, 1)
                 self.tau = self.zUrho*self.cd*self.spd
                 self.sensible = self.zUrho*self.ct*(self.theta-self.SST)*self.cp
@@ -388,6 +361,7 @@ class S88:
                 self.tau = self.rho*np.power(self.usr, 2)*self.spd/self.wind
                 self.sensible = self.rho*self.cp*self.usr*self.tsr
                 self.latent = self.rho*self.lv*self.usr*self.qsr
+            
 
             # Set the new variables (for comparison against "old")
             new = np.array([np.copy(getattr(self, i)) for i in new_vars])
@@ -499,6 +473,8 @@ class S88:
                         self.h_in[1]/self.monob, self.meth))
             self.q10n = self.qref + \
                 psit_calc(self.ref10/self.monob, self.meth)*self.qsr/kappa
+        # elif self.meth == "NCAR":
+        #     self.u10n = np.sqrt(self.cd10n)*self.wind/kappa*np.log(self.ref10/self.zo)
         elif self.meth == "ecmwf":
             self.u10n = self.usr/kappa*np.log(self.ref10/self.zo)
 
@@ -582,8 +558,8 @@ class S88:
         if self.meth == "NCAR":
             self.spd = np.maximum(np.copy(self.spd), 0.5)
         self.T = np.where(T < 200, np.copy(T)+CtoK, np.copy(T))
-        if self.meth in ["NCAR", "ecmwf"]:
-            self.T = np.maximum(self.T, 180)
+        # if self.meth in ["NCAR", "ecmwf"]:
+        #     self.T = np.maximum(self.T, 180)
         self.hum = ['no', np.full(SST.shape, 80)] if hum is None else hum
         self.SST = np.where(SST < 200, np.copy(SST)+CtoK, np.copy(SST))
         self.lat = np.full(self.arr_shp, 45) if lat is None else lat
@@ -627,42 +603,13 @@ class S88:
         self.meth = "S88"
 
 
-class S80(S88):
-
-    def __init__(self):
-        self.meth = "S80"
-        self.u_lo = [6, 6]
-        self.u_hi = [22, 22]
-
-
-class YT96(S88):
-    # def _minimum_params(self):
-    #     self.u10n = np.where(self.h_in[0]/self.monob > 0,
-    #                          np.maximum(np.copy(self.u10n), 0.1), self.u10n)
-
-    def __init__(self):
-        self.meth = "YT96"
-
-        # no limits to u range as we use eq. 21 for cdn
-        # self.u_lo = [0, 3]
-        # self.u_hi = [26, 26]
-
-
-class LP82(S88):
-
-    def __init__(self):
-        self.meth = "LP82"
-        self.u_lo = [3, 3]
-        self.u_hi = [25, 25]
-
-
 class NCAR(S88):
 
     def _minimum_params(self):
         self.cd = np.maximum(np.copy(self.cd), 1e-4)
         self.ct = np.maximum(np.copy(self.ct), 1e-4)
         self.cq = np.maximum(np.copy(self.cq), 1e-4)
-        self.zo = np.minimum(np.copy(self.zo), 0.0025)
+        # self.zo = np.minimum(np.copy(self.zo), 0.0025)
         # self.u10n = np.maximum(np.copy(self.u10n), 0.25)
 
     def __init__(self):
@@ -711,18 +658,6 @@ class ecmwf(C30):
         self.meth = "ecmwf"
         self.default_gust = [1, 1.2, 600, 0.01]
         self.skin = "ecmwf"
-
-
-class Beljaars(C30):
-    # def set_coolskin_warmlayer(self, wl=0, cskin=1, skin="Beljaars", Rl=None,
-    #                            Rs=None):
-    #     self._fix_coolskin_warmlayer(wl, cskin, skin, Rl, Rs)
-
-    def __init__(self):
-        self.meth = "Beljaars"
-        self.default_gust = [1, 1.2, 600, 0.01]
-        self.skin = "ecmwf"
-        # self.skin = "Beljaars"
 
 
 def AirSeaFluxCode_dev(spd, T, SST, SST_fl, meth, lat=None, hum=None, P=None,

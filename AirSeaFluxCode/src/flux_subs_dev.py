@@ -95,7 +95,7 @@ def cdn_from_roughness(u10n, usr, Ta, grav, meth):
                   np.power(usr, 2)/grav)
         elif meth in ["ecmwf", "Beljaars"]:
             # eq. (3.26) p.38 over sea IFS Documentation cy46r1
-            # zo = 0.018*np.power(usr, 2)/grav+0.11*visc_air(Ta)/usr
+            zo = 0.018*np.power(usr, 2)/grav+0.11*visc_air(Ta)/usr
             # temporary as in aerobulk
             zo = np.minimum(np.abs(zo), 0.001)
         else:
@@ -103,8 +103,8 @@ def cdn_from_roughness(u10n, usr, Ta, grav, meth):
 
         cdn = np.power(kappa/np.log(10/zo), 2)
         # temporary as in aerobulk
-        if meth == "ecmwf":
-            cdn = np.maximum(cdn, 0.1e-3)
+        # if meth == "ecmwf":
+        #     cdn = np.maximum(cdn, 0.1e-3)
     return cdn
 # ---------------------------------------------------------------------
 
@@ -198,17 +198,17 @@ def ctqn_calc(corq, zol, cdn, usr, zo, Ta, meth):
         ctn = np.power(kappa, 2)/np.log(10/zo)/np.log(10/zot)
     elif meth in ["ecmwf", "Beljaars"]:
         # eq. (3.26) p.38 over sea IFS Documentation cy46r1
-        # zot = 0.40*visc_air(Ta)/usr
-        # zoq = 0.62*visc_air(Ta)/usr
+        zot = 0.40*visc_air(Ta)/usr
+        zoq = 0.62*visc_air(Ta)/usr
         # temporary as in aerobulk next 2lines
         # eq.3.26, Chap.3, p.34, IFS doc - Cy31r1
         zot = np.minimum(np.abs(zot), 0.001)
         zoq = np.minimum(np.abs(zoq), 0.001)
-        # cqn = np.power(kappa, 2)/np.log(10/zo)/np.log(10/zoq)
-        # ctn = np.power(kappa, 2)/np.log(10/zo)/np.log(10/zot)
+        cqn = np.power(kappa, 2)/np.log(10/zo)/np.log(10/zoq)
+        ctn = np.power(kappa, 2)/np.log(10/zo)/np.log(10/zot)
         # temporary as in aerobulk
-        ctn = np.maximum(ctn, 0.1e-3)
-        cqn = np.maximum(cqn, 0.1e-3)
+        # ctn = np.maximum(ctn, 0.1e-3)
+        # cqn = np.maximum(cqn, 0.1e-3)
     else:
         raise ValueError("Unknown method ctqn: "+meth)
 
@@ -698,7 +698,7 @@ def apply_GF(gust, spd, wind, step):
 
     """
     # 1. following C35 documentation, 2. use GF to TSF, u10n uzout,
-    # 3. GF=1, 4. UA,  5. C35 code 6. ecmwf aerobulk)
+    # 3. GF=1, 4. UA/ecmwf,  5. C35 code 
     # ratio of gusty to horizontal wind; gustiness factor
     if step in ["u"]:
         GustFact = wind*0+1
