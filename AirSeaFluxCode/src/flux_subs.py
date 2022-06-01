@@ -633,7 +633,7 @@ def apply_GF(gust, spd, wind, step):
         GustFact = wind*0+1
         if gust[0] in [1, 2]:
             GustFact = np.sqrt(wind/spd)
-        elif gust[0] == 5:
+        elif gust[0] == 6:
             # as in C35 matlab code
             GustFact = wind/spd
     elif step == "TSF":

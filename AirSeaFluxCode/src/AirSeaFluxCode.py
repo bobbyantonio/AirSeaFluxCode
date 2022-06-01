@@ -10,14 +10,14 @@ from cs_wl_subs import *
 
 class S88:
     def _wind_iterate(self, ind):
-        if self.gust[0] in range(1, 6):
+        if self.gust[0] in range(1, 7):
             self.wind[ind] = np.sqrt(np.power(np.copy(self.spd[ind]), 2) +
                                      np.power(get_gust(
                                          self.gust[1], self.gust[2],
                                          self.gust[3], self.theta[ind],
                                          self.usr[ind], self.tsrv[ind],
                                          self.grav[ind]), 2))
-            if self.gust[0] in [3, 4]:
+            if self.gust[0] in [3, 4, 5]:
                 # self.GustFact[ind] = 1
                 # option to not remove GustFact
                 self.u10n[ind] = self.wind[ind]-self.usr[ind]/kappa*(
@@ -92,11 +92,6 @@ class S88:
                     self.SST[ind]), self.rho[ind], self.Rs[ind], self.Rnl[ind],
                     self.cp[ind], self.lv[ind], np.copy(self.tkt[ind]),
                     self.usr[ind], self.tsr[ind], self.qsr[ind], self.grav[ind])
-
-                # self.dter[ind] = cs_C35(np.copy(
-                #     self.skt[ind]), self.rho[ind], self.Rs[ind], self.Rnl[ind],
-                #     self.cp[ind], self.lv[ind], self.usr[ind], self.tsr[ind],
-                #     self.qsr[ind], self.grav[ind])
             elif self.skin == "ecmwf":
                 self.dter[ind] = cs_ecmwf(
                     self.rho[ind], self.Rs[ind], self.Rnl[ind], self.cp[ind],
@@ -406,6 +401,12 @@ class S88:
             self.uref = self.wind-self.usr/kappa*(
                 np.log(self.h_in[0]/self.h_out[0])-self.psim +
                 psim_calc(self.h_out[0]/self.monob, self.meth))
+        elif self.gust[0] == 5:
+            self.u10n = self.spd-self.usr/kappa*(
+                np.log(self.h_in[0]/self.ref10)-self.psim)
+            self.uref = self.spd-self.usr/kappa*(
+                np.log(self.h_in[0]/self.h_out[0])-self.psim +
+                psim_calc(self.h_out[0]/self.monob, self.meth))
         else:
             self.u10n = self.spd-self.usr/kappa/self.GFo*(
                 np.log(self.h_in[0]/self.ref10)-self.psim) # C.4-7
@@ -527,7 +528,7 @@ class S88:
             gust = [0, 0, 0, 0]
 
         assert np.size(gust) == 4, "gust input must be a 4x1 array"
-        assert gust[0] in range(6), "gust at position 0 must be 0 to 5"
+        assert gust[0] in range(7), "gust at position 0 must be 0 to 6"
         self.gust = gust
 
     def _class_flag(self):

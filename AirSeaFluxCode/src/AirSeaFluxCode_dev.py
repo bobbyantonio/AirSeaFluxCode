@@ -10,7 +10,7 @@ from cs_wl_subs import *
 
 class S88:
     def _wind_iterate(self, ind):
-        if self.gust[0] in range(1, 6):
+        if self.gust[0] in range(1, 7):
             self.wind[ind] = np.sqrt(np.power(np.copy(self.spd[ind]), 2) +
                                      np.power(get_gust(
                                          self.gust[1], self.gust[2],
@@ -361,8 +361,6 @@ class S88:
                 self.tau = self.rho*np.power(self.usr, 2)*self.spd/self.wind
                 self.sensible = self.rho*self.cp*self.usr*self.tsr
                 self.latent = self.rho*self.lv*self.usr*self.qsr
-            
-
             # Set the new variables (for comparison against "old")
             new = np.array([np.copy(getattr(self, i)) for i in new_vars])
 
@@ -582,7 +580,7 @@ class S88:
             gust = [0, 0, 0, 0]
 
         assert np.size(gust) == 4, "gust input must be a 4x1 array"
-        assert gust[0] in range(6), "gust at position 0 must be 0 to 5"
+        assert gust[0] in range(7), "gust at position 0 must be 0 to 6"
         self.gust = gust
 
     def _class_flag(self):
