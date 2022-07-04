@@ -19,13 +19,8 @@ from AirSeaFluxCode import AirSeaFluxCode
 import time
 from tabulate import tabulate
 #%%
-def reject_outliers(data, m=2):
-    x = np.copy(data)
-    x = np.where(np.abs(x-np.nanmean(x)) < m*np.nanstd(x), x, np.nan)
-    return x
-
-
-def toy_ASFC(inF, outF, outS, gustIn, cskinIn, tolIn, meth, qmIn, LIn, stdIn):
+def toy_ASFC(inF, outF, outS, sst_fl, gustIn, cskinIn, tolIn, meth, qmIn, LIn,
+             stdIn):
     """
     Example routine of how to run AirSeaFluxCode with the test data given
     and save output either as .csv or NetCDF
@@ -57,6 +52,7 @@ def toy_ASFC(inF, outF, outS, gustIn, cskinIn, tolIn, meth, qmIn, LIn, stdIn):
         latitude from input netCDF file
 
     """
+    out_var = ("tau", "sensible", "latent", "u10n", "t10n", "q10n")
     if (inF == "data_all.csv"):
         #%% load data_all
         inDt = pd.read_csv("data_all.csv")
@@ -78,10 +74,10 @@ def toy_ASFC(inF, outF, outS, gustIn, cskinIn, tolIn, meth, qmIn, LIn, stdIn):
         hin = np.array([hu, ht, ht])
         del hu, ht, inDt
         #%% run AirSeaFluxCode
-        res = AirSeaFluxCode(spd, t, sst, lat=lat, hum=['rh', rh], P=p,
+        res = AirSeaFluxCode(spd, t, sst, sst_fl, lat=lat, hum=['rh', rh], P=p,
                              hin=hin, Rs=sw, tol=tolIn, gust=gustIn,
-                             cskin=cskinIn, meth=meth, qmeth=qmIn, maxiter=30,
-                             out_var="limited", L=LIn)
+                             cskin=cskinIn, meth=meth, qmeth=qmIn, L=LIn, 
+                             maxiter=10, out_var = out_var)
         flg = res["flag"]
 
     elif (inF == 'era5_r360x180.nc'):
@@ -120,18 +116,19 @@ def toy_ASFC(inF, outF, outS, gustIn, cskinIn, tolIn, meth, qmIn, LIn, stdIn):
         flg = np.empty((len(tim),len(lon)*len(lat)), dtype="object")
         # reshape input and run code
         for x in range(len(tim)):
-            a = AirSeaFluxCode(
-                spd.reshape(len(tim), len(lon)*len(lat))[x, :],
-                T.reshape(len(tim), len(lon)*len(lat))[x, :],
-                sst.reshape(len(tim), len(lon)*len(lat))[x, :],
-                lat=latIn, 
-                hum=['Td', Td.reshape(len(tim), len(lon)*len(lat))[x, :]],
-                P=p.reshape(len(tim), len(lon)*len(lat))[x, :], hin=hin,
-                Rs=sw.reshape(len(tim), len(lon)*len(lat))[x, :],
-                Rl=lw.reshape(len(tim), len(lon)*len(lat))[x, :],
-                gust=gustIn, cskin=cskinIn, tol=tolIn, meth=meth, qmeth=qmIn,
-                maxiter=30, out_var="limited", L=LIn)
-            temp = a.iloc[:,:-1]
+            a = AirSeaFluxCode(spd.reshape(len(tim), len(lon)*len(lat))[x, :],
+                               T.reshape(len(tim), len(lon)*len(lat))[x, :],
+                               sst.reshape(len(tim), len(lon)*len(lat))[x, :],
+                               sst_fl, lat=latIn,
+                               hum=['Td', Td.reshape(len(tim), len(lon)*len(lat))[x, :]],
+                               P=p.reshape(len(tim), len(lon)*len(lat))[x, :],
+                               hin=hin,
+                               Rs=sw.reshape(len(tim), len(lon)*len(lat))[x, :],
+                               Rl=lw.reshape(len(tim), len(lon)*len(lat))[x, :],
+                               gust=gustIn, cskin=cskinIn, tol=tolIn,
+                               meth=meth, qmeth=qmIn, maxiter=30, L=LIn,
+                               out_var = out_var)
+            temp = a.iloc[:, :-1]
             temp = temp.to_numpy()
             flg[x, :] = a["flag"]
             res[x, :, :] = temp
@@ -155,9 +152,10 @@ def toy_ASFC(inF, outF, outS, gustIn, cskinIn, tolIn, meth, qmIn, LIn, stdIn):
             tau = fid.createVariable('tau', 'f4', ('time','lat','lon'))
             sensible = fid.createVariable('shf', 'f4', ('time','lat','lon'))
             latent = fid.createVariable('lhf', 'f4', ('time','lat','lon'))
-            urefs = fid.createVariable('uref', 'f4', ('time','lat','lon'))
-            trefs = fid.createVariable('tref', 'f4', ('time','lat','lon'))
-            qrefs = fid.createVariable('qref', 'f4', ('time','lat','lon'))
+            monob = fid.createVariable('MO', 'f4', ('time','lat','lon'))
+            u10n = fid.createVariable('u10n', 'f4', ('time','lat','lon'))
+            t10n = fid.createVariable('t10n', 'f4', ('time','lat','lon'))
+            q10n = fid.createVariable('q10n', 'f4', ('time','lat','lon'))
             flag = fid.createVariable('flag', 'U1', ('time','lat','lon'))
 
             longitude[:] = lon
@@ -166,9 +164,9 @@ def toy_ASFC(inF, outF, outS, gustIn, cskinIn, tolIn, meth, qmIn, LIn, stdIn):
             tau[:] = res[:, :, 0].reshape((len(tim), len(lat), len(lon)))*msk
             sensible[:] = res[:, :, 1].reshape((len(tim), len(lat), len(lon)))*msk
             latent[:] = res[:, :, 2].reshape((len(tim), len(lat), len(lon)))*msk
-            urefs[:] = res[:, :, 3].reshape((len(tim), len(lat), len(lon)))*msk
-            trefs[:] = res[:, :, 4].reshape((len(tim), len(lat), len(lon)))*msk
-            qrefs[:] = res[:, :, 5].reshape((len(tim), len(lat), len(lon)))*msk
+            u10n[:] = res[:, :, 3].reshape((len(tim), len(lat), len(lon)))*msk
+            t10n[:] = res[:, :, 4].reshape((len(tim), len(lat), len(lon)))*msk
+            q10n[:] = res[:, :, 5].reshape((len(tim), len(lat), len(lon)))*msk
             flag[:] = flg.reshape((len(tim), len(lat), len(lon)))
 
             longitude.long_name = 'Longitude'
@@ -183,20 +181,22 @@ def toy_ASFC(inF, outF, outS, gustIn, cskinIn, tolIn, meth, qmIn, LIn, stdIn):
             sensible.units = 'W/m^2'
             latent.long_name = 'Latent heat flux'
             latent.units = 'W/m^2'
-            urefs.long_name = 'wind speed at ref height'
-            urefs.units = 'm/s'
-            trefs.long_name = 'temperature at ref height'
-            trefs.units = 'degrees Celsius'
-            qrefs.long_name = 'specific humidity at ref height'
-            qrefs.units = 'kgr/kgr'
+            u10n.long_name = '10m neutral wind speed'
+            u10n.units = 'm/s'
+            t10n.long_name = '10m neutral temperature'
+            t10n.units = 'degrees Celsius'
+            q10n.long_name = '10m neutral specific humidity'
+            q10n.units = 'kgr/kgr'
             flag.long_name = ('flag "n" normal, "u": u10n < 0, "q": q10n < 0,'
                               '"l": zol<0.01, "m": missing, "i": points that'
                               'have not converged')
             fid.close()
             #%% delete variables
-            del longitude, latitude, Date, tau, sensible, latent
-            del urefs, trefs, qrefs
-            del tim, T, Td, p, lw, sw, lsm, spd, hin, latIn, icon, msk
+            # del longitude, latitude, Date, tau, sensible, latent, monob, cd, cdn
+            # del ct, ctn, cq, cqn, tsrv, tsr, qsr, usr, psim, psit, psiq, u10n, t10n
+            # del tv10n, q10n, zo, zot, zoq, urefs, trefs, qrefs, itera, dter, dqer
+            # del qair, qsea, Rl, Rs, Rnl, dtwl
+            # del tim, T, Td, p, lw, sw, lsm, spd, hin, latIn, icon, msk
         else:
             #%% save NetCDF4
             fid = nc.Dataset(outF,'w', format='NETCDF4')
@@ -209,9 +209,9 @@ def toy_ASFC(inF, outF, outS, gustIn, cskinIn, tolIn, meth, qmIn, LIn, stdIn):
             tau = fid.createVariable('tau', 'f4', 'time')
             sensible = fid.createVariable('shf', 'f4', 'time')
             latent = fid.createVariable('lhf', 'f4', 'time')
-            urefs = fid.createVariable('uref', 'f4', 'time')
-            trefs = fid.createVariable('tref', 'f4', 'time')
-            qrefs = fid.createVariable('qref', 'f4', 'time')
+            u10n = fid.createVariable('u10n', 'f4', 'time')
+            t10n = fid.createVariable('t10n', 'f4', 'time')
+            q10n = fid.createVariable('q10n', 'f4', 'time')
             flag = fid.createVariable('flag', 'U1', 'time')
 
             longitude[:] = lon
@@ -220,9 +220,9 @@ def toy_ASFC(inF, outF, outS, gustIn, cskinIn, tolIn, meth, qmIn, LIn, stdIn):
             tau[:] = res["tau"]
             sensible[:] = res["shf"]
             latent[:] = res["lhf"]
-            urefs[:] = res["uref"]
-            trefs[:] = res["tref"]
-            qrefs[:] = res["qref"]
+            u10n[:] = res["u10n"]
+            t10n[:] = res["t10n"]
+            q10n[:] = res["q10n"]
             flag[:] = res["flag"]
 
             longitude.long_name = 'Longitude'
@@ -237,21 +237,22 @@ def toy_ASFC(inF, outF, outS, gustIn, cskinIn, tolIn, meth, qmIn, LIn, stdIn):
             sensible.units = 'W/m^2'
             latent.long_name = 'Latent heat flux'
             latent.units = 'W/m^2'
-            urefs.long_name = 'wind speed at ref height'
-            urefs.units = 'm/s'
-            trefs.long_name = 'temperature at ref height'
-            trefs.units = 'degrees Celsius'
-            qrefs.long_name = 'specific humidity at ref height'
-            qrefs.units = 'kgr/kgr'
+            u10n.long_name = '10m neutral wind speed'
+            u10n.units = 'm/s'
+            t10n.long_name = '10m neutral temperature'
+            t10n.units = 'degrees Celsius'
+            q10n.long_name = '10m neutral specific humidity'
+            q10n.units = 'kgr/kgr'
             flag.long_name = ('flag "n" normal, "u": u10n < 0, "q": q10n < 0,'
                               '"l": zol<0.01, "m": missing, "i": points that'
                               'have not converged')
             fid.close()
             #%% delete variables
-            del longitude, latitude, Date, tau, sensible, latent
-            del urefs, trefs, qrefs
-            del qair, qsea, Rl, Rs, Rnl, ug, rh, Rib
-            del t, date, p, sw, spd, hin, sst
+            # del longitude, latitude, Date, tau, sensible, latent, monob, cd, cdn
+            # del ct, ctn, cq, cqn, tsrv, tsr, qsr, usr, psim, psit, psiq, u10n, t10n
+            # del tv10n, q10n, zo, zot, zoq, urefs, trefs, qrefs, itera, dter, dqer
+            # del qair, qsea, Rl, Rs, Rnl, ug, rh, Rib
+            # del t, date, p, sw, spd, hin, sst
     else:
         #%% save as .csv
         res.insert(loc=0, column='date', value=date)
@@ -272,6 +273,8 @@ else:
     meth = meth #[meth]
 ext = meth+"_"
 #------------------------------------------------------------------------------
+sst_fl = input("Give SST flag (bulk/sin): \n")
+#------------------------------------------------------------------------------
 qmIn = input("Give prefered method for specific humidity: \n")
 if (qmIn == ''):
     qmIn = 'Buck2' # default
@@ -285,7 +288,7 @@ else:
 #------------------------------------------------------------------------------
 gustIn = input("Give gustiness option (to switch it off enter 0;"
                " to set your own input use the form [1, B, zi, ugmin]"
-               " i.e. [1, 1, 800, 0.2] or "
+               " i.e. [1, 1, 800, 0.01] or "
                "to use default press enter): \n")
 if (gustIn == ''):
     gustIn = None
@@ -364,8 +367,8 @@ elif (outS[-4:] != '.txt'):
 #------------------------------------------------------------------------------
 print("\n run_ASFC.py, started for method "+meth)
 
-res, lon, lat = toy_ASFC(inF, outF, outS, gustIn, cskinIn, tolIn, meth, qmIn,
-                         LIn, stdIn)
+res, lon, lat = toy_ASFC(inF, outF, outS, sst_fl, gustIn, cskinIn, tolIn, 
+                         meth, qmIn, LIn, stdIn)
 print("run_ASFC.py took ", np.round((time.perf_counter()-start_time)/60, 2),
       "minutes to run")
 
@@ -396,22 +399,19 @@ print("run_ASFC.py took ", np.round((time.perf_counter()-start_time)/60, 2),
 #         plt.savefig('./'+ttl[i][:3]+'_'+ext+'.png', dpi=300, bbox_inches='tight')
 
 #%% generate txt file with statistics
-if ((cskinIn == None) and (meth == "S80" or meth == "S88" or meth == "LP82"
-                           or meth == "YT96" or meth == "UA" or
-                           meth == "NCAR")):
+if (cskinIn == None) and (meth in ["S80", "S88", "LP82", "YT96", "UA", "NCAR"]):
    cskinIn = 0
-elif ((cskinIn == None) and (meth == "C30" or meth == "C35"
-                             or meth == "ecmwf" or meth == "Beljaars")):
+elif (cskinIn == None) and (meth in ["C30", "C35", "ecmwf", "Beljaars"]):
    cskinIn = 1
-if (np.all(gustIn == None) and (meth == "C30" or meth == "C35")):
+if np.all(gustIn == None) and (meth in ["C30", "C35"]):
     gustIn = [1, 1.2, 600, 0.2]
-elif (np.all(gustIn == None) and (meth == "UA" or meth == "ecmwf")):
+elif np.all(gustIn == None) and (meth in ["UA", "ecmwf"]):
     gustIn = [1, 1, 1000, 0.01]
 elif np.all(gustIn == None):
-    gustIn = [1, 1.2, 600, 0.01]
-elif ((np.size(gustIn) < 4) and (gustIn == 0)):
+    gustIn = [1, 1.2, 800, 0.01]
+elif (np.size(gustIn) < 4) and (gustIn == 0):
     gust = [0, 0, 0, 0]
-if (tolIn == None):
+if tolIn == None:
     tolIn = ['all', 0.01, 0.01, 1e-05, 1e-3, 0.1, 0.1]
 
 
@@ -422,7 +422,7 @@ print('input file name: {}, \n method: {}, \n gustiness: {}, \n cskin: {},'
                                                            qmIn, LIn),
       file=open('./'+outS, 'a'))
 ttl = np.asarray(["tau  ", "shf  ", "lhf  ", 
-                  "urefs", "trefs", "qrefs"])
+                  "u10n ", "t10n ", "q10n "])
 header = ["var", "mean", "median", "min", "max", "5%", "95%"]
 n = np.shape(res)
 stats = np.copy(ttl)
@@ -440,7 +440,7 @@ if (inF == 'era5_r360x180.nc'):
                              "2.2e")), file=open('./'+outS, 'a'))
     print('-'*79+'\n', file=open('./'+outS, 'a'))
 elif (inF == "data_all.csv"):
-    a = res.loc[:,"tau":"rh"].to_numpy(dtype="float64").T
+    a = res.loc[:, "tau":"q10n"].to_numpy(dtype="float64").T
     stats = np.c_[stats, np.nanmean(a, axis=1)]
     stats = np.c_[stats, np.nanmedian(a, axis=1)]
     stats = np.c_[stats, np.nanmin(a, axis=1)]
