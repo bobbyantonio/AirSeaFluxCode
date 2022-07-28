@@ -416,7 +416,6 @@ class S88:
 
         self.GustFact = self.wind/self.spd
         self.usr_gust = np.copy(self.usr)
-        self.usr_nogust = self.usr/self.GFo
         # include lapse rate adjustment as theta is well-mixed
         self.tref = self.theta-self.tlapse*self.h_out[1]-self.tsr/kappa * \
             (np.log(self.h_in[1]/self.h_out[1])-self.psit +
@@ -719,15 +718,13 @@ def AirSeaFluxCode(spd, T, SST, SST_fl, meth, lat=None, hum=None, P=None,
             set 1 to keep points
         out_var : str
            optional. user can define pandas array of variables to be output.
-           the default full pandas array is :
+           the default full pandas array, with cskin=0 gust=0, is :
                out_var = ("tau", "sensible", "latent", "monob", "cd", "cd10n",
                            "ct", "ct10n", "cq", "cq10n", "tsrv", "tsr", "qsr",
                            "usr", "psim", "psit", "psiq", "psim_ref", "psit_ref",
                            "psiq_ref", "u10n", "t10n", "q10n", "zo", "zot", "zoq",
-                           "uref", "tref", "qref", "dter", "dqer", "dtwl", "tkt",
-                           "qair", "qsea", "Rl", "Rs", "Rnl", "ug", "usrGF",
-                           "GustFact", "Rb", "rh", "rho", "cp", "lv", "theta",
-                           "itera")
+                           "uref", "tref", "qref", "qair", "qsea", "Rb", "rh",
+                           "rho", "cp", "lv", "theta", "itera")
             the "limited" pandas array is:
                 out_var = ("tau", "sensible", "latent", "uref", "tref", "qref")
             the user can define a custom pandas array of variables to  output.
@@ -778,7 +775,7 @@ def AirSeaFluxCode(spd, T, SST, SST_fl, meth, lat=None, hum=None, P=None,
                        37. downward shortwave radiation (Rs)
                        38. downward net longwave radiation (Rnl)
                        39. gust wind speed (ug)
-                       40. star wind speed/GustFact (usrGF)
+                       40. star wind speed with gust (usr_gust)
                        41. Gustiness Factor (GustFact)
                        42. Bulk Richardson number (Rb)
                        43. relative humidity (rh)

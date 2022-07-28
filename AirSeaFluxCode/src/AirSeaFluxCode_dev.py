@@ -426,7 +426,6 @@ class S88:
 
         self.GustFact = self.wind/self.spd
         self.usr_gust = np.copy(self.usr)
-        self.usr_nogust = self.usr/self.GFo
         # include lapse rate adjustment as theta is well-mixed
         self.tref = self.theta-self.tlapse*self.h_out[1]-self.tsr/kappa * \
             (np.log(self.h_in[1]/self.h_out[1])-self.psit +
@@ -795,7 +794,7 @@ def AirSeaFluxCode_dev(spd, T, SST, SST_fl, meth, lat=None, hum=None, P=None,
                        37. downward shortwave radiation (Rs)
                        38. downward net longwave radiation (Rnl)
                        39. gust wind speed (ug)
-                       40. star wind speed/GustFact (usrGF)
+                       40. star wind with gust (usr_gust)
                        41. Gustiness Factor (GustFact)
                        42. Bulk Richardson number (Rb)
                        43. relative humidity (rh)
