@@ -176,21 +176,21 @@ def cs_C35(sst, rho, Rs, Rnl, cp, lv, delta, usr, tsr, qsr, grav):
     # density of water, specific heat capacity of water, water viscosity,
     # thermal conductivity of water
     rhow, cpw, visw, tcw = 1022, 4000, 1e-6, 0.6
-    for i in range(4):
-        aw = 2.1e-5*np.power(np.maximum(sst+3.2, 0), 0.79)
-        bigc = 16*grav*cpw*np.power(rhow*visw, 3)/(np.power(tcw, 2)*np.power(
-            rho, 2))
-        Rns = 0.945*Rs  # albedo correction
-        shf = rho*cp*usr*tsr
-        lhf = rho*lv*usr*qsr
-        Qnsol = shf+lhf+Rnl
-        fs = 0.065+11*delta-6.6e-5/delta*(1-np.exp(-delta/8.0e-4))
-        Q = Qnsol+Rns*fs
-        Qb = aw*Q+0.026*np.minimum(lhf, 0)*cpw/lv
-        xlamx = 6*np.ones(sst.shape)
-        xlamx = np.where(Qb > 0, 6/(1+(bigc*Qb/usr**4)**0.75)**0.333, 6)
-        delta = np.minimum(xlamx*visw/(np.sqrt(rho/rhow)*usr), 0.01)
-        delta = np.where(Qb > 0, xlamx*visw/(np.sqrt(rho/rhow)*usr), delta)
+    aw = 2.1e-5*np.power(np.maximum(sst+3.2, 0), 0.79)
+    bigc = 16*grav*cpw*np.power(rhow*visw, 3)/(np.power(tcw, 2)*np.power(
+        rho, 2))
+    Rns = 0.945*Rs  # albedo correction
+    shf = rho*cp*usr*tsr
+    lhf = rho*lv*usr*qsr
+    Qnsol = shf+lhf+Rnl
+    fs = 0.065+11*delta-6.6e-5/delta*(1-np.exp(-delta/8.0e-4))
+    Q = Qnsol+Rns*fs
+    Qb = aw*Q+0.026*np.minimum(lhf, 0)*cpw/lv
+    xlamx = 6*np.ones(sst.shape)
+    xlamx = np.where(Qb > 0, 6, 6/(1+(bigc*np.abs(Qb)/usr**4)**0.75)**0.333)
+    delta = np.where(
+        Qb > 0, np.minimum(xlamx*visw/(np.sqrt(rho/rhow)*usr), 0.01), 
+        xlamx*visw/(np.sqrt(rho/rhow)*usr))
     dter = Q*delta/tcw
     return dter, delta
 # ---------------------------------------------------------------------
