@@ -186,7 +186,7 @@ def get_outvars(out_var, cskin, gust):
                         "usr", "psim", "psit", "psiq", "psim_ref", "psit_ref",
                         "psiq_ref", "u10n", "t10n", "q10n", "zo", "zot", "zoq",
                         "uref", "tref", "qref", "dter", "dqer", "dtwl", "tkt",
-                        "Rl", "Rs", "Rnl""qair", "qsea", "Rb", "rh", "rho",
+                        "Rl", "Rs", "Rnl", "qair", "qsea", "Rb", "rh", "rho",
                         "cp", "lv", "theta", "itera")
         elif cskin == 0 and gust[0] != 0:  # skin OFF and gust ON
             res_vars = ("tau", "sensible", "latent", "monob", "cd", "cd10n",
