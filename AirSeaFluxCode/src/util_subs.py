@@ -215,7 +215,7 @@ def get_outvars(out_var, cskin, gust):
     elif out_var == "limited":
         res_vars = ("tau", "sensible", "latent", "uref", "tref", "qref")
     else:
-         res_vars = out_var
+        res_vars = out_var
     return res_vars
 # ---------------------------------------------------------------------
 
