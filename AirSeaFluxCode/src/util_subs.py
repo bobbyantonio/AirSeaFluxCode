@@ -23,7 +23,7 @@ def get_heights(h, dim_len):
     hh : array
     """
     hh = np.zeros((3, dim_len))
-    if (type(h) == float or type(h) == int):
+    if isinstance(h, (float, int)):
         hh[0, :], hh[1, :], hh[2, :] = h, h, h
     elif (len(h) == 2 and np.ndim(h) == 1):
         hh[0, :], hh[1, :], hh[2, :] = h[0], h[1], h[1]
