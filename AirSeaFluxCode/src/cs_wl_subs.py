@@ -112,7 +112,7 @@ def cs(sst, d, rho, Rs, Rnl, cp, lv, usr, tsr, qsr, grav, opt):
         # in F96 first term in eq. 17 is 0.137 insted of 0.065
         Q = Qnsol+Rns*fs
         Qb = aw*Q+0.026*np.minimum(lhf, 0)*cpw/lv  # eq. 8 F96
-        d = delta(aw, Qb, usr, grav, rho, opt)
+        d = delta(aw, Qb, usr, grav)
     elif opt == "ecmwf":
         aw = np.maximum(1e-5, 1e-5*(sst-CtoK))
         # d = delta(aw, Qnsol, usr, grav, rho, opt)
@@ -121,7 +121,7 @@ def cs(sst, d, rho, Rs, Rnl, cp, lv, usr, tsr, qsr, grav, opt):
             # and Eq.(5) Zeng & Beljaars, 2005
             fs = 0.065+11*d-6.6e-5/d*(1-np.exp(-d/8e-4)) # eq. 8.153 Cy46r1
             Q = Qnsol+Rns*fs
-            d = delta(aw, Q, usr, grav, rho, opt)
+            d = delta(aw, Q, usr, grav)
     dter = Q*d/tcw # eq. 4 F96
     return dter, d
 # ---------------------------------------------------------------------
