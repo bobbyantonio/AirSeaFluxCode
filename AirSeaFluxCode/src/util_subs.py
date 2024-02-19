@@ -63,7 +63,7 @@ def gc(lat, lon=None):
     c3 = 0.0000001262
     c4 = 0.0000000007
     if lon is not None:
-        lon_m, lat_m = np.meshgrid(lon, lat)
+        _, lat_m = np.meshgrid(lon, lat)
     else:
         lat_m = lat
     phi = lat_m*np.pi/180.
