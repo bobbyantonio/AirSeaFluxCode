@@ -7,7 +7,7 @@ long_description = (here / 'README.md').read_text(encoding='utf-8')
 
 setup(
     name='AirSeaFluxCode',
-    version='1.0.0',    
+    version='1.0.1',
     description='A package to compute turbulent surface fluxes',
     long_description=long_description,  # Optional
     url='https://git.noc.ac.uk/NOCSurfaceProcesses/AirSeaFluxCode',
@@ -15,9 +15,9 @@ setup(
     author_email='sbiri@noc.ac.uk',
     license='CCBY',
     package_dir={'': 'src'},  # Optional
-    packages=find_packages(where='src'), #['AirSeaFluxCode'],
+    packages=find_packages(where='src'),  # ['AirSeaFluxCode'],
     install_requires=['pandas',
-                      'numpy',                     
+                      'numpy',
                       ],
 
     classifiers=[
@@ -27,7 +27,7 @@ setup(
         #   5 - Production/Stable
         'Development Status :: 4 - Beta',
         'Intended Audience :: Science/Research',
-        'License :: OSI Approved :: CCBY License',  
+        'License :: OSI Approved :: CCBY License',
         'Operating System :: POSIX :: Linux',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.4',
