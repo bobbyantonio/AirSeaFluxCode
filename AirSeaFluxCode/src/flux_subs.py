@@ -757,18 +757,18 @@ def get_tsrv(tsr, qsr, Ta, qair):
     Parameters
     ----------
     tsr : float
-        star temperature (K)
+        star temperature [K]
     qsr : float
-        star specific humidity (g/kg)
+        star specific humidity [g/kg]
     Ta : float
-        air temperature (K)
+        air temperature [K]
     qair : float
-        air specific humidity (g/kg)
+        air specific humidity [g/kg]
 
     Returns
     -------
     tsrv : float
-        virtual star temperature (K)
+        virtual star temperature [K]
 
     """
     # NOTE: 0.6077 goes with mixing ratio or [kg/kg] humidity
@@ -786,21 +786,21 @@ def get_Rb(grav, usr, hin_u, hin_t, tv, dtv, wind, monob, meth):
     Parameters
     ----------
     grav : float
-        acceleration due to gravity (m/s2)
+        acceleration due to gravity [m/s2]
     usr : float
-        friction wind speed (m/s)
+        friction wind speed [m/s]
     hin_u : float
-        u sensor height (m)
+        u sensor height [m]
     hin_t : float
-        t sensor height (m)
+        t sensor height [m]
     tv : float
-        virtual temperature (K)
+        virtual temperature [K]
     dtv : float
-        virtual temperature difference, air and sea (K)
+        virtual temperature difference, air and sea [K]
     wind : float
-        wind speed (m/s)
+        wind speed [m/s]
     monob : float
-        Monin-Obukhov length from previous iteration step (m)
+        Monin-Obukhov length from previous iteration step [m]
     meth : str
         bulk parameterisation method option: "S80", "S88", "LP82", "YT96",
         "UA", "NCAR", "C30", "C35", "ecmwf", "Beljaars"
@@ -834,13 +834,13 @@ def get_LRb(Rb, hin_t, monob, zo, zot, meth):
     Rb  : float
        Richardson number
     hin_t : float
-        t sensor height (m)
+        t sensor height [m]
     monob : float
-        Monin-Obukhov length from previous iteration step (m)
+        Monin-Obukhov length from previous iteration step [m]
     zo   : float
-        surface roughness       (m)
+        surface roughness       [m]
     zot   : float
-        temperature roughness length       (m)
+        temperature roughness length       [m]
     meth : str
         bulk parameterisation method option: "S80", "S88", "LP82", "YT96",
         "UA", "NCAR", "C30", "C35", "ecmwf", "Beljaars"
@@ -848,7 +848,7 @@ def get_LRb(Rb, hin_t, monob, zo, zot, meth):
     Returns
     -------
     monob : float
-        M-O length (m)
+        M-O length [m]
 
     """
     zol = Rb*(np.power(
@@ -869,18 +869,18 @@ def get_Ltsrv(tsrv, grav, tv, usr):
     Parameters
     ----------
     tsrv : float
-        virtual star temperature (K)
+        virtual star temperature [K]
     grav : float
-        acceleration due to gravity (m/s2)
+        acceleration due to gravity [m/s2]
     tv : float
-        virtual temperature (K)
+        virtual temperature [K]
     usr : float
-        friction wind speed (m/s)
+        friction wind speed [m/s]
 
     Returns
     -------
     monob : float
-        M-O length (m)
+        M-O length [m]
 
     """
     tsrv = np.maximum(np.abs(tsrv), 1e-9)*np.sign(tsrv)

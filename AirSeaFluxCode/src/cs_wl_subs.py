@@ -137,8 +137,6 @@ def cs_C35(sst, rho, Rs, Rnl, cp, lv, delta, usr, tsr, qsr, grav):
     ----------
     sst : float
         sea surface temperature      [K]
-    qsea : float
-        specific humidity over sea   [g/kg]
     rho : float
         density of air               [kg/m^3]
     Rs : float

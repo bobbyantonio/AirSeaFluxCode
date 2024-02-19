@@ -41,11 +41,11 @@ class S88:
 
     def get_specHumidity(self, qmeth="Buck2"):
         self.qair, self.qsea = get_hum(self.hum, self.T, self.SST, self.P,
-                                       qmeth)
+                                       qmeth)  # [g/kg]
         if (np.all(np.isnan(self.qsea)) or np.all(np.isnan(self.qair))):
             raise ValueError("qsea and qair cannot be nan")
-        self.dq_in = self.qair-self.qsea
-        self.dq_full = self.qair-self.qsea
+        self.dq_in = self.qair-self.qsea  # [g/kg]
+        self.dq_full = self.qair-self.qsea  # [g/kg]
 
         # Set lapse rate and Potential Temperature (now we have humdity)
         self.cp = 1004.67*(1+0.84*self.qsea*0.001)  # qsea [g/kg]
@@ -105,9 +105,9 @@ class S88:
                     self.grav[ind], np.copy(self.Qs[ind]))
 
             self.dqer[ind] = get_dqer(self.dter[ind], self.SST[ind],
-                                      self.qsea[ind], self.lv[ind])
+                                      self.qsea[ind], self.lv[ind])  # [g/kg]
             self.skt[ind] = np.copy(self.SST[ind])+self.dter[ind]
-            self.skq[ind] = np.copy(self.qsea[ind])+self.dqer[ind]
+            self.skq[ind] = np.copy(self.qsea[ind])+self.dqer[ind]  # [g/kg]
             if self.wl == 1:
                 self.dtwl[ind] = wl_ecmwf(
                     self.rho[ind], self.Rs[ind], self.Rnl[ind], self.cp[ind],
@@ -117,11 +117,11 @@ class S88:
                 self.skt[ind] = (np.copy(self.SST[ind])+self.dter[ind] +
                                  self.dtwl[ind])
                 self.dqer[ind] = get_dqer(self.dter[ind], self.skt[ind],
-                                          self.qsea[ind], self.lv[ind])
-                self.skq[ind] = np.copy(self.qsea[ind])+self.dqer[ind]
+                                          self.qsea[ind], self.lv[ind])  # [g/kg]
+                self.skq[ind] = np.copy(self.qsea[ind])+self.dqer[ind]  # [g/kg]
         else:
             self.dter[ind] = np.zeros(self.SST[ind].shape)
-            self.dqer[ind] = np.zeros(self.SST[ind].shape)
+            self.dqer[ind] = np.zeros(self.SST[ind].shape)  # [g/kg]
             self.dtwl[ind] = np.zeros(self.SST[ind].shape)
             self.tkt[ind] = np.zeros(self.SST[ind].shape)
 
@@ -157,7 +157,7 @@ class S88:
             self.dter, self.tkt, self.dtwl = [
                 dummy_array(x) for x in (-0.3, 0.001, 0.3)]
             self.dqer = get_dqer(self.dter, self.SST, self.qsea,
-                                 self.lv)
+                                 self.lv)  # [g/kg]
             self.Rnl = 0.97*(self.Rl-5.67e-8*np.power(
                 self.SST-0.3*self.cskin, 4))
             self.Qs = 0.945*self.Rs
@@ -167,7 +167,7 @@ class S88:
             self.Rnl, self.Qs, self.tkt = [
                 np.empty(self.arr_shp)*self.msk for _ in range(3)]
         self.skt = np.copy(self.SST)
-        self.skq = np.copy(self.qsea)
+        self.skq = np.copy(self.qsea)  # [g/kg]
 
         self.u10n = np.copy(self.wind)
         self.usr = 0.035*self.u10n
@@ -306,7 +306,7 @@ class S88:
                 self.tsr[ind]/kappa * \
                 (np.log(self.h_in[1, ind]/self.ref10)-self.psit[ind])
             self.q10n[ind] = self.qair[ind]-self.qsr[ind]/kappa * \
-                (np.log(self.h_in[2, ind]/self.ref10)-self.psiq[ind])
+                (np.log(self.h_in[2, ind]/self.ref10)-self.psiq[ind])  # [g/kg]
 
             # update stability info
             self.tsrv[ind] = get_tsrv(
@@ -655,12 +655,12 @@ def AirSeaFluxCode(spd, T, SST, SST_fl, meth, lat=None, hum=None, P=None,
     Parameters
     ----------
         spd : float
-            relative wind speed in m/s (is assumed as magnitude difference
+            relative wind speed in [m/s] (is assumed as magnitude difference
             between wind and surface current vectors)
         T : float
-            air temperature in K (will convert if < 200)
+            air temperature [K] (will convert if < 200)
         SST : float
-            sea surface temperature in K (will convert if < 200)
+            sea surface temperature [K] (will convert if < 200)
         SST_fl : str
             provides information on the type of the input SST; "bulk" or
             "skin"
@@ -668,22 +668,22 @@ def AirSeaFluxCode(spd, T, SST, SST_fl, meth, lat=None, hum=None, P=None,
             "S80", "S88", "LP82", "YT96", "UA", "NCAR", "C30", "C35",
             "ecmwf", "Beljaars"
         lat : float
-            latitude (deg), default 45deg
+            latitude [deg], default 45deg
         hum : float
             humidity input switch 2x1 [x, values] default is relative humidity
-            x='rh' : relative humidity in %
-            x='q' : specific humidity (g/kg)
-            x='Td' : dew point temperature (K)
+            x='rh' : relative humidity [%]
+            x='q' : specific humidity [g/kg]
+            x='Td' : dew point temperature [K]
         P : float
-            air pressure (hPa), default 1013hPa
+            air pressure [hPa], default 1013hPa
         hin : float
-            sensor heights in m (array 3x1 or 3xn), default 18m
+            sensor heights [m] (array 3x1 or 3xn), default 18m
         hout : float
-            output height, default is 10m
+            output height [m], default is 10m
         Rl : float
-            downward longwave radiation (W/m^2)
+            downward longwave radiation [W/m^2]
         Rs : float
-            downward shortwave radiation (W/m^2)
+            downward shortwave radiation [W/m^2]
         cskin : int
             0 switch cool skin adjustment off, else 1
             default is 0
@@ -697,14 +697,15 @@ def AirSeaFluxCode(spd, T, SST, SST_fl, meth, lat=None, hum=None, P=None,
             from TSFs u10n, uref, 3. GF=1, 4. following ECMWF, 
             4. following Zeng et al. 1998, 6. following C35 matlab code;
             beta gustiness parameter, default is 1.2,
-            zi PBL height (m) default is 600,
-            min is the value for gust speed in stable conditions,
-            default is 0.01ms^{-1}
+            zi PBL height [m] default is 600,
+            min is the value for gust speed in stable conditions [m/s],
+            default is 0.01 m/s
         qmeth : str
-            is the saturation evaporation method to use amongst
-            "HylandWexler","Hardy","Preining","Wexler","GoffGratch","WMO",
-            "MagnusTetens","Buck","Buck2","WMO2018","Sonntag","Bolton",
-            "IAPWS","MurphyKoop"]
+            is the saturation evaporation method to use amongst [
+                "HylandWexler", "Hardy", "Preining", "Wexler",
+                "GoffGratch", "WMO", "MagnusTetens", "Buck",
+                "Buck2", "WMO2018", "Sonntag", "Bolton",
+                "IAPWS", "MurphyKoop"]
             default is Buck2
         tol : float
            4x1 or 7x1 [option, lim1-3 or lim1-6]
@@ -720,9 +721,9 @@ def AirSeaFluxCode(spd, T, SST, SST_fl, meth, lat=None, hum=None, P=None,
                   u10n, q10n or T10n out of limits to missing (default)
             set 1 to keep points
         out_var : str
-           optional. user can define pandas array of variables to be output.
-           the default full pandas array, with cskin=0 gust=0, is :
-               out_var = ("tau", "sensible", "latent", "monob", "cd", "cd10n",
+            optional. user can define pandas array of variables to be output.
+            the default full pandas array, with cskin=0 gust=0, is :
+                out_var = ("tau", "sensible", "latent", "monob", "cd", "cd10n",
                            "ct", "ct10n", "cq", "cq10n", "tsrv", "tsr", "qsr",
                            "usr", "psim", "psit", "psiq", "psim_ref", "psit_ref",
                            "psiq_ref", "u10n", "t10n", "q10n", "zo", "zot", "zoq",
@@ -739,10 +740,10 @@ def AirSeaFluxCode(spd, T, SST, SST_fl, meth, lat=None, hum=None, P=None,
     Returns
     -------
         res : array that contains
-                       1. momentum flux       (N/m^2)
-                       2. sensible heat       (W/m^2)
-                       3. latent heat         (W/m^2)
-                       4. Monin-Obhukov length (m)
+                       1. momentum flux       [N/m^2]
+                       2. sensible heat       [W/m^2]
+                       3. latent heat         [W/m^2]
+                       4. Monin-Obhukov length [m]
                        5. drag coefficient (cd)
                        6. neutral drag coefficient (cd10n)
                        7. heat exchange coefficient (ct)
@@ -750,45 +751,45 @@ def AirSeaFluxCode(spd, T, SST, SST_fl, meth, lat=None, hum=None, P=None,
                        9. moisture exhange coefficient (cq)
                        10. neutral moisture exchange coefficient (cq10n)
                        11. star virtual temperatcure (tsrv)
-                       12. star temperature (tsr)
-                       13. star specific humidity (qsr)
-                       14. star wind speed (usr)
+                       12. star temperature (tsr) [K]
+                       13. star specific humidity (qsr) [g/kg]
+                       14. star wind speed (usr) [m/s]
                        15. momentum stability function (psim)
                        16. heat stability function (psit)
                        17. moisture stability function (psiq)
                        18. momentum stability function at hout (psim_ref)
                        19. heat stability function at hout (psit_ref)
                        20. moisture stability function at hout (psiq_ref)
-                       21. 10m neutral wind speed (u10n)
-                       22. 10m neutral temperature (t10n)
-                       23. 10m neutral specific humidity (q10n)
-                       24. surface roughness length (zo)
-                       25. heat roughness length (zot)
-                       26. moisture roughness length (zoq)
-                       27. wind speed at reference height (uref)
-                       28. temperature at reference height (tref)
-                       29. specific humidity at reference height (qref)
-                       30. cool-skin temperature depression (dter)
-                       31. cool-skin humidity depression (dqer)
+                       21. 10m neutral wind speed (u10n) [m/s]
+                       22. 10m neutral temperature (t10n) [K]
+                       23. 10m neutral specific humidity (q10n) [g/kg]
+                       24. surface roughness length (zo) [m]
+                       25. heat roughness length (zot) [m]
+                       26. moisture roughness length (zoq) [m]
+                       27. wind speed at reference height (uref) [m/s]
+                       28. temperature at reference height (tref) [K]
+                       29. specific humidity at reference height (qref) [g/kg]
+                       30. cool-skin temperature depression (dter) [K]
+                       31. cool-skin humidity depression (dqer) [g/kg]
                        32. warm layer correction (dtwl)
                        33. thickness of the viscous layer (delta)
-                       34. specific humidity of air (qair)
-                       35. specific humidity at sea surface (qsea)
+                       34. specific humidity of air (qair) [g/kg]
+                       35. specific humidity at sea surface (qsea) [g/kg]
                        36. downward longwave radiation (Rl)
                        37. downward shortwave radiation (Rs)
                        38. downward net longwave radiation (Rnl)
-                       39. gust wind speed (ug)
-                       40. star wind speed with gust (usr_gust)
+                       39. gust wind speed (ug) [m/s]
+                       40. star wind speed with gust (usr_gust) [m/s]
                        41. Gustiness Factor (GustFact)
                        42. Bulk Richardson number (Rb)
-                       43. relative humidity (rh)
+                       43. relative humidity (rh) [%]
                        44. air density (rho)
                        45. specific heat of moist air (cp)
                        46. lv latent heat of vaporization (Jkg−1)
                        47. potential temperature (theta)
                        48. number of iterations until convergence
                        49. flag ("n": normal, "o": out of nominal range,
-                                 "u": u10n<0, "q":q10n<0 or q>0.04
+                                 "u": u10n<0, "q":q10n<0 or q>40
                                  "m": missing,
                                  "l": Rib<-0.5 or Rib>0.2 or z/L>1000,
                                  "r" : rh>100%,
@@ -798,6 +799,7 @@ def AirSeaFluxCode(spd, T, SST, SST_fl, meth, lat=None, hum=None, P=None,
     2021 / Author S. Biri
     2021 / Restructured by R. Cornes
     2021 / Simplified by E. Kent
+    2024 / Units corrected by J. Siddons
     """
     logging.basicConfig(filename='flux_calc.log', filemode="w",
                         format='%(asctime)s %(message)s', level=logging.INFO)

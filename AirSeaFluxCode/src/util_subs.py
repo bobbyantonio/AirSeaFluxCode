@@ -1,11 +1,11 @@
 import numpy as np
 
 CtoK = 273.16  # 273.15
-""" Conversion factor for $^\circ\,$C to K """
+r""" Conversion factor for $^\circ\,$C to K """
 
 kappa = 0.4  # NOTE: 0.41
 """ von Karman's constant """
-#------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
 
 def get_heights(h, dim_len):
@@ -14,7 +14,7 @@ def get_heights(h, dim_len):
     Parameters
     ----------
     h : float
-        input heights (m)
+        input heights [m]
     dim_len : int
         length dimension
 
@@ -43,19 +43,19 @@ def get_heights(h, dim_len):
 
 
 def gc(lat, lon=None):
-    """ Computes gravity relative to latitude
+    r""" Computes gravity relative to latitude
 
     Parameters
     ----------
     lat : float
-        latitude ($^\circ$)
+        latitude [$^\circ$]
     lon : float
-        longitude ($^\circ$, optional)
+        longitude [$^\circ$, optional]
 
     Returns
     -------
     gc : float
-        gravity constant (m/s^2)
+        gravity constant [m/s^2]
     """
     gamma = 9.7803267715
     c1 = 0.0052790414
@@ -75,18 +75,18 @@ def gc(lat, lon=None):
 
 
 def visc_air(T):
-    """ Computes the kinematic viscosity of dry air as a function of air temp.
+    r""" Computes the kinematic viscosity of dry air as a function of air temp.
     following Andreas (1989), CRREL Report 89-11.
 
     Parameters
     ----------
     Ta : float
-        air temperature ($^\circ$\,C)
+        air temperature [$^\circ$\,C]
 
     Returns
     -------
     visa : float
-        kinematic viscosity (m^2/s)
+        kinematic viscosity [m^2/s]
     """
     T = np.asarray(T)
     if (np.nanmin(T) > 200):  # if Ta in Kelvin convert to Celsius

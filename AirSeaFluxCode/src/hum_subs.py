@@ -16,12 +16,14 @@ def VaporPressure(temp, P, phase, meth):
     The current default fomulas are Hyland and Wexler for liquid and
     Goff Gratch for ice.
 
+    Ported to Python and modified by S. Biri from Holger Voemel's original
+
     Parameters
     ----------
     temp : float
-        Temperature in [deg C]
+        Temperature [C]
     phase : str
-        'liquid' : Calculate vapor pressure over liqiud water or
+        'liquid' : Calculate vapor pressure over liquid water or
         'ice' : Calculate vapor pressure over ice
     meth : str
         formula to be used
@@ -44,12 +46,12 @@ def VaporPressure(temp, P, phase, meth):
     Returns
     -------
     P : float
-        Saturation vapor pressure in [hPa]
 
 
     Author
     ------
     Ported to Python and modified by S. Biri from Holger Voemel's original
+        Saturation vapor pressure [hPa]
     """
     Psat = np.zeros(temp.size)*np.nan
     if np.nanmin(temp) > 200:  # if Ta in Kelvin convert to Celsius
@@ -295,9 +297,9 @@ def qsat_sea(T, P, qmeth):
     Parameters
     ----------
     T : float
-        temperature ($^\circ$\,C)
+        temperature [$^\circ$\,C]
     P : float
-        pressure (mb)
+        pressure [mb]
     qmeth : str
         method to calculate vapor pressure
 
@@ -323,11 +325,11 @@ def qsat_air(T, P, rh, qmeth):
     Parameters
     ----------
     T : float
-        temperature ($^\circ$\,C)
+        temperature [$^\circ$\,C]
     P : float
-        pressure (mb)
+        pressure [mb]
     rh : float
-       relative humidity (%)
+       relative humidity [%]
     qmeth : str
         method to calculate vapor pressure
 
