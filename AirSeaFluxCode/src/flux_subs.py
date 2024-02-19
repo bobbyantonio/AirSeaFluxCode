@@ -695,12 +695,13 @@ def get_strs(hin, monob, wind, zo, zot, zoq, dt, dq, cd, ct, cq, meth):
         star specific humidity [g/kg]
 
     """
+    usr = wind*np.sqrt(cd)
+    tsr = ct*wind*dt/usr
+    qsr = cq*wind*dq/usr
+
     if meth == "UA":
         # Zeng et al. 1998
         # away from extremes UA follows e.g. S80
-        usr = wind*np.sqrt(cd)
-        tsr = ct*wind*dt/usr
-        qsr = cq*wind*dq/usr
 
         # momentum
         hol0 = hin[0]/np.copy(monob)
@@ -742,10 +743,6 @@ def get_strs(hin, monob, wind, zo, zot, zoq, dt, dq, cd, ct, cq, meth):
         qsr = np.where(hol2 > 1, kappa*dq/(np.log(monob/zoq)+5-5*zoq/monob +
                                            5*np.log(hin[2]/monob) +
                                            hin[2]/monob-1), qsr)
-    else:
-        usr = wind*np.sqrt(cd)
-        tsr = ct*wind*dt/usr
-        qsr = cq*wind*dq/usr
     return usr, tsr, qsr
 # ---------------------------------------------------------------------
 
