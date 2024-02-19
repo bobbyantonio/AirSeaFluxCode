@@ -102,7 +102,7 @@ def cs(sst, d, rho, Rs, Rnl, cp, lv, usr, tsr, qsr, grav, opt):
     tcw = 0.6
     Rns = 0.945*Rs  # albedo correction
     shf = rho*cp*usr*tsr
-    lhf = rho*lv*usr*qsr
+    lhf = rho*lv*usr*qsr*0.001  # qsr [g/kg]
     Qnsol = shf+lhf+Rnl
     if opt == "C35":
         cpw = 4000
@@ -181,7 +181,7 @@ def cs_C35(sst, rho, Rs, Rnl, cp, lv, delta, usr, tsr, qsr, grav):
         rho, 2))
     Rns = 0.945*Rs  # albedo correction
     shf = rho*cp*usr*tsr
-    lhf = rho*lv*usr*qsr
+    lhf = rho*lv*usr*qsr*0.001  # qsr [g/kg]
     Qnsol = shf+lhf+Rnl
     fs = 0.065+11*delta-6.6e-5/delta*(1-np.exp(-delta/8.0e-4))
     Q = Qnsol+Rns*fs
@@ -269,7 +269,7 @@ def cs_ecmwf(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, sst, grav):
     aw = np.maximum(1e-5, 1e-5*(sst-CtoK))
     Rns = 0.945*Rs  # (net solar radiation (albedo correction)
     shf = rho*cp*usr*tsr
-    lhf = rho*lv*usr*qsr
+    lhf = rho*lv*usr*qsr*0.001  # qsr [g/kg]
     Qnsol = shf+lhf+Rnl  # eq. 8.152
     d = delta(aw, Qnsol, usr, grav)
     for jc in range(4):  # because implicit in terms of delta...
@@ -333,7 +333,7 @@ def wl_ecmwf(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, sst, skt, dtc, grav):
     b1, b2, b3 = -71.5, -2.8, -0.06  # [m-1]
     Rd = 1-(a1*np.exp(b1*rd0)+a2*np.exp(b2*rd0)+a3*np.exp(b3*rd0))
     shf = rho*cp*usr*tsr
-    lhf = rho*lv*usr*qsr
+    lhf = rho*lv*usr*qsr*0.001  # qsr [g/kg]
     Qnsol = shf+lhf+Rnl
     usrw = np.maximum(usr, 1e-4)*np.sqrt(1.2/rhow)   # u* in the water
     zc3 = rd0*kappa*grav/np.power(1.2/rhow, 3/2)
@@ -404,7 +404,7 @@ def cs_Beljaars(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, grav, Qs):
     aw = 3e-4       # thermal expansion coefficient [K-1]
     Rns = 0.945*Rs  # net solar radiation (albedo correction)
     shf = rho*cp*usr*tsr
-    lhf = rho*lv*usr*qsr
+    lhf = rho*lv*usr*qsr*0.001  # qsr [g/kg]
     Q = Rnl+shf+lhf+Qs
     xt = 16*Q*grav*aw*cpw*np.power(rhow*visw, 3)/(
         np.power(usr, 4)*np.power(rho*tcw, 2))

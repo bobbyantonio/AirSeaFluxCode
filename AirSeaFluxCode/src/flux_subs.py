@@ -771,7 +771,9 @@ def get_tsrv(tsr, qsr, Ta, qair):
         virtual star temperature (K)
 
     """
-    tsrv = tsr*(1+0.6077*qair)+0.6077*Ta*qsr
+    # NOTE: 0.6077 goes with mixing ratio or [kg/kg] humidity
+    # tsrv = tsr*(1+0.6077*qair)+0.6077*Ta*qsr  # q [kg/kg]
+    tsrv = 0.001*(tsr*(1000+0.6077*qair)+0.6077*Ta*qsr)  # q [g/kg]
     return tsrv
 
 # ---------------------------------------------------------------------

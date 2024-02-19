@@ -48,8 +48,9 @@ class S88:
         self.dq_full = self.qair-self.qsea
 
         # Set lapse rate and Potential Temperature (now we have humdity)
-        self.cp = 1004.67*(1+0.00084*self.qsea)
-        self.tlapse = gamma("dry", self.SST, self.T, self.qair/1000, self.cp)
+        self.cp = 1004.67*(1+0.84*self.qsea*0.001)  # qsea [g/kg]
+        # gamma takes q in units [g/kg]
+        self.tlapse = gamma("dry", self.SST, self.T, self.qair, self.cp)
         self.theta = np.copy(self.T)+self.tlapse*self.h_in[1]
         self.dt_in = self.theta-self.SST
         self.dt_full = self.theta-self.SST
@@ -129,13 +130,14 @@ class S88:
         self.ref10 = 10
 
         #  first guesses
-        self.t10n, self.q10n = np.copy(self.theta), np.copy(self.qair)
-        self.rho = self.P*100/(287.1*self.t10n*(1+0.6077*self.q10n))
+        self.t10n, self.q10n = np.copy(self.theta), np.copy(self.qair)  # q [g/kg]
+        self.rho = self.P*100/(287.1*self.t10n*(1+0.6077*self.q10n*0.001))  # q [g/kg]
         self.lv = (2.501-0.00237*(self.SST-CtoK))*1e6  # J/kg
 
         #  Zeng et al. 1998
         self.tv = self.theta*(1+0.6077*self.qair)   # virtual potential T
-        self.dtv = self.dt_in*(1+0.6077*self.qair)+0.6077*self.theta*self.dq_in
+        self.dtv = self.dt_in*(1+0.6077*self.qair*0.001) + \
+            0.6077*self.theta*self.dq_in*0.001  # q [g/kg]
 
         # Set the wind array
         self.wind = np.sqrt(np.power(np.copy(self.spd), 2)+0.25)
@@ -187,7 +189,7 @@ class S88:
 
         # Decide which variables to use in tolerances based on tolerance
         # specification
-        tol = ['all', 0.01, 0.01, 1e-05, 1e-3,
+        tol = ['all', 0.01, 0.01, 1e-02, 1e-3,
                0.1, 0.1] if tol is None else tol
         assert tol[0] in ['flux', 'ref', 'all'], "unknown tolerance input"
 
@@ -332,7 +334,7 @@ class S88:
             self.itera[ind] = np.full(1, it)
             self.tau = self.rho*np.power(self.usr, 2)
             self.sensible = self.rho*self.cp*self.usr*self.tsr
-            self.latent = self.rho*self.lv*self.usr*self.qsr
+            self.latent = self.rho*self.lv*self.usr*self.qsr*0.001  # [g/kg]
 
             # Set the new variables (for comparison against "old")
             new = np.array([np.copy(getattr(self, i)) for i in new_vars])
@@ -367,7 +369,8 @@ class S88:
             self.rh = 100*esd/es
         elif self.hum[0] == "q":
             es = 611.21*np.exp(17.502*((self.T-CtoK)/(self.T-32.19)))
-            e = self.qair*self.P/(0.378*self.qair+0.622)
+            # Following qsat_air
+            e = self.qair*self.P/(0.378*self.qair+622)  # for q [g/kg]
             self.rh = 100*e/es
 
     def _flag(self, out=0):
@@ -392,7 +395,7 @@ class S88:
         self.GFo = apply_GF(self.gust, self.spd, self.wind, "TSF")
         self.tau = self.rho*np.power(self.usr, 2)/self.GFo[0]
         self.sensible = self.rho*self.cp*(self.usr/self.GFo[1])*self.tsr
-        self.latent = self.rho*self.lv*(self.usr/self.GFo[2])*self.qsr
+        self.latent = self.rho*self.lv*(self.usr/self.GFo[2])*self.qsr*0.001  # qsr: [g/kg]
 
         self.GFo = apply_GF(self.gust, self.spd, self.wind, "u")
         if self.gust[0] in [3, 4]:
@@ -709,7 +712,7 @@ def AirSeaFluxCode(spd, T, SST, SST_fl, meth, lat=None, hum=None, P=None,
            option : 'ref' to set tolerance limits for height adjustment lim-1-3
            option : 'all' to set tolerance limits for both fluxes and height
                     adjustment lim1-6
-           default is tol=['all', 0.01, 0.01, 1e-05, 1e-3, 0.1, 0.1]
+           default is tol=['all', 0.01, 0.01, 1e-2, 1e-3, 0.1, 0.1]
         maxiter : int
             number of iterations (default = 10)
         out : int

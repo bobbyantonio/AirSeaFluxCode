@@ -843,9 +843,10 @@ def get_tsrv(tsr, qsr, Ta, qair):
         virtual star temperature (K)
 
     """
+    # NOTE: 0.6077 goes with mixing ratio, equiv kg/kg humidity
     # as in aerobulk One_on_L in mod_phymbl.f90
     # tsrv = tsr+0.6077*Ta*qsr
-    tsrv = tsr*(1+0.6077*qair)+0.6077*Ta*qsr
+    tsrv = 0.001*(tsr*(1000+0.6077*qair)+0.6077*Ta*qsr)  # q [g/kg]
     return tsrv
 
 # ---------------------------------------------------------------------

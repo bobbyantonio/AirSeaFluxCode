@@ -110,7 +110,7 @@ def set_flag(miss, rh, u10n, q10n, t10n, Rb, hin, monob, itera, out=0):
     u10n : float
         10m neutral wind speed        [ms^{-1}]
     q10n : float
-        10m neutral specific humidity [kg/kg]
+        10m neutral specific humidity [g/kg]
     t10n : float
         10m neutral air temperature   [K]
     Rb : float
@@ -131,7 +131,7 @@ def set_flag(miss, rh, u10n, q10n, t10n, Rb, hin, monob, itera, out=0):
     """
     # set maximum/minimum acceptable values
     u10max = 200
-    q10max = 40*0.001
+    q10max = 40  # [g/kg] (Equivalent to 0.04 kg/kg)
     t10min, t10max = 173, 373
     Rbmin, Rbmax = -0.5, 0.2
     flag = np.full(miss.shape, "n", dtype="object")
@@ -231,7 +231,7 @@ def rho_air(T, qair, p):
     T : float
         absolute air temperature             [K]
     qair : float
-        air specific humidity   [kg/kg]
+        air specific humidity   [g/kg]
     p : float
         pressure in                [Pa]
 
@@ -241,5 +241,5 @@ def rho_air(T, qair, p):
         density of moist air   [kg/m^3]
 
     """
-    rho_air = np.maximum(p/(287.05*T*(1+(461.495/287.05-1)*qair)), 0.8)
+    rho_air = np.maximum(p/(287.05*T*(1+(461.495/287.05-1)*qair*0.001)), 0.8)
     return rho_air

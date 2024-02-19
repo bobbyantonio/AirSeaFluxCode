@@ -304,6 +304,7 @@ def qsat_sea(T, P, qmeth):
     Returns
     -------
     qs : float
+        surface saturation specific humidity [g/kg]
     """
     T = np.asarray(T)
     if np.nanmin(T) > 200:  # if Ta in Kelvin convert to Celsius
@@ -311,7 +312,7 @@ def qsat_sea(T, P, qmeth):
     ex = VaporPressure(T, P, 'liquid', qmeth)
     es = 0.98*ex  # reduction at sea surface
     qs = 622*es/(P-0.378*es)
-    return qs
+    return qs  # [g/kg]
 # -----------------------------------------------------------------------------
 
 
@@ -333,7 +334,7 @@ def qsat_air(T, P, rh, qmeth):
     Returns
     -------
     q : float
-    em : float
+        specific humidity [g/kg]
     """
     T = np.asarray(T)
     if np.nanmin(T) > 200:  # if Ta in Kelvin convert to Celsius
@@ -341,7 +342,7 @@ def qsat_air(T, P, rh, qmeth):
     es = VaporPressure(T, P, 'liquid', qmeth)
     em = 0.01*rh*es
     q = 622*em/(P-0.378*em)
-    return q
+    return q  # [g/kg]
 # -----------------------------------------------------------------------------
 
 
@@ -353,39 +354,37 @@ def get_hum(hum, T, sst, P, qmeth):
     ----------
     hum : array
         humidity input switch 2x1 [x, values] default is relative humidity
-            x='rh' : relative humidity in %
-            x='q' : specific humidity (kg/kg)
-            x='Td' : dew point temperature (K)
+            x='rh' : relative humidity [%]
+            x='q' : specific humidity [g/kg]
+            x='Td' : dew point temperature [K]
     T : float
-        air temperature in K
+        air temperature [K]
     sst : float
-        sea surface temperature in K
+        sea surface temperature [K]
     P : float
-        air pressure at sea level in hPa
+        air pressure at sea level [hPa]
     qmeth : str
         method to calculate specific humidity from vapor pressure
 
     Returns
     -------
     qair : float
-        specific humidity of air
+        specific humidity of air [g/kg]
     qsea : float
-        specific humidity over sea surface
+        specific humidity over sea surface [g/kg]
 
     """
-    if (hum[0] not in ['rh', 'q', 'Td', 'no']):
-        sys.exit("unknown humidity input")
-        qair, qsea = np.nan, np.nan
-    elif ((hum[0] == 'rh') or (hum[0] == 'no')):
+    if ((hum[0] == 'rh') or (hum[0] == 'no')):
         RH = hum[1]
         if np.all(RH < 1):
-            sys.exit("input relative humidity units should be %")
-            qair, qsea = np.nan, np.nan
-        qsea = qsat_sea(sst, P, qmeth)/1000    # surface water q (kg/kg)
-        qair = qsat_air(T, P, RH, qmeth)/1000  # q of air (kg/kg)
+            raise ValueError("input relative humidity units should be %")
+        qsea = qsat_sea(sst, P, qmeth)  # surface water q [g/kg]
+        qair = qsat_air(T, P, RH, qmeth)  # q of air [g/kg]
     elif hum[0] == 'q':
-        qair = hum[1]
-        qsea = qsat_sea(sst, P, qmeth)/1000  # surface water q (kg/kg)
+        qair = hum[1]  # [g/kg]
+        if np.all(qair < 1):
+            raise ValueError("input humidity units should be g/kg")
+        qsea = qsat_sea(sst, P, qmeth)  # surface water q [g/kg]
     elif hum[0] == 'Td':
         Td = hum[1]  # dew point temperature (K)
         Td = np.where(Td < 200, np.copy(Td)+CtoK, np.copy(Td))
@@ -393,8 +392,10 @@ def get_hum(hum, T, sst, P, qmeth):
         esd = 611.21*np.exp(17.502*((Td-273.16)/(Td-32.19)))
         es = 611.21*np.exp(17.502*((T-273.16)/(T-32.19)))
         RH = 100*esd/es
-        qair = qsat_air(T, P, RH, qmeth)/1000  # q of air (kg/kg)
-        qsea = qsat_sea(sst, P, qmeth)/1000    # surface water q (kg/kg)
+        qair = qsat_air(T, P, RH, qmeth)  # q of air [g/kg]
+        qsea = qsat_sea(sst, P, qmeth)    # surface water q [g/kg]
+    else:
+        raise ValueError('(get_hum) Unknown humidity input')
     return qair, qsea
 # -----------------------------------------------------------------------------
 
@@ -414,7 +415,7 @@ def gamma(opt, sst, t, q, cp):
     t : float
         air temperature [K]
     q : float
-        specific humidity of air [kg/kg]
+        specific humidity of air [g/kg]
     cp : float
         specific capacity of air at constant Pressure
 
@@ -424,6 +425,7 @@ def gamma(opt, sst, t, q, cp):
         lapse rate [K/m]
 
     """
+    q = np.copy(q) / 1000  # convert to [kg/kg]
     if np.nanmin(sst) < 200:  # if sst in Celsius convert to Kelvin
         sst = sst+CtoK
     if np.nanmin(t) < 200:  # if t in Celsius convert to Kelvin
