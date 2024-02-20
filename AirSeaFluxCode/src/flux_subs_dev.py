@@ -767,12 +767,12 @@ def get_strs(hin, monob, wind, zo, zot, zoq, dt, dq, cd, ct, cq, meth):
         star specific humidity [g/kg]
 
     """
+    usr = wind*np.sqrt(cd)
+    tsr = ct*wind*dt/usr
+    qsr = cq*wind*dq/usr
     if meth == "UA":
         # Zeng et al. 1998
         # away from extremes UA follows e.g. S80
-        usr = wind*np.sqrt(cd)
-        tsr = ct*wind*dt/usr
-        qsr = cq*wind*dq/usr
 
         # momentum
         hol0 = hin[0]/np.copy(monob)
@@ -814,10 +814,6 @@ def get_strs(hin, monob, wind, zo, zot, zoq, dt, dq, cd, ct, cq, meth):
         qsr = np.where(hol2 > 1, kappa*dq/(np.log(monob/zoq)+5-5*zoq/monob +
                                            5*np.log(hin[2]/monob) +
                                            hin[2]/monob-1), qsr)
-    else:
-        usr = wind*np.sqrt(cd)
-        tsr = ct*wind*dt/usr
-        qsr = cq*wind*dq/usr
     return usr, tsr, qsr
 # ---------------------------------------------------------------------
 
@@ -843,9 +839,10 @@ def get_tsrv(tsr, qsr, Ta, qair):
         virtual star temperature (K)
 
     """
+    # NOTE: 0.6077 goes with mixing ratio, equiv kg/kg humidity
     # as in aerobulk One_on_L in mod_phymbl.f90
     # tsrv = tsr+0.6077*Ta*qsr
-    tsrv = tsr*(1+0.6077*qair)+0.6077*Ta*qsr
+    tsrv = 0.001*(tsr*(1000+0.6077*qair)+0.6077*Ta*qsr)  # q [g/kg]
     return tsrv
 
 # ---------------------------------------------------------------------

@@ -1,11 +1,11 @@
 import numpy as np
 
 CtoK = 273.16  # 273.15
-""" Conversion factor for $^\circ\,$C to K """
+r""" Conversion factor for $^\circ\,$C to K """
 
 kappa = 0.4  # NOTE: 0.41
 """ von Karman's constant """
-#------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
 
 def get_heights(h, dim_len):
@@ -14,7 +14,7 @@ def get_heights(h, dim_len):
     Parameters
     ----------
     h : float
-        input heights (m)
+        input heights [m]
     dim_len : int
         length dimension
 
@@ -23,7 +23,7 @@ def get_heights(h, dim_len):
     hh : array
     """
     hh = np.zeros((3, dim_len))
-    if (type(h) == float or type(h) == int):
+    if isinstance(h, (float, int)):
         hh[0, :], hh[1, :], hh[2, :] = h, h, h
     elif (len(h) == 2 and np.ndim(h) == 1):
         hh[0, :], hh[1, :], hh[2, :] = h[0], h[1], h[1]
@@ -43,19 +43,19 @@ def get_heights(h, dim_len):
 
 
 def gc(lat, lon=None):
-    """ Computes gravity relative to latitude
+    r""" Computes gravity relative to latitude
 
     Parameters
     ----------
     lat : float
-        latitude ($^\circ$)
+        latitude [$^\circ$]
     lon : float
-        longitude ($^\circ$, optional)
+        longitude [$^\circ$, optional]
 
     Returns
     -------
     gc : float
-        gravity constant (m/s^2)
+        gravity constant [m/s^2]
     """
     gamma = 9.7803267715
     c1 = 0.0052790414
@@ -63,7 +63,7 @@ def gc(lat, lon=None):
     c3 = 0.0000001262
     c4 = 0.0000000007
     if lon is not None:
-        lon_m, lat_m = np.meshgrid(lon, lat)
+        _, lat_m = np.meshgrid(lon, lat)
     else:
         lat_m = lat
     phi = lat_m*np.pi/180.
@@ -75,18 +75,18 @@ def gc(lat, lon=None):
 
 
 def visc_air(T):
-    """ Computes the kinematic viscosity of dry air as a function of air temp.
+    r""" Computes the kinematic viscosity of dry air as a function of air temp.
     following Andreas (1989), CRREL Report 89-11.
 
     Parameters
     ----------
     Ta : float
-        air temperature ($^\circ$\,C)
+        air temperature [$^\circ$\,C]
 
     Returns
     -------
     visa : float
-        kinematic viscosity (m^2/s)
+        kinematic viscosity [m^2/s]
     """
     T = np.asarray(T)
     if (np.nanmin(T) > 200):  # if Ta in Kelvin convert to Celsius
@@ -110,7 +110,7 @@ def set_flag(miss, rh, u10n, q10n, t10n, Rb, hin, monob, itera, out=0):
     u10n : float
         10m neutral wind speed        [ms^{-1}]
     q10n : float
-        10m neutral specific humidity [kg/kg]
+        10m neutral specific humidity [g/kg]
     t10n : float
         10m neutral air temperature   [K]
     Rb : float
@@ -131,7 +131,7 @@ def set_flag(miss, rh, u10n, q10n, t10n, Rb, hin, monob, itera, out=0):
     """
     # set maximum/minimum acceptable values
     u10max = 200
-    q10max = 40*0.001
+    q10max = 40  # [g/kg] (Equivalent to 0.04 kg/kg)
     t10min, t10max = 173, 373
     Rbmin, Rbmax = -0.5, 0.2
     flag = np.full(miss.shape, "n", dtype="object")
@@ -215,7 +215,7 @@ def get_outvars(out_var, cskin, gust):
     elif out_var == "limited":
         res_vars = ("tau", "sensible", "latent", "uref", "tref", "qref")
     else:
-         res_vars = out_var
+        res_vars = out_var
     return res_vars
 # ---------------------------------------------------------------------
 
@@ -231,7 +231,7 @@ def rho_air(T, qair, p):
     T : float
         absolute air temperature             [K]
     qair : float
-        air specific humidity   [kg/kg]
+        air specific humidity   [g/kg]
     p : float
         pressure in                [Pa]
 
@@ -241,5 +241,5 @@ def rho_air(T, qair, p):
         density of moist air   [kg/m^3]
 
     """
-    rho_air = np.maximum(p/(287.05*T*(1+(461.495/287.05-1)*qair)), 0.8)
+    rho_air = np.maximum(p/(287.05*T*(1+(461.495/287.05-1)*qair*0.001)), 0.8)
     return rho_air

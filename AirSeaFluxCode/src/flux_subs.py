@@ -695,12 +695,13 @@ def get_strs(hin, monob, wind, zo, zot, zoq, dt, dq, cd, ct, cq, meth):
         star specific humidity [g/kg]
 
     """
+    usr = wind*np.sqrt(cd)
+    tsr = ct*wind*dt/usr
+    qsr = cq*wind*dq/usr
+
     if meth == "UA":
         # Zeng et al. 1998
         # away from extremes UA follows e.g. S80
-        usr = wind*np.sqrt(cd)
-        tsr = ct*wind*dt/usr
-        qsr = cq*wind*dq/usr
 
         # momentum
         hol0 = hin[0]/np.copy(monob)
@@ -742,10 +743,6 @@ def get_strs(hin, monob, wind, zo, zot, zoq, dt, dq, cd, ct, cq, meth):
         qsr = np.where(hol2 > 1, kappa*dq/(np.log(monob/zoq)+5-5*zoq/monob +
                                            5*np.log(hin[2]/monob) +
                                            hin[2]/monob-1), qsr)
-    else:
-        usr = wind*np.sqrt(cd)
-        tsr = ct*wind*dt/usr
-        qsr = cq*wind*dq/usr
     return usr, tsr, qsr
 # ---------------------------------------------------------------------
 
@@ -757,21 +754,23 @@ def get_tsrv(tsr, qsr, Ta, qair):
     Parameters
     ----------
     tsr : float
-        star temperature (K)
+        star temperature [K]
     qsr : float
-        star specific humidity (g/kg)
+        star specific humidity [g/kg]
     Ta : float
-        air temperature (K)
+        air temperature [K]
     qair : float
-        air specific humidity (g/kg)
+        air specific humidity [g/kg]
 
     Returns
     -------
     tsrv : float
-        virtual star temperature (K)
+        virtual star temperature [K]
 
     """
-    tsrv = tsr*(1+0.6077*qair)+0.6077*Ta*qsr
+    # NOTE: 0.6077 goes with mixing ratio or [kg/kg] humidity
+    # tsrv = tsr*(1+0.6077*qair)+0.6077*Ta*qsr  # q [kg/kg]
+    tsrv = 0.001*(tsr*(1000+0.6077*qair)+0.6077*Ta*qsr)  # q [g/kg]
     return tsrv
 
 # ---------------------------------------------------------------------
@@ -784,21 +783,21 @@ def get_Rb(grav, usr, hin_u, hin_t, tv, dtv, wind, monob, meth):
     Parameters
     ----------
     grav : float
-        acceleration due to gravity (m/s2)
+        acceleration due to gravity [m/s2]
     usr : float
-        friction wind speed (m/s)
+        friction wind speed [m/s]
     hin_u : float
-        u sensor height (m)
+        u sensor height [m]
     hin_t : float
-        t sensor height (m)
+        t sensor height [m]
     tv : float
-        virtual temperature (K)
+        virtual temperature [K]
     dtv : float
-        virtual temperature difference, air and sea (K)
+        virtual temperature difference, air and sea [K]
     wind : float
-        wind speed (m/s)
+        wind speed [m/s]
     monob : float
-        Monin-Obukhov length from previous iteration step (m)
+        Monin-Obukhov length from previous iteration step [m]
     meth : str
         bulk parameterisation method option: "S80", "S88", "LP82", "YT96",
         "UA", "NCAR", "C30", "C35", "ecmwf", "Beljaars"
@@ -832,13 +831,13 @@ def get_LRb(Rb, hin_t, monob, zo, zot, meth):
     Rb  : float
        Richardson number
     hin_t : float
-        t sensor height (m)
+        t sensor height [m]
     monob : float
-        Monin-Obukhov length from previous iteration step (m)
+        Monin-Obukhov length from previous iteration step [m]
     zo   : float
-        surface roughness       (m)
+        surface roughness       [m]
     zot   : float
-        temperature roughness length       (m)
+        temperature roughness length       [m]
     meth : str
         bulk parameterisation method option: "S80", "S88", "LP82", "YT96",
         "UA", "NCAR", "C30", "C35", "ecmwf", "Beljaars"
@@ -846,7 +845,7 @@ def get_LRb(Rb, hin_t, monob, zo, zot, meth):
     Returns
     -------
     monob : float
-        M-O length (m)
+        M-O length [m]
 
     """
     zol = Rb*(np.power(
@@ -867,18 +866,18 @@ def get_Ltsrv(tsrv, grav, tv, usr):
     Parameters
     ----------
     tsrv : float
-        virtual star temperature (K)
+        virtual star temperature [K]
     grav : float
-        acceleration due to gravity (m/s2)
+        acceleration due to gravity [m/s2]
     tv : float
-        virtual temperature (K)
+        virtual temperature [K]
     usr : float
-        friction wind speed (m/s)
+        friction wind speed [m/s]
 
     Returns
     -------
     monob : float
-        M-O length (m)
+        M-O length [m]
 
     """
     tsrv = np.maximum(np.abs(tsrv), 1e-9)*np.sign(tsrv)
