@@ -1,4 +1,5 @@
 import numpy as np
+import warnings
 from util_subs import (CtoK)
 
 
@@ -372,13 +373,21 @@ def get_hum(hum, T, sst, P, qmeth):
     if ((hum[0] == 'rh') or (hum[0] == 'no')):
         RH = hum[1]
         if np.all(RH < 1):
-            raise ValueError("input relative humidity units should be %")
+            warnings.warn(
+                "All relative humidity values < 1. " +
+                "Input relative humidity units should be %. " +
+                "Continuing with calculations assuming values are correct."
+            )
         qsea = qsat_sea(sst, P, qmeth)  # surface water q [g/kg]
         qair = qsat_air(T, P, RH, qmeth)  # q of air [g/kg]
     elif hum[0] == 'q':
         qair = hum[1]  # [g/kg]
         if np.all(qair < 1):
-            raise ValueError("input humidity units should be g/kg")
+            warnings.warn(
+                "All humidity values < 1. " +
+                "Input humidity units should be g/kg. " +
+                "Continuing with calculations assuming values are correct."
+            )
         qsea = qsat_sea(sst, P, qmeth)  # surface water q [g/kg]
     elif hum[0] == 'Td':
         Td = hum[1]  # dew point temperature (K)
