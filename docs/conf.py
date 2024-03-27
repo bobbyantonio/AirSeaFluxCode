@@ -23,7 +23,7 @@ copyright = '2023, Stavroula Biri'
 author = 'Stavroula Biri'
 
 # The full version, including alpha/beta/rc tags
-release = '1.0.1'
+release = '1.1.0'
 
 
 # -- General configuration ---------------------------------------------------
@@ -32,11 +32,11 @@ release = '1.0.1'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = ['sphinx.ext.autodoc', 'sphinx.ext.doctest', 'sphinx.ext.todo',
-              'sphinx.ext.mathjax', 'sphinx.ext.ifconfig', 
-              'sphinx.ext.viewcode', 'sphinx.ext.githubpages', 
+              'sphinx.ext.mathjax', 'sphinx.ext.ifconfig',
+              'sphinx.ext.viewcode', 'sphinx.ext.githubpages',
               'sphinx.ext.napoleon', 'sphinx.ext.autosummary',
               'sphinx_autodoc_typehints'
-] #'autoapi.extension',
+              ]  # 'autoapi.extension',
 
 # autoapi_type = 'python'
 # autoapi_dirs = ['../../']
@@ -44,7 +44,7 @@ extensions = ['sphinx.ext.autodoc', 'sphinx.ext.doctest', 'sphinx.ext.todo',
 # autoapi_keep_files = False
 # autodoc_typehints = "description"
 
-#autoapi_options = ['members', 'undoc-members', 'private-members']
+# autoapi_options = ['members', 'undoc-members', 'private-members']
 # autoapi_options = ['members', 'undoc-members', 'private-members', 'show-inheritance',
 #                     'show-module-summary', 'special-members', 'imported-members']
 # autoapi_ignore = ['*mymodel*', '*conf*', '*gather_stats_c99.py*']
@@ -63,7 +63,8 @@ pygments_style = 'sphinx'
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'sphinx_rtd_theme' # "sphinxawesome_theme" # 'sphinx_rtd_theme' # 'alabaster'
+# "sphinxawesome_theme" # 'sphinx_rtd_theme' # 'alabaster'
+html_theme = 'sphinx_rtd_theme'
 # html_theme_options = {
 #     "rightsidebar": "true",
 #     "relbarbgcolor": "black"
@@ -93,8 +94,8 @@ html_theme_options = {
 # 'searchbox.html']``.
 #
 html_sidebars = {
-  '**': ['logo-text.html', 'globaltoc.html', 'searchbox.html']
-  #'**': ['logo-text.html', 'globaltoc.html', 'localtoc.html', 'searchbox.html']
+    '**': ['logo-text.html', 'globaltoc.html', 'searchbox.html']
+    # '**': ['logo-text.html', 'globaltoc.html', 'localtoc.html', 'searchbox.html']
 }
 
 numfig = True

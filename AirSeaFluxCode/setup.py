@@ -7,7 +7,7 @@ long_description = (here / 'README.md').read_text(encoding='utf-8')
 
 setup(
     name='AirSeaFluxCode',
-    version='1.0.1',
+    version='1.1.0',
     description='A package to compute turbulent surface fluxes',
     long_description=long_description,  # Optional
     url='https://git.noc.ac.uk/NOCSurfaceProcesses/AirSeaFluxCode',
