@@ -7,7 +7,7 @@ long_description = (here / 'README.md').read_text(encoding='utf-8')
 
 setup(
     name='AirSeaFluxCode',
-    version='1.0.1',
+    version='1.1.0',
     description='A package to compute turbulent surface fluxes',
     long_description=long_description,  # Optional
     url='https://git.noc.ac.uk/NOCSurfaceProcesses/AirSeaFluxCode',
@@ -25,13 +25,15 @@ setup(
         #   3 - Alpha
         #   4 - Beta
         #   5 - Production/Stable
-        'Development Status :: 4 - Beta',
+        'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: CCBY License',
         'Operating System :: POSIX :: Linux',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.11',
     ],
 )
 
