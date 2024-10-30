@@ -1,0 +1,18 @@
+name: airseaflux
+channels:
+  - conda-forge
+dependencies:
+  - ipykernel
+  - jupyter
+  - jupyterlab
+  - jupytext
+  - matplotlib
+  - numpy
+  - pandas
+  - scipy
+  - pip
+  - requests
+  - xarray
+  - pip:
+      - airseafluxcode==1.1.0
+      - xarray-regrid==0.4.0

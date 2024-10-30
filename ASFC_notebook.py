@@ -3,8 +3,8 @@
 #   jupytext:
 #     text_representation:
 #       extension: .py
-#       format_name: light
-#       format_version: '1.5'
+#       format_name: percent
+#       format_version: '1.3'
 #       jupytext_version: 1.16.4
 #   kernelspec:
 #     display_name: airseaflux
@@ -12,6 +12,7 @@
 #     name: python3
 # ---
 
+# %% [markdown]
 # ## Introduction
 #
 # AirSeaFluxCode is developed to provide an easy and accessible way to calculate turbulent surface fluxes (TSFs) from a small number of bulk variables and for a viariety of bulk algorithms. 
@@ -19,10 +20,12 @@
 # By running AirSeaFluxCode you can compare different bulk algorithms and to also investigate the effect choices within the implementation of each parameterisation have on the TSFs estimates. 
 #
 
+# %% [markdown]
 # ### Getting started
 #
 # Let's first import the basic python packages we will need for reading in our input data, to perform basic statistics  and plotting
 
+# %%
 # first import all packages you might need
 # %matplotlib inline
 import matplotlib.pyplot as plt
@@ -35,12 +38,13 @@ from glob import glob
 from tabulate import tabulate
 from AirSeaFluxCode import AirSeaFluxCode
 
+# %% [markdown]
 # ## Air sea flux code on gridded data
 
-# +
+# %%
 # TODO: precip needs to be aggregated
 
-# +
+# %%
 fps = glob('/Users/bobbyantonio/repos/AirSeaFluxCode/sample_era5_data/*20070203.nc')
 
 var_name_lookup = {'z': 'geopotential', 'q': 'specific_humidity'}
@@ -86,11 +90,11 @@ df = ds.to_dataframe().reset_index()
 df = df[~np.isnan(df['sst'])].reset_index()
 df.head()
 
-# -
 
+# %%
 print(df.columns)
 
-# +
+# %%
 # Pick a random point and plot it
 
 row = df.sample(1)
@@ -100,18 +104,20 @@ q_vals = [row['q_surface'].item(), row['q_1000'].item(), row['q_975'].item()]
 pressure_vals = [row['msl'].item(), 1000, 975]
 height_vals = [0, row['z_1000'].item(), row['z_975'].item()]
 plt.scatter(height_vals, q_vals)
-# -
 
+# %%
 row
 
+# %%
 inDt = pd.read_csv("Test_Data/data_all.csv")
 
+# %%
 inDt[inDt['Date'] == 20070203]
 
-# +
+# %%
 # Get the data into the right format
-# -
 
+# %%
 in_df = pd.DataFrame(dict(latitude=df['latitude'],
                         longitude=df['longitude'],
                         time = df['time'],
@@ -122,10 +128,13 @@ in_df = pd.DataFrame(dict(latitude=df['latitude'],
                      hum=df['q_surface'].to_numpy(), 
                      P=df['msl'].to_numpy()))
 
+# %%
 inDt[inDt['Date'] == 20070203]
 
+# %%
 in_df[(in_df['longitude']==255.75) & (df['latitude']==9.75)]
 
+# %%
 res = AirSeaFluxCode(spd=df['wind_speed'].to_numpy(), 
                      T=df['t2m'].to_numpy(), 
                      SST=df['skt'].to_numpy(), 
@@ -144,16 +153,20 @@ res = AirSeaFluxCode(spd=df['wind_speed'].to_numpy(),
                      wl=1,
                      out_var = ("tau", "sensible", "latent", "cd", "rho", "uref"))
 
+# %%
 res['rho']
 
+# %%
 # check tau is calculated as you expect
 res['tau_calc'] = ((np.power(res['uref'],2))*res['cd']*res['rho'])
 
+# %%
 res = pd.concat([df[['latitude', 'longitude']], res], axis=1)
 
+# %%
 res_ds = res.set_index(['latitude', 'longitude']).to_xarray()
 
-# +
+# %%
 num_rows = 2
 num_cols = 2
 
@@ -166,25 +179,31 @@ sshf_da.plot.imshow(ax=ax[0,1], vmin=-400, vmax=400, cmap='RdBu_r',)
 res_ds['tau'].plot.imshow(ax=ax[1,0], vmin=0, vmax=4)
 tau_da = ds['surface_stress_magnitude'].where(~ds['sst'].isnull())
 tau_da.plot.imshow(ax=ax[1,1], vmin=0, vmax=4)
-# -
 
+# %%
 res_ds['tau_calc'].plot.hist()
 
+# %%
 ds['surface_stress_magnitude'].where(~ds['sst'].isnull()).plot.hist()
 
+# %%
 res['tau'].max()
 
+# %%
 ds['surface_stress_magnitude'].where(~ds['sst'].isnull()).max()
 
+# %% [markdown]
 # ### AirSeaFluxCode examples
 #
 # AirSeaFluxCode is set up to run in its default setting with a minimum number of input variables, namely wind speed; air temperature; and sea surface temperature. Let's load the code, import some real data composed for testing it (Research vessel data) and run AirSeaFluxCode with default settings (output height 10m, cool skin/warm layer corrections turned off, bulk algorithm Smith 1988, gustiness on, saturation vapour pressure following Buck (2012), tolerance limits set for both flux estimates and height adjusted variables (['all', 0.01, 0.01, 1e-05, 1e-3, 0.1, 0.1]), number of iterations are ten, non converged points are set to missing and Monin-Obukhov stability length is calculated following the ECMWF implementation.
 
+# %%
 inDt = pd.read_csv("Test_Data/data_all.csv")
 
+# %%
 inDt = inDt[inDt['Date'] == 20070203]
 
-# +
+# %%
 inDt = pd.read_csv("Test_Data/data_all.csv")
 date = np.asarray(inDt["Date"])
 lon = np.asarray(inDt["Longitude"])
@@ -217,16 +236,20 @@ res_baseline = AirSeaFluxCode(spd,
                      Rs=sw,
                      tol=['all', 0.01, 0.01, 1e-05, 1e-3, 0.1, 0.1], L="tsrv", 
                      out_var = outvar)
-# -
 
+# %%
 t
 
+# %%
 np.abs(res['sensible']).max()
 
+# %%
 hu
 
+# %%
 ht
 
+# %%
 increase_factor = 100
 res = AirSeaFluxCode(np.concat([spd]*increase_factor), 
                      np.concat([t]*increase_factor), 
@@ -242,18 +265,20 @@ res = AirSeaFluxCode(np.concat([spd]*increase_factor),
                      tol=['all', 0.01, 0.01, 1e-05, 1e-3, 0.1, 0.1], L="tsrv", 
                      out_var = outvar)
 
+# %%
 
+# %%
 
+# %%
 
+# %%
 
+# %%
 
-
-
-
-
-
+# %% [markdown]
 # res is the output of AirSeaFluxCode which is a dataFrame with keys: "tau", "sensible", "latent", "u10n", "t10n", "q10n". Let's plot the flux estimates.
 
+# %%
 fig, ax = plt.subplots(3, 1, sharex=True, sharey=False)
 fig.tight_layout()
 ax[0].plot(res["tau"], "-", color="grey", linewidth=1, alpha = 0.8)
@@ -264,12 +289,16 @@ ax[1].set_ylabel('shf (Wm$^{-2}$)')
 ax[2].set_ylabel('lhf (Wm$^{-2}$)')
 plt.show()
 
+# %% [markdown]
 # You can save the output in a csv file
 
+# %%
 res.to_csv("test_AirSeaFluxCode.csv")
 
+# %% [markdown]
 # and generate some statistics which you can save in a txt file
 
+# %%
 print("Input summary", file=open('./stats.txt', 'a'))
 print('input file name: {}, \n method: {}, \n gustiness: {}, \n cskin: {},'
       ' \n tolerance: {}, \n qmethod: {}, \n L: {}'.format("data_all.csv", "UA", "on",
@@ -292,4 +321,4 @@ print(tabulate(stats, headers=header, tablefmt="github", numalign="left",
 print('-'*79+'\n', file=open('./stats.txt', 'a'))
 del a
 
-
+# %%
