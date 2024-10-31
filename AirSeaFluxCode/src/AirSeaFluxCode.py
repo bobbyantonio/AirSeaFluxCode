@@ -2,13 +2,16 @@ import warnings
 import numpy as np
 import pandas as pd
 import logging
-from hum_subs import (get_hum, gamma)
+from hum_subs import get_hum, gamma
 from util_subs import *
 from flux_subs import *
 from cs_wl_subs import *
 
-
 class S88:
+
+    def __init__(self):
+        self.meth = "S88"
+
     def _wind_iterate(self, ind):
         if self.gust[0] in range(1, 7):
             self.wind[ind] = np.sqrt(np.power(np.copy(self.spd[ind]), 2) +
@@ -39,24 +42,32 @@ class S88:
         self.h_in = get_heights(hin, len(self.spd))
         self.h_out = get_heights(self.hout, 1)
 
-    def get_specHumidity(self, qmeth="Buck2"):
+    def get_humidity_and_potential_temperature(self, 
+                                               qmeth="Buck2"):
+
         self.qair, self.qsea = get_hum(self.hum, self.T, self.SST, self.P,
                                        qmeth)  # [g/kg]
+
         if (np.all(np.isnan(self.qsea)) or np.all(np.isnan(self.qair))):
             raise ValueError("qsea and qair cannot be nan")
+
         self.dq_in = self.qair-self.qsea  # [g/kg]
         self.dq_full = self.qair-self.qsea  # [g/kg]
 
         # Set lapse rate and Potential Temperature (now we have humdity)
-        self.cp = 1004.67*(1+0.84*self.qsea*0.001)  # qsea [g/kg]
+        self.cp = 1004.67 * (1 + 0.84 * self.qsea * 0.001)  # qsea [g/kg]
+        
         # gamma takes q in units [g/kg]
+        # Calculate dry adiabatic lapse rate, for approximation of potential temperature
         self.tlapse = gamma("dry", self.SST, self.T, self.qair, self.cp)
-        self.theta = np.copy(self.T)+self.tlapse*self.h_in[1]
-        self.dt_in = self.theta-self.SST
-        self.dt_full = self.theta-self.SST
+        self.theta = np.copy(self.T) + self.tlapse * self.h_in[1]
+        self.dt_in = self.theta - self.SST
+        self.dt_full = self.theta - self.SST
 
-    def _fix_coolskin_warmlayer(self, wl, cskin, skin, Rl, Rs):
+    def _fix_coolskin_warmlayer(self, wl: int, cskin: int, skin: str, Rl, Rs):
+
         skin = self.skin if skin is None else skin
+
         assert wl in [0, 1], "wl not valid"
         assert cskin in [0, 1], "cskin not valid"
         assert skin in ["C35", "ecmwf", "Beljaars"], "Skin value not valid"
@@ -76,13 +87,18 @@ class S88:
 
     def set_coolskin_warmlayer(self, wl=0, cskin=0, skin=None, Rl=None,
                                Rs=None):
+
         wl = 0 if wl is None else wl
+
         if hasattr(self, "skin") == False:
             self.skin = "C35"
+
         self._fix_coolskin_warmlayer(wl, cskin, skin, Rl, Rs)
 
     def _update_coolskin_warmlayer(self, ind):
+
         if self.cskin == 1:
+
             # self.dter[ind], self.tkt[ind] = cs(np.copy(
             #     self.SST[ind]), np.copy(self.tkt[ind]), self.rho[ind],
             #     self.Rs[ind], self.Rnl[ind], self.cp[ind], self.lv[ind],
@@ -126,28 +142,33 @@ class S88:
             self.tkt[ind] = np.zeros(self.SST[ind].shape)
 
     def _first_guess(self):
+
         # reference height
         self.ref10 = 10
 
-        #  first guesses
+        # first guesses
         self.t10n, self.q10n = np.copy(self.theta), np.copy(self.qair)  # q [g/kg]
-        self.rho = self.P*100/(287.1*self.t10n*(1+0.6077*self.q10n*0.001))  # q [g/kg]
-        self.lv = (2.501-0.00237*(self.SST-CtoK))*1e6  # J/kg
+        self.rho = self.P * 100/(287.1 * self.t10n * (1 + 0.6077 * self.q10n * 0.001))  # q [g/kg]
+        self.lv = (2.501 - 0.00237*(self.SST - CtoK)) * 1e6  # J/kg
 
         #  Zeng et al. 1998
-        self.tv = self.theta*(1+0.6077*self.qair)   # virtual potential T
-        self.dtv = self.dt_in*(1+0.6077*self.qair*0.001) + \
-            0.6077*self.theta*self.dq_in*0.001  # q [g/kg]
+        self.tv = self.theta*(1 + 0.6077 * self.qair)   # virtual potential T
+
+        # This is equation 6d in the paper, with C_tz / sqrt(C_dz) set to one
+        self.dtv = self.dt_in * (1 + 0.6077 * self.qair * 0.001) + \
+            0.6077 * self.theta * self.dq_in * 0.001  # q [g/kg]
 
         # Set the wind array
-        self.wind = np.sqrt(np.power(np.copy(self.spd), 2)+0.25)
-        self.GustFact = self.wind*0+1
+        #TODO: check GustFact is meant to multiply wind by 0?
+        self.wind = np.sqrt(np.power(np.copy(self.spd), 2) + 0.25)
+        self.GustFact = self.wind * 0 + 1
 
         # Rb eq. 11 Grachev & Fairall 1997, use air temp height
         # use self.tv??  adjust wind to T-height?
-        Rb = self.grav*self.h_in[1]*self.dtv/(self.T*np.power(self.wind, 2))
+        Rb = self.grav * self.h_in[1] * self.dtv / (self.T * np.power(self.wind, 2))
+
         # eq. 12 Grachev & Fairall 1997   # DO.THIS
-        self.monob = self.h_in[1]/12.0/Rb
+        self.monob = self.h_in[1]/ (12.0 * Rb)
 
         # ------------
 
@@ -166,13 +187,16 @@ class S88:
                 dummy_array(x) for x in (0.0, 0.0, 0.0)]
             self.Rnl, self.Qs, self.tkt = [
                 np.empty(self.arr_shp)*self.msk for _ in range(3)]
+
         self.skt = np.copy(self.SST)
         self.skq = np.copy(self.qsea)  # [g/kg]
 
         self.u10n = np.copy(self.wind)
-        self.usr = 0.035*self.u10n
+        self.usr = 0.035*self.u10n #???
+
         self.cd10n, self.zo = cdn_calc(
             self.u10n, self.usr, self.theta, self.grav, self.meth)
+
         self.psim = psim_calc(self.h_in[0]/self.monob, self.meth)
         self.cd = cd_calc(self.cd10n, self.h_in[0], self.ref10, self.psim)
         self.usr =np.sqrt(self.cd*np.power(self.wind, 2))
@@ -180,9 +204,11 @@ class S88:
             np.empty(self.arr_shp)*self.msk for _ in range(4)]
         self.ct10n, self.cq10n, self.ct, self.cq = [
             np.empty(self.arr_shp)*self.msk for _ in range(4)]
+            
         self.tv10n = self.zot
 
     def iterate(self, maxiter=10, tol=None):
+
         if maxiter < 5:
             warnings.warn("Iteration number <5 - resetting to 5.")
             maxiter = 5
@@ -202,6 +228,7 @@ class S88:
                     "ref": ["u10n", "t10n", "q10n"]}
         new_vars["all"] = new_vars["ref"] + new_vars["flux"]
         new_vars = new_vars[tol[0]]
+
         # extract tolerance values by deleting flag from tol
         tvals = np.delete(np.copy(tol), 0)
         tol_vals = list([float(tt) for tt in tvals])
@@ -211,13 +238,11 @@ class S88:
 
         # Setup empty arrays
         self.tsrv, self.psim, self.psit, self.psiq = [
-            np.zeros(self.arr_shp)*self.msk for _ in range(4)]
-
+            np.zeros(self.arr_shp) * self.msk for _ in range(4)]
 
         # extreme values for first comparison
-        dummy_array = lambda val : np.full(self.T.shape, val)*self.msk
-        # you can use def instead of lambda
-        # def dummy_array(val): return np.full(self.arr_shp, val)*self.msk
+        dummy_array = lambda val : np.full(self.T.shape, val) * self.msk
+
         self.itera, self.tau, self.sensible, self.latent = [
             dummy_array(x) for x in (-1, 1e+99, 1e+99, 1e+99)]
 
@@ -243,8 +268,10 @@ class S88:
 
             self.psim[ind] = psim_calc(
                 self.h_in[0, ind]/self.monob[ind], self.meth)
+
             self.cd[ind] = cd_calc(
                 self.cd10n[ind], self.h_in[0, ind], self.ref10, self.psim[ind])
+
             # Update the wind values
             self._wind_iterate(ind)
 
@@ -252,8 +279,10 @@ class S88:
             self.ct10n[ind], self.zot[ind] = ctqn_calc(
                 "ct", self.h_in[1, ind]/self.monob[ind], self.cd10n[ind],
                 self.usr[ind], self.zo[ind], self.theta[ind], self.meth)
+
             self.psit[ind] = psit_calc(
                 self.h_in[1, ind]/self.monob[ind], self.meth)
+
             self.ct[ind] = ctq_calc(
                 self.cd10n[ind], self.cd[ind], self.ct10n[ind],
                 self.h_in[1, ind], self.ref10, self.psit[ind])
@@ -262,8 +291,10 @@ class S88:
             self.cq10n[ind], self.zoq[ind] = ctqn_calc(
                 "cq", self.h_in[2, ind]/self.monob[ind], self.cd10n[ind],
                 self.usr[ind], self.zo[ind], self.theta[ind], self.meth)
+
             self.psiq[ind] = psit_calc(
                 self.h_in[2, ind]/self.monob[ind], self.meth)
+
             self.cq[ind] = ctq_calc(
                 self.cd10n[ind], self.cd[ind], self.cq10n[ind],
                 self.h_in[2, ind], self.ref10, self.psiq[ind])
@@ -276,7 +307,9 @@ class S88:
 
             self.dt_full[ind] = self.dt_in[ind] - \
                 self.dter[ind]*self.cskin - self.dtwl[ind]*self.wl
+
             self.dq_full[ind] = self.dq_in[ind] - self.dqer[ind]*self.cskin
+
             self.usr[ind], self.tsr[ind], self.qsr[ind] = get_strs(
                 self.h_in[:, ind], self.monob[ind], self.wind[ind],
                 self.zo[ind], self.zot[ind], self.zoq[ind], self.dt_full[ind],
@@ -300,21 +333,25 @@ class S88:
                 self.Rnl[ind] = 0.97*(self.Rl[ind]-5.67e-8 *
                                       np.power(self.SST[ind] +
                                                self.dter[ind]*self.cskin, 4))
+
             # not sure how to handle lapse/potemp
             # well-mixed in potential temperature ...
-            self.t10n[ind] = self.theta[ind]-self.tlapse[ind]*self.ref10 - \
+            self.t10n[ind] = self.theta[ind]-self.tlapse[ind] * self.ref10 - \
                 self.tsr[ind]/kappa * \
                 (np.log(self.h_in[1, ind]/self.ref10)-self.psit[ind])
+
             self.q10n[ind] = self.qair[ind]-self.qsr[ind]/kappa * \
                 (np.log(self.h_in[2, ind]/self.ref10)-self.psiq[ind])  # [g/kg]
 
             # update stability info
             self.tsrv[ind] = get_tsrv(
                 self.tsr[ind], self.qsr[ind], self.theta[ind], self.qair[ind])
+
             self.Rb[ind] = get_Rb(
                 self.grav[ind], self.usr[ind], self.h_in[0, ind],
                 self.h_in[1, ind], self.tv[ind], self.dtv[ind], self.wind[ind],
                 self.monob[ind], self.meth)
+
             if self.L == "tsrv":
                 self.monob[ind] = get_Ltsrv(
                     self.tsrv[ind], self.grav[ind], self.tv[ind],
@@ -332,9 +369,9 @@ class S88:
                 self.u10n = np.where(self.u10n < 0, 0.5, self.u10n)
 
             self.itera[ind] = np.full(1, it)
-            self.tau = self.rho*np.power(self.usr, 2)
-            self.sensible = self.rho*self.cp*self.usr*self.tsr
-            self.latent = self.rho*self.lv*self.usr*self.qsr*0.001  # [g/kg]
+            self.tau = self.rho * np.power(self.usr, 2)
+            self.sensible = self.rho * self.cp * self.usr * self.tsr
+            self.latent = self.rho * self.lv * self.usr * self.qsr * 0.001  # [g/kg]
 
             # Set the new variables (for comparison against "old")
             new = np.array([np.copy(getattr(self, i)) for i in new_vars])
@@ -358,7 +395,9 @@ class S88:
 
     def _get_humidity(self):
         """Calculate RH used for flagging purposes & output."""
+
         if self.hum[0] in ('rh', 'no'):
+
             self.rh = self.hum[1]
         elif self.hum[0] == 'Td':
             Td = self.hum[1]  # dew point temperature (K)
@@ -490,34 +529,37 @@ class S88:
 
         return resAll
 
-    def add_variables(self, spd, T, SST, SST_fl, cskin=0, lat=None, hum=None,
+    def add_variables(self, spd: np.ndarray, T: np.ndarray, SST: np.ndarray, SST_fl: str, cskin=0, lat=None, hum=None,
                       P=None, L=None):
+                      
         # Add the mandatory variables
         assert type(spd) == type(T) == type(
             SST) == np.ndarray, "input type of spd, T and SST should be"
         " numpy.ndarray"
         if self.meth in ["S80", "S88", "LP82", "YT96", "UA", "NCAR"]:
             assert SST_fl == "bulk", "input SST should be bulk for method "+self.meth
+
         if self.meth in ["C30", "C35", "ecmwf", "Beljaars"]:
             if cskin == 1:
                 assert SST_fl == "bulk", "input SST should be bulk with cool skin correction switched on for method "+self.meth
             else:
                 assert SST_fl == "skin", "input SST should be skin for method "+self.meth
+
         self.L = "tsrv" if L is None else L
         self.arr_shp = spd.shape
         self.nlen = len(spd)
         self.spd = spd
-        self.T = np.where(T < 200, np.copy(T)+CtoK, np.copy(T))
+        self.T = np.where(T < 200, np.copy(T) + CtoK, np.copy(T))
         self.hum = ['no', np.full(SST.shape, 80)] if hum is None else hum
-        self.SST = np.where(SST < 200, np.copy(SST)+CtoK, np.copy(SST))
+        self.SST = np.where(SST < 200, np.copy(SST) + CtoK, np.copy(SST))
         self.lat = np.full(self.arr_shp, 45) if lat is None else lat
         self.grav = gc(self.lat)
         self.P = np.full(self.nlen, 1013) if P is None else P
 
         # mask to preserve missing values when initialising variables
         self.msk = np.empty(SST.shape)
-        self.msk = np.where(np.isnan(spd+T+SST), np.nan, 1)
-        self.Rb = np.empty(SST.shape)*self.msk
+        self.msk = np.where(np.isnan(spd + T + SST), np.nan, 1)
+        self.Rb = np.empty(SST.shape) * self.msk
 
     def add_gust(self, gust=None):
         if np.all(gust is None):
@@ -547,8 +589,6 @@ class S88:
                                            self.flag.astype(str), 'q') == -1)),
                                       self.flag+[","]+["o"], self.flag))
 
-    def __init__(self):
-        self.meth = "S88"
 
 
 class S80(S88):
@@ -810,7 +850,7 @@ def AirSeaFluxCode(spd, T, SST, SST_fl, meth, lat=None, hum=None, P=None,
     iclass.add_variables(spd, T, SST, SST_fl, cskin=cskin, lat=lat, hum=hum,
                          P=P, L=L)
     iclass.get_heights(hin, hout)
-    iclass.get_specHumidity(qmeth=qmeth)
+    iclass.get_humidity_and_potential_temperature(qmeth=qmeth)
     iclass.set_coolskin_warmlayer(wl=wl, cskin=cskin, skin=skin, Rl=Rl, Rs=Rs)
     iclass.iterate(tol=tol, maxiter=maxiter)
     resAll = iclass.get_output(out_var=out_var, out=out)
