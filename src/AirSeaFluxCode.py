@@ -7,6 +7,30 @@ from util_subs import *
 from flux_subs import *
 from cs_wl_subs import *
 
+def get_relative_humidity(hum, T, qair, P):
+    """Calculate RH used for flagging purposes & output."""
+
+    if hum[0] in ('rh', 'no'):
+
+        rh = hum[1]
+        
+    elif hum[0] == 'Td':
+        
+        Td = hum[1]  # dew point temperature (K)
+        Td = np.where(Td < 200, np.copy(Td)+CtoK, np.copy(Td))
+        T = np.where(T < 200, np.copy(T)+CtoK, np.copy(T))
+        esd = 611.21*np.exp(17.502*((Td-CtoK)/(Td-32.19)))
+        es = 611.21*np.exp(17.502*((T-CtoK)/(T-32.19)))
+        rh = 100*esd/es
+        
+    elif hum[0] == "q":
+        
+        es = 611.21*np.exp(17.502*((T-CtoK)/(T-32.19)))
+        # Following qsat_air
+        e = qair * P/(0.378 * qair + 622)  # for q [g/kg]
+        rh = 100*e/es
+    return rh
+    
 class S88:
 
     def __init__(self):
@@ -36,7 +60,10 @@ class S88:
             self.u10n[ind] = self.wind[ind]-self.usr[ind]/kappa*(
                 np.log(self.h_in[0, ind]/self.ref10)-self.psim[ind])
 
-    def get_heights(self, hin, hout=10):
+    def get_heights(self, 
+                    hin, 
+                    hout=10):
+        
         self.hout = hout
         self.hin = hin
         self.h_in = get_heights(hin, len(self.spd))
@@ -147,7 +174,8 @@ class S88:
         self.ref10 = 10
 
         # first guesses
-        self.t10n, self.q10n = np.copy(self.theta), np.copy(self.qair)  # q [g/kg]
+        self.t10n = np.copy(self.theta)
+        self.q10n = np.copy(self.qair)  # q [g/kg]
         self.rho = self.P * 100/(287.1 * self.t10n * (1 + 0.6077 * self.q10n * 0.001))  # q [g/kg]
         self.lv = (2.501 - 0.00237*(self.SST - CtoK)) * 1e6  # J/kg
 
@@ -207,7 +235,7 @@ class S88:
             
         self.tv10n = self.zot
 
-    def iterate(self, maxiter=10, tol=None):
+    def iterate(self, maxiter=10, tol=None, warm_start_parameters=None):
 
         if maxiter < 5:
             warnings.warn("Iteration number <5 - resetting to 5.")
@@ -248,6 +276,14 @@ class S88:
 
         # Generate the first guess values
         self._first_guess()
+        
+        # If warm start parameters are provided, then use those
+        if warm_start_parameters is not None:
+            for col, series in warm_start_parameters.items():
+                if hasattr(self, col):
+                    assert getattr(self, col).shape == series.shape
+                    setattr(self, col, series.to_numpy())
+                    t=1
 
         #  iteration loop
         ii = True
@@ -393,25 +429,6 @@ class S88:
         logging.info('method %s | # of points that did not converge :%s \n',
                      self.meth, self.ind[0].size)
 
-    def _get_humidity(self):
-        """Calculate RH used for flagging purposes & output."""
-
-        if self.hum[0] in ('rh', 'no'):
-
-            self.rh = self.hum[1]
-        elif self.hum[0] == 'Td':
-            Td = self.hum[1]  # dew point temperature (K)
-            Td = np.where(Td < 200, np.copy(Td)+CtoK, np.copy(Td))
-            T = np.where(self.T < 200, np.copy(self.T)+CtoK, np.copy(self.T))
-            esd = 611.21*np.exp(17.502*((Td-CtoK)/(Td-32.19)))
-            es = 611.21*np.exp(17.502*((T-CtoK)/(T-32.19)))
-            self.rh = 100*esd/es
-        elif self.hum[0] == "q":
-            es = 611.21*np.exp(17.502*((self.T-CtoK)/(self.T-32.19)))
-            # Following qsat_air
-            e = self.qair*self.P/(0.378*self.qair+622)  # for q [g/kg]
-            self.rh = 100*e/es
-
     def _flag(self, out=0):
         miss = np.copy(self.msk)  # define missing input points
         if self.cskin == 1:
@@ -428,11 +445,11 @@ class S88:
 
         assert out in [0, 1], "out must be either 0 or 1"
 
-        self._get_humidity()  # Get the Relative humidity
+        self.rh = get_relative_humidity(hum=self.hum, T=self.T, qair=self.qair, P=self.P)  # Get the Relative humidity
         self._flag(out=out)  # Get flags
 
         self.GFo = apply_GF(self.gust, self.spd, self.wind, "TSF")
-        self.tau = self.rho*np.power(self.usr, 2)/self.GFo[0]
+        self.tau = self.rho * np.power(self.usr, 2) / self.GFo[0]
         self.sensible = self.rho*self.cp*(self.usr/self.GFo[1])*self.tsr
         self.latent = self.rho*self.lv*(self.usr/self.GFo[2])*self.qsr*0.001  # qsr: [g/kg]
 
@@ -529,8 +546,15 @@ class S88:
 
         return resAll
 
-    def add_variables(self, spd: np.ndarray, T: np.ndarray, SST: np.ndarray, SST_fl: str, cskin=0, lat=None, hum=None,
-                      P=None, L=None):
+    def add_variables(self, spd: np.ndarray, 
+                      T: np.ndarray, 
+                      SST: np.ndarray, 
+                      SST_fl: str, 
+                      cskin=0, 
+                      lat=None, 
+                      hum=None,
+                      P=None, 
+                      L=None):
                       
         # Add the mandatory variables
         assert type(spd) == type(T) == type(
@@ -686,7 +710,7 @@ class Beljaars(C30):
 def AirSeaFluxCode(spd, T, SST, SST_fl, meth, lat=None, hum=None, P=None,
                    hin=18, hout=10, Rl=None, Rs=None, cskin=0, skin=None, wl=0,
                    gust=None, qmeth="Buck2", tol=None, maxiter=30, out=0,
-                   out_var=None, L=None):
+                   out_var=None, L=None, warm_start_parameters=None):
     """
     Calculate turbulent surface fluxes using different parameterizations.
 
@@ -852,7 +876,7 @@ def AirSeaFluxCode(spd, T, SST, SST_fl, meth, lat=None, hum=None, P=None,
     iclass.get_heights(hin, hout)
     iclass.get_humidity_and_potential_temperature(qmeth=qmeth)
     iclass.set_coolskin_warmlayer(wl=wl, cskin=cskin, skin=skin, Rl=Rl, Rs=Rs)
-    iclass.iterate(tol=tol, maxiter=maxiter)
+    iclass.iterate(tol=tol, maxiter=maxiter, warm_start_parameters=warm_start_parameters)
     resAll = iclass.get_output(out_var=out_var, out=out)
 
     return resAll

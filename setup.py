@@ -10,7 +10,7 @@ setup(
     version='1.1.0',
     description='A package to compute turbulent surface fluxes',
     long_description=long_description,  # Optional
-    url='https://git.noc.ac.uk/NOCSurfaceProcesses/AirSeaFluxCode',
+    url='https://github.com/bobbyantonio/AirSeaFluxCode',
     author='Stavroula Biri',
     author_email='sbiri@noc.ac.uk',
     license='CCBY',
