@@ -76,49 +76,70 @@ if __name__=="__main__":
     df_low_res = df_low_res[~np.isnan(df_low_res['sst'])].reset_index()
     df_low_res.head()
     
-    start = time.time()
-    warm_start_df = AirSeaFluxCode(spd=df_low_res['wind_speed'].to_numpy(), 
-                    T=df_low_res['t2m'].to_numpy(), 
-                    SST=df_low_res['skt'].to_numpy(), 
-                    SST_fl="skin", 
-                    meth="ecmwf", 
-                    lat=df_low_res['latitude'].to_numpy(),
-                    hin=np.array([10, 2]), 
-                    hum=('q', df_low_res['q_surface'].to_numpy()), 
-                    hout=10,
-                    maxiter=50,
-                    P=df_low_res['msl'].to_numpy(), 
-                    cskin=0, 
-                    Rs=df_low_res['msdwswrf'],
-                    tol=['all', 0.01, 0.01, 1e-05, 1e-3, 0.1, 0.1], 
-                    L="tsrv", 
-                    wl=1,
-                    out_var = ("tau", "sensible", "latent", "monob", "cd", "cd10n",
-                        "ct", "ct10n", "cq", "cq10n", "tsrv", "tsr", "qsr",
-                        "usr", "psim", "psit", "psiq", "psim_ref", "psit_ref",
-                        "psiq_ref", "u10n", "t10n", "q10n", "zo", "zot", "zoq",
-                        "uref", "tref", "qref", "qair", "qsea", "Rb", "rh",
-                        "rho", "cp", "lv", "theta"))
-    warm_start_df = warm_start_df.drop('flag', axis=1)
-    # TODO: this filling of NaN values needs to be better
-    warm_start_df = warm_start_df.fillna(method='bfill')
-    warm_start_df = pd.concat([df_low_res[['latitude', 'longitude']], warm_start_df], axis=1)
-    warm_start_ds = warm_start_df.set_index(['latitude', 'longitude']).to_xarray()
-    print(f'Iterations took {time.time() - start} seconds')
+    # start = time.time()
+    # warm_start_df = AirSeaFluxCode(spd=df_low_res['wind_speed'].to_numpy(), 
+    #                 T=df_low_res['t2m'].to_numpy(), 
+    #                 SST=df_low_res['skt'].to_numpy(), 
+    #                 SST_fl="skin", 
+    #                 meth="ecmwf", 
+    #                 lat=df_low_res['latitude'].to_numpy(),
+    #                 hin=np.array([10, 2]), 
+    #                 hum=('q', df_low_res['q_surface'].to_numpy()), 
+    #                 hout=10,
+    #                 maxiter=50,
+    #                 P=df_low_res['msl'].to_numpy(), 
+    #                 cskin=0, 
+    #                 Rs=df_low_res['msdwswrf'],
+    #                 tol=['all', 0.01, 0.01, 1e-05, 1e-3, 0.1, 0.1], 
+    #                 L="tsrv", 
+    #                 wl=1,
+    #                 out_var = ("tau", "sensible", "latent", "monob", "cd", "cd10n",
+    #                     "ct", "ct10n", "cq", "cq10n", "tsrv", "tsr", "qsr",
+    #                     "usr", "psim", "psit", "psiq", "psim_ref", "psit_ref",
+    #                     "psiq_ref", "u10n", "t10n", "q10n", "zo", "zot", "zoq",
+    #                     "uref", "tref", "qref", "qair", "qsea", "Rb", "rh",
+    #                     "rho", "cp", "lv", "theta"))
+    # warm_start_df = warm_start_df.drop('flag', axis=1)
+    # # TODO: this filling of NaN values needs to be better
+    # warm_start_df = warm_start_df.fillna(method='bfill')
+    # warm_start_df = pd.concat([df_low_res[['latitude', 'longitude']], warm_start_df], axis=1)
+    # warm_start_ds = warm_start_df.set_index(['latitude', 'longitude']).to_xarray()
+    # print(f'Iterations took {time.time() - start} seconds')
     
-    start = time.time()
-    hi_res_dummy_dataset = get_dummy_global_dataset(0.25)
-    warm_start_ds_hi_res = warm_start_ds.regrid.linear(hi_res_dummy_dataset)
-    warm_start_df = warm_start_ds_hi_res.to_dataframe().reset_index()
+    # start = time.time()
+    # hi_res_dummy_dataset = get_dummy_global_dataset(0.25)
+    # warm_start_ds_hi_res = warm_start_ds.regrid.linear(hi_res_dummy_dataset)
+    # warm_start_df = warm_start_ds_hi_res.to_dataframe().reset_index()
     
-    warm_start_df = warm_start_df[~np.isnan(df['sst'])].reset_index()
-    warm_start_df = warm_start_df.fillna(method='bfill')
-    df = df[~np.isnan(df['sst'])].reset_index()
+    # warm_start_df = warm_start_df[~np.isnan(df['sst'])].reset_index()
+    # warm_start_df = warm_start_df.fillna(method='bfill')
+    # df = df[~np.isnan(df['sst'])].reset_index()
     
-    print(f'Regridding took {time.time() - start} seconds')
+    # print(f'Regridding took {time.time() - start} seconds')
 
-    start = time.time()
-    res_ws = AirSeaFluxCode(spd=df['wind_speed'].to_numpy(), 
+    # start = time.time()
+    # res_ws = AirSeaFluxCode(spd=df['wind_speed'].to_numpy(), 
+    #                 T=df['t2m'].to_numpy(), 
+    #                 SST=df['skt'].to_numpy(), 
+    #                 SST_fl="skin", 
+    #                 meth="ecmwf", 
+    #                 lat=df['latitude'].to_numpy(),
+    #                 hin=np.array([10, 2]), 
+    #                 hum=('q', df['q_surface'].to_numpy()), 
+    #                 hout=10,
+    #                 maxiter=50,
+    #                 P=df['msl'].to_numpy(), 
+    #                 cskin=0, 
+    #                 Rs=df['msdwswrf'],
+    #                 tol=['all', 0.01, 0.01, 1e-05, 1e-3, 0.1, 0.1], 
+    #                 L="tsrv", 
+    #                 wl=1,
+    #                 out_var = ("tau", "sensible", "latent"),
+    #                 warm_start_parameters=None)
+    # print(f'Iterations without warm start took {time.time() - start} seconds')
+    
+
+    res_no_ws = AirSeaFluxCode.AirSeaFluxCode(spd=df['wind_speed'].to_numpy(), 
                     T=df['t2m'].to_numpy(), 
                     SST=df['skt'].to_numpy(), 
                     SST_fl="skin", 
@@ -127,37 +148,30 @@ if __name__=="__main__":
                     hin=np.array([10, 2]), 
                     hum=('q', df['q_surface'].to_numpy()), 
                     hout=10,
-                    maxiter=50,
+                    maxiter=5,
                     P=df['msl'].to_numpy(), 
                     cskin=0, 
                     Rs=df['msdwswrf'],
                     tol=['all', 0.01, 0.01, 1e-05, 1e-3, 0.1, 0.1], 
                     L="tsrv", 
                     wl=1,
-                    out_var = ("tau", "sensible", "latent"),
+                    out_var = ("tau", "sensible", "latent", "itera"),
                     warm_start_parameters=None)
-    print(f'Iterations without warm start took {time.time() - start} seconds')
-    
-    start = time.time()
-    res_no_ws = AirSeaFluxCode(spd=df['wind_speed'].to_numpy(), 
-                    T=df['t2m'].to_numpy(), 
-                    SST=df['skt'].to_numpy(), 
-                    SST_fl="skin", 
-                    meth="ecmwf", 
-                    lat=df['latitude'].to_numpy(),
-                    hin=np.array([10, 2]), 
-                    hum=('q', df['q_surface'].to_numpy()), 
-                    hout=10,
-                    maxiter=50,
-                    P=df['msl'].to_numpy(), 
-                    cskin=0, 
-                    Rs=df['msdwswrf'],
-                    tol=['all', 0.01, 0.01, 1e-05, 1e-3, 0.1, 0.1], 
-                    L="tsrv", 
-                    wl=1,
-                    out_var = ("tau", "sensible", "latent"),
-                    warm_start_parameters=warm_start_df)
-    print(f'Iterations with warm start took {time.time() - start} seconds')
-    
+
+#     Creating class: 0.0001 seconds
+# Gust: 0.0001 seconds
+# Add vars: 0.0728 seconds
+# get heights: 0.0023 seconds
+# get hum: 0.0501 seconds
+# cswl: 0.0025 seconds
+# Starting iteration: 0.3236 seconds
+# setting old vars: 0.0302 seconds
+# Calculate 1: 0.2829 seconds
+# wind iteration 1: 0.0470 seconds
+# Calculate 2: 0.4058 seconds
+# Update CSWL 1: 0.0209 seconds
+# Logging: 0.0385 seconds
+# Calculate 3: 0.2253 seconds
+# ITerate wind 2: 0.0547 seconds
     t=1
    

@@ -1,11 +1,13 @@
 import warnings
+from codetiming import Timer
 import numpy as np
 import pandas as pd
 import logging
-from hum_subs import get_hum, gamma
-from util_subs import *
-from flux_subs import *
-from cs_wl_subs import *
+import time
+from src.hum_subs import get_hum, gamma
+from src.util_subs import *
+from src.flux_subs import *
+from src.cs_wl_subs import *
 
 def get_relative_humidity(hum, T, qair, P):
     """Calculate RH used for flagging purposes & output."""
@@ -237,190 +239,205 @@ class S88:
 
     def iterate(self, maxiter=10, tol=None, warm_start_parameters=None):
 
-        if maxiter < 5:
-            warnings.warn("Iteration number <5 - resetting to 5.")
-            maxiter = 5
+        with Timer(text="Starting iteration: {:.4f} seconds"):
 
-        # Decide which variables to use in tolerances based on tolerance
-        # specification
-        tol = ['all', 0.01, 0.01, 1e-02, 1e-3,
-               0.1, 0.1] if tol is None else tol
-        assert tol[0] in ['flux', 'ref', 'all'], "unknown tolerance input"
+            if maxiter < 5:
+                warnings.warn("Iteration number <5 - resetting to 5.")
+                maxiter = 5
 
-        old_vars = {"flux": ["tau", "sensible", "latent"],
-                    "ref": ["u10n", "t10n", "q10n"]}
-        old_vars["all"] = old_vars["ref"] + old_vars["flux"]
-        old_vars = old_vars[tol[0]]
+            # Decide which variables to use in tolerances based on tolerance
+            # specification
+            tol = ['all', 0.01, 0.01, 1e-02, 1e-3,
+                0.1, 0.1] if tol is None else tol
+            assert tol[0] in ['flux', 'ref', 'all'], "unknown tolerance input"
 
-        new_vars = {"flux": ["tau", "sensible", "latent"],
-                    "ref": ["u10n", "t10n", "q10n"]}
-        new_vars["all"] = new_vars["ref"] + new_vars["flux"]
-        new_vars = new_vars[tol[0]]
+            old_vars = {"flux": ["tau", "sensible", "latent"],
+                        "ref": ["u10n", "t10n", "q10n"]}
+            old_vars["all"] = old_vars["ref"] + old_vars["flux"]
+            old_vars = old_vars[tol[0]]
 
-        # extract tolerance values by deleting flag from tol
-        tvals = np.delete(np.copy(tol), 0)
-        tol_vals = list([float(tt) for tt in tvals])
+            new_vars = {"flux": ["tau", "sensible", "latent"],
+                        "ref": ["u10n", "t10n", "q10n"]}
+            new_vars["all"] = new_vars["ref"] + new_vars["flux"]
+            new_vars = new_vars[tol[0]]
 
-        ind = np.where(self.spd > 0)
-        it = 0
+            # extract tolerance values by deleting flag from tol
+            tvals = np.delete(np.copy(tol), 0)
+            tol_vals = list([float(tt) for tt in tvals])
 
-        # Setup empty arrays
-        self.tsrv, self.psim, self.psit, self.psiq = [
-            np.zeros(self.arr_shp) * self.msk for _ in range(4)]
+            ind = np.where(self.spd > 0)
+            it = 0
 
-        # extreme values for first comparison
-        dummy_array = lambda val : np.full(self.T.shape, val) * self.msk
+            # Setup empty arrays
+            self.tsrv, self.psim, self.psit, self.psiq = [
+                np.zeros(self.arr_shp) * self.msk for _ in range(4)]
 
-        self.itera, self.tau, self.sensible, self.latent = [
-            dummy_array(x) for x in (-1, 1e+99, 1e+99, 1e+99)]
+            # extreme values for first comparison
+            dummy_array = lambda val : np.full(self.T.shape, val) * self.msk
 
-        # Generate the first guess values
-        self._first_guess()
-        
-        # If warm start parameters are provided, then use those
-        if warm_start_parameters is not None:
-            for col, series in warm_start_parameters.items():
-                if hasattr(self, col):
-                    assert getattr(self, col).shape == series.shape
-                    setattr(self, col, series.to_numpy())
-                    t=1
+            self.itera, self.tau, self.sensible, self.latent = [
+                dummy_array(x) for x in (-1, 1e+99, 1e+99, 1e+99)]
+
+            # Generate the first guess values
+            self._first_guess()
+            
+            # If warm start parameters are provided, then use those
+            # if warm_start_parameters is not None:
+            #     for col, series in warm_start_parameters.items():
+            #         if hasattr(self, col):
+            #             assert getattr(self, col).shape == series.shape
+            #             setattr(self, col, series.to_numpy())
+            #             t=1
 
         #  iteration loop
         ii = True
         while ii & (it < maxiter):
             it += 1
 
-            # Set the old variables (for comparison against "new")
-            old = np.array([np.copy(getattr(self, i)) for i in old_vars])
+            with Timer(text="setting old vars: {:.4f} seconds"):
+                # Set the old variables (for comparison against "new")
+                old = np.array([np.copy(getattr(self, i)) for i in old_vars])
 
-            # Calculate cdn
-            self.cd10n[ind], self.zo[ind] = cdn_calc(
-                self.u10n[ind], self.usr[ind], self.theta[ind], self.grav[ind],
-                self.meth)
+            with Timer(text="Calculate 1: {:.4f} seconds"):
+                # Calculate cdn
+                self.cd10n[ind], self.zo[ind] = cdn_calc(
+                    self.u10n[ind], self.usr[ind], self.theta[ind], self.grav[ind],
+                    self.meth)
 
-            if np.all(np.isnan(self.cd10n)):
-                logging.info('break %s at iteration %s cd10n<0', self.meth, it)
-                break
+                if np.all(np.isnan(self.cd10n)):
+                    logging.info('break %s at iteration %s cd10n<0', self.meth, it)
+                    break
+           
+                self.psim[ind] = psim_calc(
+                    self.h_in[0, ind]/self.monob[ind], self.meth)
 
-            self.psim[ind] = psim_calc(
-                self.h_in[0, ind]/self.monob[ind], self.meth)
+                self.cd[ind] = cd_calc(
+                    self.cd10n[ind], self.h_in[0, ind], self.ref10, self.psim[ind])
 
-            self.cd[ind] = cd_calc(
-                self.cd10n[ind], self.h_in[0, ind], self.ref10, self.psim[ind])
+            with Timer(text="wind iteration 1: {:.4f} seconds"):
+                
+                # Update the wind values
+                self._wind_iterate(ind)
 
-            # Update the wind values
-            self._wind_iterate(ind)
+            with Timer(text="Calculate 2: {:.4f} seconds"):
+                # temperature
+                self.ct10n[ind], self.zot[ind] = ctqn_calc(
+                    "ct", self.h_in[1, ind]/self.monob[ind], self.cd10n[ind],
+                    self.usr[ind], self.zo[ind], self.theta[ind], self.meth)
 
-            # temperature
-            self.ct10n[ind], self.zot[ind] = ctqn_calc(
-                "ct", self.h_in[1, ind]/self.monob[ind], self.cd10n[ind],
-                self.usr[ind], self.zo[ind], self.theta[ind], self.meth)
+                self.psit[ind] = psit_calc(
+                    self.h_in[1, ind]/self.monob[ind], self.meth)
 
-            self.psit[ind] = psit_calc(
-                self.h_in[1, ind]/self.monob[ind], self.meth)
+                self.ct[ind] = ctq_calc(
+                    self.cd10n[ind], self.cd[ind], self.ct10n[ind],
+                    self.h_in[1, ind], self.ref10, self.psit[ind])
 
-            self.ct[ind] = ctq_calc(
-                self.cd10n[ind], self.cd[ind], self.ct10n[ind],
-                self.h_in[1, ind], self.ref10, self.psit[ind])
+                # humidity
+                self.cq10n[ind], self.zoq[ind] = ctqn_calc(
+                    "cq", self.h_in[2, ind]/self.monob[ind], self.cd10n[ind],
+                    self.usr[ind], self.zo[ind], self.theta[ind], self.meth)
 
-            # humidity
-            self.cq10n[ind], self.zoq[ind] = ctqn_calc(
-                "cq", self.h_in[2, ind]/self.monob[ind], self.cd10n[ind],
-                self.usr[ind], self.zo[ind], self.theta[ind], self.meth)
+                self.psiq[ind] = psit_calc(
+                    self.h_in[2, ind]/self.monob[ind], self.meth)
 
-            self.psiq[ind] = psit_calc(
-                self.h_in[2, ind]/self.monob[ind], self.meth)
+                self.cq[ind] = ctq_calc(
+                    self.cd10n[ind], self.cd[ind], self.cq10n[ind],
+                    self.h_in[2, ind], self.ref10, self.psiq[ind])
 
-            self.cq[ind] = ctq_calc(
-                self.cd10n[ind], self.cd[ind], self.cq10n[ind],
-                self.h_in[2, ind], self.ref10, self.psiq[ind])
+                # Some parameterizations set a minimum on parameters
+                try:
+                    self._minimum_params()
+                except AttributeError:
+                    pass
 
-            # Some parameterizations set a minimum on parameters
-            try:
-                self._minimum_params()
-            except AttributeError:
-                pass
+                self.dt_full[ind] = self.dt_in[ind] - \
+                    self.dter[ind]*self.cskin - self.dtwl[ind]*self.wl
 
-            self.dt_full[ind] = self.dt_in[ind] - \
-                self.dter[ind]*self.cskin - self.dtwl[ind]*self.wl
+                self.dq_full[ind] = self.dq_in[ind] - self.dqer[ind]*self.cskin
 
-            self.dq_full[ind] = self.dq_in[ind] - self.dqer[ind]*self.cskin
+                self.usr[ind], self.tsr[ind], self.qsr[ind] = get_strs(
+                    self.h_in[:, ind], self.monob[ind], self.wind[ind],
+                    self.zo[ind], self.zot[ind], self.zoq[ind], self.dt_full[ind],
+                    self.dq_full[ind], self.cd[ind], self.ct[ind], self.cq[ind],
+                    self.meth)
 
-            self.usr[ind], self.tsr[ind], self.qsr[ind] = get_strs(
-                self.h_in[:, ind], self.monob[ind], self.wind[ind],
-                self.zo[ind], self.zot[ind], self.zoq[ind], self.dt_full[ind],
-                self.dq_full[ind], self.cd[ind], self.ct[ind], self.cq[ind],
-                self.meth)
+            with Timer(text="Update CSWL 1: {:.4f} seconds"):
+                # Update CS/WL parameters
+                self._update_coolskin_warmlayer(ind)
 
-            # Update CS/WL parameters
-            self._update_coolskin_warmlayer(ind)
 
-            # Logging output
-            log_vars = {"dter": 2, "dqer": 7, "tkt": 2,
-                        "Rnl": 2, "usr": 3, "tsr": 4, "qsr": 7}
-            log_vars = [np.round(np.nanmedian(getattr(self, V)), R)
-                        for V, R in log_vars.items()]
-            log_vars.insert(0, self.meth)
-            logging.info(
-                'method {} | dter = {} | dqer = {} | tkt = {} | Rnl = {} |'
-                ' usr = {} | tsr = {} | qsr = {}'.format(*log_vars))
+            with Timer(text="Logging: {:.4f} seconds"):
+                # Logging output
+                log_vars = {"dter": 2, "dqer": 7, "tkt": 2,
+                            "Rnl": 2, "usr": 3, "tsr": 4, "qsr": 7}
+                log_vars = [np.round(np.nanmedian(getattr(self, V)), R)
+                            for V, R in log_vars.items()]
+                log_vars.insert(0, self.meth)
+                logging.info(
+                    'method {} | dter = {} | dqer = {} | tkt = {} | Rnl = {} |'
+                    ' usr = {} | tsr = {} | qsr = {}'.format(*log_vars))
 
-            if self.cskin + self.wl > 0:
-                self.Rnl[ind] = 0.97*(self.Rl[ind]-5.67e-8 *
-                                      np.power(self.SST[ind] +
-                                               self.dter[ind]*self.cskin, 4))
+            with Timer(text="Calculate 3: {:.4f} seconds"):
+                if self.cskin + self.wl > 0:
+                    self.Rnl[ind] = 0.97*(self.Rl[ind]-5.67e-8 *
+                                        np.power(self.SST[ind] +
+                                                self.dter[ind]*self.cskin, 4))
 
-            # not sure how to handle lapse/potemp
-            # well-mixed in potential temperature ...
-            self.t10n[ind] = self.theta[ind]-self.tlapse[ind] * self.ref10 - \
-                self.tsr[ind]/kappa * \
-                (np.log(self.h_in[1, ind]/self.ref10)-self.psit[ind])
+                # not sure how to handle lapse/potemp
+                # well-mixed in potential temperature ...
+                self.t10n[ind] = self.theta[ind]-self.tlapse[ind] * self.ref10 - \
+                    self.tsr[ind]/kappa * \
+                    (np.log(self.h_in[1, ind]/self.ref10)-self.psit[ind])
 
-            self.q10n[ind] = self.qair[ind]-self.qsr[ind]/kappa * \
-                (np.log(self.h_in[2, ind]/self.ref10)-self.psiq[ind])  # [g/kg]
+                self.q10n[ind] = self.qair[ind]-self.qsr[ind]/kappa * \
+                    (np.log(self.h_in[2, ind]/self.ref10)-self.psiq[ind])  # [g/kg]
 
-            # update stability info
-            self.tsrv[ind] = get_tsrv(
-                self.tsr[ind], self.qsr[ind], self.theta[ind], self.qair[ind])
+                # update stability info
+                self.tsrv[ind] = get_tsrv(
+                    self.tsr[ind], self.qsr[ind], self.theta[ind], self.qair[ind])
 
-            self.Rb[ind] = get_Rb(
-                self.grav[ind], self.usr[ind], self.h_in[0, ind],
-                self.h_in[1, ind], self.tv[ind], self.dtv[ind], self.wind[ind],
-                self.monob[ind], self.meth)
+                self.Rb[ind] = get_Rb(
+                    self.grav[ind], self.usr[ind], self.h_in[0, ind],
+                    self.h_in[1, ind], self.tv[ind], self.dtv[ind], self.wind[ind],
+                    self.monob[ind], self.meth)
 
-            if self.L == "tsrv":
-                self.monob[ind] = get_Ltsrv(
-                    self.tsrv[ind], self.grav[ind], self.tv[ind],
-                    self.usr[ind])
-            else:
-                self.monob[ind] = get_LRb(
-                    self.Rb[ind], self.h_in[1, ind], self.monob[ind],
-                    self.zo[ind], self.zot[ind], self.meth)
+                if self.L == "tsrv":
+                    self.monob[ind] = get_Ltsrv(
+                        self.tsrv[ind], self.grav[ind], self.tv[ind],
+                        self.usr[ind])
+                else:
+                    self.monob[ind] = get_LRb(
+                        self.Rb[ind], self.h_in[1, ind], self.monob[ind],
+                        self.zo[ind], self.zot[ind], self.meth)
 
-            # Update the wind values
-            self._wind_iterate(ind)
+            with Timer(text="ITerate wind 2: {:.4f} seconds"):
+                # Update the wind values
+                self._wind_iterate(ind)
 
-            # make sure you allow small negative values convergence
-            if it == 1:
-                self.u10n = np.where(self.u10n < 0, 0.5, self.u10n)
+            with Timer(text="End bit: {:.4f} seconds"):
+                # make sure you allow small negative values convergence
+                if it == 1:
+                    self.u10n = np.where(self.u10n < 0, 0.5, self.u10n)
 
-            self.itera[ind] = np.full(1, it)
-            self.tau = self.rho * np.power(self.usr, 2)
-            self.sensible = self.rho * self.cp * self.usr * self.tsr
-            self.latent = self.rho * self.lv * self.usr * self.qsr * 0.001  # [g/kg]
+                self.itera[ind] = np.full(1, it)
+                self.tau = self.rho * np.power(self.usr, 2)
+                self.sensible = self.rho * self.cp * self.usr * self.tsr
+                self.latent = self.rho * self.lv * self.usr * self.qsr * 0.001  # [g/kg]
 
-            # Set the new variables (for comparison against "old")
-            new = np.array([np.copy(getattr(self, i)) for i in new_vars])
+                # Set the new variables (for comparison against "old")
+                new = np.array([np.copy(getattr(self, i)) for i in new_vars])
 
-            if it > 2:  # force at least three iterations
-                d = np.abs(new-old)  # change over this iteration
-                for ii in range(0, len(tol_vals)):
-                    d[ii, ] = d[ii, ]/tol_vals[ii]  # ratio to tolerance
-                # identifies non-convergence
-                ind = np.where(d.max(axis=0) >= 1)
+                if it > 2:  # force at least three iterations
+                    d = np.abs(new-old)  # change over this iteration
+                    for ii in range(0, len(tol_vals)):
+                        d[ii, ] = d[ii, ]/tol_vals[ii]  # ratio to tolerance
+                    # identifies non-convergence
+                    ind = np.where(d.max(axis=0) >= 1)
 
-            self.ind = np.copy(ind)
-            ii = False if (ind[0].size == 0) else True
+                self.ind = np.copy(ind)
+                ii = False if (ind[0].size == 0) else True
+                
+   
             # End of iteration loop
 
         self.itera[ind] = -1
@@ -869,14 +886,31 @@ def AirSeaFluxCode(spd, T, SST, SST_fl, meth, lat=None, hum=None, P=None,
                         format='%(asctime)s %(message)s', level=logging.INFO)
     logging.captureWarnings(True)
 
-    iclass = globals()[meth]()
-    iclass.add_gust(gust=gust)
-    iclass.add_variables(spd, T, SST, SST_fl, cskin=cskin, lat=lat, hum=hum,
-                         P=P, L=L)
-    iclass.get_heights(hin, hout)
-    iclass.get_humidity_and_potential_temperature(qmeth=qmeth)
-    iclass.set_coolskin_warmlayer(wl=wl, cskin=cskin, skin=skin, Rl=Rl, Rs=Rs)
-    iclass.iterate(tol=tol, maxiter=maxiter, warm_start_parameters=warm_start_parameters)
-    resAll = iclass.get_output(out_var=out_var, out=out)
+    with Timer(text="Creating class: {:.4f} seconds"):
+        iclass = globals()[meth]()
+    
+    with Timer(text="Gust: {:.4f} seconds"):
+        iclass.add_gust(gust=gust)
+
+    with Timer(text="Add vars: {:.4f} seconds"):
+        iclass.add_variables(spd, T, SST, SST_fl, cskin=cskin, lat=lat, hum=hum,
+                            P=P, L=L)
+
+    with Timer(text="get heights: {:.4f} seconds"):
+
+        iclass.get_heights(hin, hout)
+
+    with Timer(text="get hum: {:.4f} seconds"):
+        iclass.get_humidity_and_potential_temperature(qmeth=qmeth)
+
+    with Timer(text="cswl: {:.4f} seconds"):
+        iclass.set_coolskin_warmlayer(wl=wl, cskin=cskin, skin=skin, Rl=Rl, Rs=Rs)
+   
+    with Timer(text="iterate: {:.4f} seconds"):
+        iclass.iterate(tol=tol, maxiter=maxiter, warm_start_parameters=warm_start_parameters)
+
+    with Timer(text="output: {:.4f} seconds"):
+
+        resAll = iclass.get_output(out_var=out_var, out=out)
 
     return resAll
