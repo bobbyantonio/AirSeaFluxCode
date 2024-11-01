@@ -13,6 +13,7 @@ dependencies:
   - pip
   - requests
   - xarray
+  - codetiming
   - pip:
       - airseafluxcode==1.1.0
       - xarray-regrid==0.4.0

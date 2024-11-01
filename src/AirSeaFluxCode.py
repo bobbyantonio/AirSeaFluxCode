@@ -9,6 +9,9 @@ from src.util_subs import *
 from src.flux_subs import *
 from src.cs_wl_subs import *
 
+performance_logger = logging.getLogger(__name__)
+performance_logger.setLevel(logging.INFO)
+
 def get_relative_humidity(hum, T, qair, P):
     """Calculate RH used for flagging purposes & output."""
 
@@ -239,7 +242,7 @@ class S88:
 
     def iterate(self, maxiter=10, tol=None, warm_start_parameters=None):
 
-        with Timer(text="Starting iteration: {:.4f} seconds"):
+        with Timer(text="Starting iteration: {:.4f} seconds" ,logger=performance_logger.debug):
 
             if maxiter < 5:
                 warnings.warn("Iteration number <5 - resetting to 5.")
@@ -294,11 +297,11 @@ class S88:
         while ii & (it < maxiter):
             it += 1
 
-            with Timer(text="setting old vars: {:.4f} seconds"):
+            with Timer(text="setting old vars: {:.4f} seconds" ,logger=performance_logger.debug):
                 # Set the old variables (for comparison against "new")
                 old = np.array([np.copy(getattr(self, i)) for i in old_vars])
 
-            with Timer(text="Calculate 1: {:.4f} seconds"):
+            with Timer(text="Calculate 1: {:.4f} seconds" ,logger=performance_logger.debug):
                 # Calculate cdn
                 self.cd10n[ind], self.zo[ind] = cdn_calc(
                     self.u10n[ind], self.usr[ind], self.theta[ind], self.grav[ind],
@@ -314,12 +317,12 @@ class S88:
                 self.cd[ind] = cd_calc(
                     self.cd10n[ind], self.h_in[0, ind], self.ref10, self.psim[ind])
 
-            with Timer(text="wind iteration 1: {:.4f} seconds"):
+            with Timer(text="wind iteration 1: {:.4f} seconds" ,logger=performance_logger.debug):
                 
                 # Update the wind values
                 self._wind_iterate(ind)
 
-            with Timer(text="Calculate 2: {:.4f} seconds"):
+            with Timer(text="Calculate 2: {:.4f} seconds" ,logger=performance_logger.debug):
                 # temperature
                 self.ct10n[ind], self.zot[ind] = ctqn_calc(
                     "ct", self.h_in[1, ind]/self.monob[ind], self.cd10n[ind],
@@ -361,12 +364,12 @@ class S88:
                     self.dq_full[ind], self.cd[ind], self.ct[ind], self.cq[ind],
                     self.meth)
 
-            with Timer(text="Update CSWL 1: {:.4f} seconds"):
+            with Timer(text="Update CSWL 1: {:.4f} seconds" ,logger=performance_logger.debug):
                 # Update CS/WL parameters
                 self._update_coolskin_warmlayer(ind)
 
 
-            with Timer(text="Logging: {:.4f} seconds"):
+            with Timer(text="Logging: {:.4f} seconds" ,logger=performance_logger.debug):
                 # Logging output
                 log_vars = {"dter": 2, "dqer": 7, "tkt": 2,
                             "Rnl": 2, "usr": 3, "tsr": 4, "qsr": 7}
@@ -377,7 +380,7 @@ class S88:
                     'method {} | dter = {} | dqer = {} | tkt = {} | Rnl = {} |'
                     ' usr = {} | tsr = {} | qsr = {}'.format(*log_vars))
 
-            with Timer(text="Calculate 3: {:.4f} seconds"):
+            with Timer(text="Calculate 3: {:.4f} seconds" ,logger=performance_logger.debug):
                 if self.cskin + self.wl > 0:
                     self.Rnl[ind] = 0.97*(self.Rl[ind]-5.67e-8 *
                                         np.power(self.SST[ind] +
@@ -410,11 +413,11 @@ class S88:
                         self.Rb[ind], self.h_in[1, ind], self.monob[ind],
                         self.zo[ind], self.zot[ind], self.meth)
 
-            with Timer(text="ITerate wind 2: {:.4f} seconds"):
+            with Timer(text="ITerate wind 2: {:.4f} seconds" ,logger=performance_logger.debug):
                 # Update the wind values
                 self._wind_iterate(ind)
 
-            with Timer(text="End bit: {:.4f} seconds"):
+            with Timer(text="End bit: {:.4f} seconds" ,logger=performance_logger.debug):
                 # make sure you allow small negative values convergence
                 if it == 1:
                     self.u10n = np.where(self.u10n < 0, 0.5, self.u10n)
@@ -886,30 +889,30 @@ def AirSeaFluxCode(spd, T, SST, SST_fl, meth, lat=None, hum=None, P=None,
                         format='%(asctime)s %(message)s', level=logging.INFO)
     logging.captureWarnings(True)
 
-    with Timer(text="Creating class: {:.4f} seconds"):
+    with Timer(text="Creating class: {:.4f} seconds", logger=performance_logger.debug):
         iclass = globals()[meth]()
     
-    with Timer(text="Gust: {:.4f} seconds"):
+    with Timer(text="Gust: {:.4f} seconds", logger=performance_logger.debug):
         iclass.add_gust(gust=gust)
 
-    with Timer(text="Add vars: {:.4f} seconds"):
+    with Timer(text="Add vars: {:.4f} seconds", logger=performance_logger.debug):
         iclass.add_variables(spd, T, SST, SST_fl, cskin=cskin, lat=lat, hum=hum,
                             P=P, L=L)
 
-    with Timer(text="get heights: {:.4f} seconds"):
+    with Timer(text="get heights: {:.4f} seconds", logger=performance_logger.debug):
 
         iclass.get_heights(hin, hout)
 
-    with Timer(text="get hum: {:.4f} seconds"):
+    with Timer(text="get hum: {:.4f} seconds", logger=performance_logger.debug):
         iclass.get_humidity_and_potential_temperature(qmeth=qmeth)
 
-    with Timer(text="cswl: {:.4f} seconds"):
+    with Timer(text="cswl: {:.4f} seconds", logger=performance_logger.debug):
         iclass.set_coolskin_warmlayer(wl=wl, cskin=cskin, skin=skin, Rl=Rl, Rs=Rs)
    
-    with Timer(text="iterate: {:.4f} seconds"):
+    with Timer(text="iterate: {:.4f} seconds", logger=performance_logger.debug):
         iclass.iterate(tol=tol, maxiter=maxiter, warm_start_parameters=warm_start_parameters)
 
-    with Timer(text="output: {:.4f} seconds"):
+    with Timer(text="output: {:.4f} seconds", logger=performance_logger.debug):
 
         resAll = iclass.get_output(out_var=out_var, out=out)
 
