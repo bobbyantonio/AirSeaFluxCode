@@ -41,11 +41,11 @@ def get_dummy_global_dataset(resolution):
         }
     )
     
-def potential_temperature(temp: np.array, pressure: np.array, 
+def potential_temperature(temperature: np.array, pressure: np.array, 
                           pressure_ref: float= 1014.0, 
                           kappa: float=0.286):
 
-    return np.multiply(temp, np.power(pressure_ref/pressure, kappa))
+    return np.multiply(temperature, np.power(pressure_ref/pressure, kappa))
 
 def potential_temperature_to_temperature(potential_temperature: np.array, pressure: np.array, 
                           pressure_ref: float= 1014.0, 
@@ -89,7 +89,8 @@ sea_points = np.array(list(zip(lat_vals, lon_vals)))
 
 # %%
 def heuristic_boundary_layer_height(ds: xr.Dataset, 
-                                    threshold: float=1.0):
+                                    threshold: float=1.0,
+                                    pressure_levels: list=None):
     
     """Heuristic method to calculate boundary layer height, based on the location that 
     potential temperature changes significantly
@@ -99,15 +100,20 @@ def heuristic_boundary_layer_height(ds: xr.Dataset,
         1000hPa, 975hPa, 950hPa, +...
 
     Returns:
-        _type_: _description_
+        height_da, pressure_da: DataArrays containing boundary layer height on the grid, and the pressure level of the boundary height (to be used to update)
     """
     
     ds = ds.sortby('level', ascending=False)
-    pressure_levels = [int(item) for item in sorted(ds['level'].values, reverse=True)]
     
-    da_pt = ds[f'temperature'].copy() 
+    if pressure_levels is None:
+        pressure_levels = [1000, 975, 950, 925, 900, 875, 850, 825, 800]
+    else:
+        pressure_levels = sorted(pressure_levels, reverse=True)
+    
+    da_pt = []
     for p in pressure_levels:
-        da_pt.loc[{'level': p}] = potential_temperature(temp=ds['temperature'].sel(level=p), pressure=p)
+        da_pt.append(potential_temperature(temperature=ds['temperature'].sel(level=p), pressure=p).expand_dims({'level': 1}).assign_coords({'level': [p]}))
+    da_pt = xr.concat(da_pt, dim='level')
 
     # Calculate boundary layer heights
     
@@ -121,19 +127,28 @@ def heuristic_boundary_layer_height(ds: xr.Dataset,
             pressure_level_da = xr.ones_like(ds['2m_temperature']) * p
             
         if n == 0:
-            
+                    
             large_diff_2m_1000 = np.abs(ds['2m_temperature'] - da_pt.sel(level=1000)) > threshold
-            large_diff_1000_975 = np.abs(da_pt.sel(level=1000) - da_pt.sel(level=975)) > threshold
             large_diff_2m_975 = np.abs(ds['2m_temperature'] - da_pt.sel(level=975)) > threshold
+            large_diff_2m_950 = np.abs(ds['2m_temperature'] - da_pt.sel(level=975)) > threshold
+            
+            large_diff_1000_975 = np.abs(da_pt.sel(level=1000) - da_pt.sel(level=975)) > threshold
+
             large_diff_975_950 = np.abs(da_pt.sel(level=975) - da_pt.sel(level=950)) > threshold
+            large_diff_950_925 = np.abs(da_pt.sel(level=950) - da_pt.sel(level=925)) > threshold
             
             check_1000hpa_positive = ds[f'geopotential'].sel(level=1000) > 0
+            check_975hpa_positive = ds[f'geopotential'].sel(level=975) > 0
             
             logical_condition_1 = np.logical_and(check_1000hpa_positive, np.logical_and(large_diff_2m_1000, large_diff_1000_975))
-            logical_condition_2 = np.logical_and(~check_1000hpa_positive, np.logical_and(large_diff_2m_975, large_diff_975_950))
+            logical_condition_2 = np.logical_and(check_975hpa_positive, np.logical_and(large_diff_2m_975, large_diff_975_950))
+            logical_condition_3 = np.logical_and(large_diff_2m_950, large_diff_950_925)
             
-            height_da = xr.where(np.logical_or(logical_condition_1, logical_condition_2), 10.0, np.nan)
-            pressure_da = xr.where(np.logical_or(logical_condition_1, logical_condition_2), pressure_level_da, np.nan)
+            # Use height halfway between 10m and the level of the first positive geopotential
+            height_to_use = xr.where(check_1000hpa_positive, 0.5*(10.0 + ds['geopotential'].sel(level=1000)), xr.where(check_975hpa_positive, 0.5*(10.0 + ds['geopotential'].sel(level=975)), 0.5*(10.0 + ds['geopotential'].sel(level=950))))
+            
+            height_da = xr.where(np.logical_or(np.logical_or(logical_condition_1, logical_condition_2), logical_condition_3), height_to_use, np.nan)
+            pressure_da = xr.where(np.logical_or(np.logical_or(logical_condition_1, logical_condition_2), logical_condition_3), pressure_level_da, np.nan)
             
         elif n == len(pressure_levels):
             values_are_null = height_da.isnull()
@@ -148,29 +163,17 @@ def heuristic_boundary_layer_height(ds: xr.Dataset,
             
             logical_condition =  np.logical_and(check_positive, np.logical_and(large_diff_here, values_are_null))
             
-            height_da = xr.where(logical_condition, ds['geopotential'].sel(level=p) / 9.81, height_da)
+            height_da = xr.where(logical_condition, 0.5*(ds['geopotential'].sel(level=p) + ds['geopotential'].sel(level=pressure_levels[n]))/ 9.81, height_da)
             pressure_da = xr.where(logical_condition, pressure_level_da, pressure_da)
 
     return height_da, pressure_da
 
 
 # %%
-sst_mask
-
-# %%
-smoothed_height_vals = ndimage.uniform_filter(height_da.fillna(height_da.mean()), 3)
-smoothed_height_vals[sst_mask] = np.nan
-
-# %%
-
-# %%
-ndimage.uniform_filter(height_da.values, 3)
-
-# %%
 time_ixs = range(5)
 main_ds = xr.load_dataset('/Users/bobbyantonio/repos/AirSeaFluxCode/sample_boundary_height_data.nc')
 
-fig, axs = plt.subplots(len(time_ixs), 4, figsize=(15,5*len(time_ixs)))
+fig, axs = plt.subplots(len(time_ixs), 3, figsize=(15,5*len(time_ixs)))
 
 for time_ix in range(5):
 
@@ -178,7 +181,7 @@ for time_ix in range(5):
     bl_ds = main_ds.isel(time=time_ix).sortby('level', ascending=False)
     bl_ds = bl_ds.drop_vars(['number', 'expver'])
     pressure_levels = [int(item) for item in sorted(bl_ds['level'].values, reverse=True)]
-    height_da, pressure_da = heuristic_boundary_layer_height(bl_ds, threshold=1.0)
+    height_da, pressure_da = heuristic_boundary_layer_height(bl_ds, threshold=0.75)
     height_da = xr.where(sst_da.isnull(), np.nan, height_da)
 
     lat_range = [-90, 90]
@@ -189,7 +192,6 @@ for time_ix in range(5):
     subset_ds = bl_ds.sel(longitude=lon_vals).sel(latitude=lat_vals)
     sst_mask = ~sst_da.sel(longitude=lon_vals).sel(latitude=lat_vals).isnull()
 
-
     height_da.sel(longitude=lon_vals).sel(latitude=lat_vals).plot.pcolormesh(ax=axs[time_ix,0], vmin=0, vmax=3000)
     axs[time_ix,0].set_title(pd.to_datetime(main_ds['time'].values[time_ix].item()).strftime('%Y-%m-%d'))
     
@@ -199,12 +201,12 @@ for time_ix in range(5):
     smoothed_height_vals = ndimage.uniform_filter(height_da.fillna(height_da.mean()).values, 3)
     smoothed_height_vals[~sst_mask] = np.nan
     
-    axs[time_ix,2].pcolormesh(smoothed_height_vals, vmin=0, vmax=3000)
-    axs[time_ix,2].set_title('smoothed')
+    # axs[time_ix,2].pcolormesh(smoothed_height_vals, vmin=0, vmax=3000)
+    # axs[time_ix,2].set_title('smoothed')
     
     error = (height_da.sel(longitude=lon_vals).sel(latitude=lat_vals) - subset_ds['boundary_layer_height'])
-    xr.where(sst_mask, error, np.nan).plot.pcolormesh( vmin=-1500, vmax=1500, ax=axs[time_ix,3], cmap='RdBu_r')
-    axs[time_ix,3].set_title('Diff=')
+    xr.where(sst_mask, error, np.nan).plot.pcolormesh( vmin=-1500, vmax=1500, ax=axs[time_ix,2], cmap='RdBu_r')
+    axs[time_ix,2].set_title('Diff=')
 
 # axs[1,0] = bl_ds['siconc'].sel(longitude=lon_vals).sel(latitude=lat_vals).plot()
 # axs[1,1] = xr.where(sst_mask, large_diff_above.astype(np.int32), np.nan).plot.pcolormesh(ax=axs[1,1])
