@@ -268,7 +268,7 @@ def VaporPressure(temp, P, phase, meth):
                           0.00728332*T)/100
 
         # s = np.where(temp > 0)
-        if np.where(temp > 0).size[0] >= 1:
+        if (temp > 0).sum() > 0:
             """Independent of the formula used for ice, use Hyland Wexler
             (water) for temperatures above freezing (see above).
             Source Hyland, R. W. and A. Wexler, Formulations for the

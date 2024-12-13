@@ -45,6 +45,25 @@ from tabulate import tabulate
 from scipy import ndimage
 from src import AirSeaFluxCode
 
+def np_multiply_many(list_of_arrays: list):
+    """
+        Performs np.multiply iteratively for a list of arrays (assumed to be the same shape)
+
+    Args:
+        list_of_arrays (list): list of arrays of the same shape
+
+    Returns:
+        np.ndarray : element-wise product of arrays in the list
+    """
+    
+    for n, arr in enumerate(list_of_arrays):
+        if n == 0:
+            result = arr.copy()
+        else:
+            result = np.multiply(arr, result)
+    
+    return result
+
 def get_dummy_global_dataset(resolution):
     
     return xr.Dataset(
@@ -80,8 +99,13 @@ def dataset_to_flux_dataframe(ds: xr.Dataset,
     Returns:
         pd.DataFrame: Pandas dataframe
     """
-        
-    flux_input_variables = ['2m_temperature', 'mean_sea_level_pressure', 'specific_humidity','10m_u_component_of_wind', '10m_v_component_of_wind']
+    
+    # It seems that AirSeaFluxCode expects downwards (not net) radiation fluxes
+    flux_input_variables = ['2m_temperature', 'mean_sea_level_pressure', 
+                            'specific_humidity','10m_u_component_of_wind', 
+                            '10m_v_component_of_wind',
+                            'mean_surface_downward_short_wave_radiation_flux',
+                            'mean_surface_downward_long_wave_radiation_flux']
     
     if plevels is None: 
         plevels = [975, 1000]
@@ -202,7 +226,15 @@ sypd = (24*60*60) / secs_per_year
 print(sypd)
 
 # %%
-sst_da = xr.load_dataarray('/Users/bobbyantonio/repos/AirSeaFluxCode/sample_era5_data/era5_sea_surface_temperature_20070203.nc').isel(time=0)
+year = 2016
+month = 1
+day = 1
+hr = 12
+
+dt = datetime.datetime(year,month,day, hour=hr)
+
+# %%
+sst_da = xr.load_dataarray(f"/Users/bobbyantonio/repos/AirSeaFluxCode/sample_era5_data/era5_sea_surface_temperature_{dt.strftime('%Y%m%d')}.nc").isel(time=0)
 
 # Regrid to 2 degrees
 target_2_degree_ds = get_dummy_global_dataset(2.0)
@@ -227,12 +259,7 @@ lon_vals = longitude_array[sst_mask]
 sea_points = np.array(list(zip(lat_vals, lon_vals)))
 
 # %%
-year = 2016
-month = 1
-day = 1
-hr = 12
 
-dt = datetime.datetime(year,month,day, hour=hr)
 glob_str = f"/Users/bobbyantonio/repos/AirSeaFluxCode/sample_era5_data/*{dt.strftime('%Y%m%d')}.nc"
 fps = glob(glob_str)
 
@@ -241,26 +268,35 @@ var_name_lookup = {'z': 'geopotential', 'q': 'specific_humidity', 't': 'temperat
 surface_fps = [fp for fp in fps if 'hPa' not in fp]
 surface_ds = xr.merge([xr.load_dataset(fp) for fp in surface_fps])
 
+
+# %%
+
 # Means of 
-surface_ds['msshf_6hr'] = surface_ds['msshf'].sel(time=[dt + pd.Timedelta(n, 'h') for n in range(1, 7)]).groupby(['latitude', 'longitude']).mean(...).expand_dims(dim={'time': 1}).assign_coords({'time': [dt]}).compute()
-surface_ds = surface_ds.sel(time=dt)
+surface_ds['surface_wind_magnitude'] = np.sqrt(surface_ds['u10']**2 + surface_ds['v10']**2)
+surface_ds['surface_stress_magnitude'] = np.sqrt(surface_ds['iews']**2 + surface_ds['inss']**2)
+
+for var in ['msshf', 'mslhf', 'surface_stress_magnitude']:
+    surface_ds[f'{var}_6hr'] = surface_ds[var].sel(time=[dt + pd.Timedelta(n, 'h') for n in range(1, 7)]).groupby(['latitude', 'longitude']).mean(...).expand_dims(dim={'time': 1}).assign_coords({'time': [dt]}).compute()
+
+surface_ds['msnswrf'] = surface_ds['msnswrf'].fillna(0)
+surface_ds_t0 = surface_ds.sel(time=dt)
 
 plevel_fps = [fp for fp in fps if 'hPa' in fp]
 
 plevel_ds = []
 for var in ['z', 'q', 't']:
     tmp_fps = [fp for fp in plevel_fps if var_name_lookup[var] in fp]
-    tmp_ds = xr.concat([xr.load_dataset(fp).drop_vars('expver') for fp in sorted(tmp_fps)], dim='pressure_level')
+    if len(tmp_fps) > 0:
+        tmp_ds = xr.concat([xr.load_dataset(fp).drop_vars('expver') for fp in sorted(tmp_fps)], dim='pressure_level')
 
-    plevel_ds.append(tmp_ds)
+        plevel_ds.append(tmp_ds)
 plevel_ds = xr.merge(plevel_ds)
 
-ds = xr.merge([surface_ds, plevel_ds]).sel(time=dt)
+ds = xr.merge([surface_ds_t0, plevel_ds]).sel(time=dt)
                                            
                                            
 # ds['ewss'] = ds['ewss'] / (60*60) # Convert from integrated stress to mean stress
 # ds['ewss'] = ds['nsss'] / (60*60)
-ds['surface_stress_magnitude'] = np.sqrt(ds['iews']**2 + ds['inss']**2)
 
 ds = ds.rename({'u10': '10m_u_component_of_wind',
                 'v10': '10m_v_component_of_wind',
@@ -270,9 +306,13 @@ ds = ds.rename({'u10': '10m_u_component_of_wind',
                 't2m': '2m_temperature',
                 'skt': 'skin_temperature',
                 't': 'temperature',
+                'sst': 'sea_surface_temperature',
+                'msnswrf': 'mean_surface_net_short_wave_radiation_flux',
+                'msdwswrf': 'mean_surface_downward_short_wave_radiation_flux',
+                'msdwlwrf': 'mean_surface_downward_long_wave_radiation_flux',
                 'pressure_level': 'level'}).drop_vars('expver').drop_vars('number')
 
-sea_surface_ds = ds[['skin_temperature']]
+sea_surface_ds = ds[['skin_temperature', 'sea_surface_temperature']]
 
 
 # %%
@@ -292,91 +332,94 @@ df_2deg = df_2deg[~np.isnan(df_2deg['sea_surface_temperature'])].reset_index()
 df_2deg.head()
 
 # %%
-# res_sst = AirSeaFluxCode.AirSeaFluxCode(spd=df['wind_speed'].copy().to_numpy(), 
-#                      T=df['2m_temperature'].copy().to_numpy(), 
-#                      SST=df['sea_surface_temperature'].to_numpy(), 
-#                      SST_fl="bulk", 
-#                      meth="ecmwf", 
-#                      lat=df['latitude'].to_numpy(),
-#                      hin=np.array([10, 2]), 
-#                      hum=('q', df['specific_humidity_surface'].copy().to_numpy()), 
-#                      hout=10,
-#                      maxiter=10,
-#                      P=df['mean_sea_level_pressure'].copy().to_numpy(), 
-#                      cskin=1, 
-#                      Rs=df['msdwswrf'].copy().to_numpy(),
-#                      tol=['all', 0.01, 0.01, 1e-05, 1e-3, 0.1, 0.1], 
-#                      L="tsrv", 
-#                      wl=1,
-#                      out_var = ("tau", "sensible", "latent", "cd", "rho", "uref"))
-# res_sst = pd.concat([df[['latitude', 'longitude']], res_sst], axis=1)
-# res_sst_ds = res_sst.set_index(['latitude', 'longitude']).to_xarray()
+df
 
 # %%
-
 df = dataset_to_flux_dataframe(ds)
-sea_surface_df = sea_surface_ds['skin_temperature'].to_dataframe().reset_index()
+sea_surface_df = sea_surface_ds['sea_surface_temperature'].to_dataframe().reset_index()
 sea_surface_df = sea_surface_df[sea_mask_df['sst']]
+sea_surface_df = sea_surface_df
 
 flux_df = df[sea_mask_df['sst']].reset_index()
 
-
-
-res_ssst = AirSeaFluxCode.AirSeaFluxCode(spd=flux_df['wind_speed'].to_numpy(), 
-                     T=flux_df['2m_temperature'].to_numpy(), 
-                     SST=sea_surface_df['skin_temperature'].to_numpy(), 
-                     SST_fl="skin", 
+res_sst = AirSeaFluxCode.AirSeaFluxCode(spd=flux_df['wind_speed'].copy().to_numpy(), 
+                     T=flux_df['2m_temperature'].copy().to_numpy(), 
+                     SST=sea_surface_df['sea_surface_temperature'].to_numpy(), 
+                     SST_fl="bulk", 
                      meth="ecmwf", 
                      lat=flux_df['latitude'].to_numpy(),
                      hin=np.array([10, 2]), 
-                     hum=('q', flux_df['specific_humidity_surface'].to_numpy()), 
+                     hum=('q', flux_df['specific_humidity_surface'].copy().to_numpy()), 
                      hout=10,
-                     maxiter=20,
-                     P=flux_df['mean_sea_level_pressure'].to_numpy(), 
-                     cskin=0, 
-                    #  Rs=flux_df['msdwswrf'].to_numpy(),
+                     maxiter=10,
+                     P=flux_df['mean_sea_level_pressure'].copy().to_numpy(), 
+                     cskin=1, 
+                     Rs=flux_df['mean_surface_downward_short_wave_radiation_flux'].copy().to_numpy(),
+                     Rl=flux_df['mean_surface_downward_long_wave_radiation_flux'].copy().to_numpy(),
                      tol=['all', 0.01, 0.01, 1e-05, 1e-3, 0.1, 0.1], 
                      L="tsrv", 
-                     wl=0,
-                     out_var = ("tau", "sensible", "latent", "cd", "cp", "rho", "usr", "ct", "ct10n"))
+                     wl=1,
+                     gust=[4, 1.2, 600, 0.01],
+                     out_var = ("tau", "sensible", "latent", "cd", "cp", "ct", "rho", 'dter', 'dqer', 'dtwl'),
+                     out=1)
 
-
-# %%
-res_ssst_df = pd.concat([flux_df[['latitude', 'longitude']], res_ssst], axis=1)
-full_ssst_df = df[['latitude', 'longitude']].merge(res_ssst_df, on=['latitude', 'longitude'], how='left')
-res_ssst_ds = full_ssst_df.set_index(['latitude', 'longitude']).to_xarray()
+res_sst_df = pd.concat([flux_df[['latitude', 'longitude']], res_sst], axis=1)
+full_sst_df = df[['latitude', 'longitude']].merge(res_sst_df, on=['latitude', 'longitude'], how='left')
+res_sst_ds = full_sst_df.set_index(['latitude', 'longitude']).to_xarray()
 
 # TODO: try using ffill instead (bit slower)
 for var in ["tau", "sensible", "latent", "cd", "cp", "rho"]:
 
     if var in  ["tau", "sensible", "latent"]:
         # Fill NaNs, set land points to 0 flux, and set sea-ice points to 0 flux
-        res_ssst_ds[var] = xr.where(sea_mask, res_ssst_ds[var].fillna(res_ssst_ds[var].mean().item()), 0)
+        res_sst_ds[var] = xr.where(sea_mask, res_sst_ds[var].fillna(res_sst_ds[var].mean().item()), 0)
     else:
-        res_ssst_ds[var] = res_ssst_ds[var].fillna(res_ssst_ds[var].mean().item())
+        res_sst_ds[var] = res_sst_ds[var].fillna(res_sst_ds[var].mean().item())
              
-print('Num NaN tau in output dataframe: ', res_ssst_df['tau'].isna().sum(), ' / ', len(res_ssst_df['tau']))  
-print('Num NaN tau in final dataset: ', res_ssst_ds['tau'].isnull().sum().item(), ' / ', res_ssst_ds['tau'].size)
+print('Num NaN tau in output dataframe: ', res_sst_df['tau'].isna().sum(), ' / ', len(res_sst_df['tau']))  
+print('Num NaN tau in final dataset: ', res_sst_ds['tau'].isnull().sum().item(), ' / ', res_sst_ds['tau'].size)
 
 # %%
 
-# %%
-np.divide(np.multiply(res_ssst_ds['ct'], res_ssst_ds['usr']) , ds['blh']).plot()
+# df = dataset_to_flux_dataframe(ds)
+# sea_surface_df = sea_surface_ds['skin_temperature'].to_dataframe().reset_index()
+# sea_surface_df = sea_surface_df[sea_mask_df['sst']]
 
-# %%
-fig, axs = plt.subplots(1,3, figsize=(15,5))
+# flux_df = df[sea_mask_df['sst']].reset_index()
 
-t2m_da = xr.load_dataarray('/Users/bobbyantonio/repos/AirSeaFluxCode/sample_era5_data/era5_2m_temperature_20160101.nc')
-xr.where(sea_mask, update, np.nan).plot.pcolormesh(ax=axs[0], vmin=-15, vmax=15, cmap='RdBu_r')
 
-xr.where(sea_mask, temp_diff, np.nan).plot(ax=axs[1], vmin=-15, vmax=15, cmap='RdBu_r')
+# res_ssst = AirSeaFluxCode.AirSeaFluxCode(spd=flux_df['wind_speed'].to_numpy(), 
+#                      T=flux_df['2m_temperature'].to_numpy(), 
+#                      SST=sea_surface_df['skin_temperature'].to_numpy(), 
+#                      SST_fl="skin", 
+#                      meth="ecmwf", 
+#                      lat=flux_df['latitude'].to_numpy(),
+#                      hin=np.array([10, 2]), 
+#                      hum=('q', flux_df['specific_humidity_surface'].to_numpy()), 
+#                      hout=10,
+#                      maxiter=20,
+#                      P=flux_df['mean_sea_level_pressure'].to_numpy(), 
+#                      cskin=0, 
+#                     #  Rs=flux_df['msdwswrf'].to_numpy(),
+#                      tol=['all', 0.01, 0.01, 1e-05, 1e-3, 0.1, 0.1], 
+#                      L="tsrv", 
+#                      wl=0,
+#                      out_var = ("tau", "sensible", "latent", "cd", "cp", "rho", "usr", "ct", "ct10n"))
+# res_ssst_df = pd.concat([flux_df[['latitude', 'longitude']], res_ssst], axis=1)
+# full_ssst_df = df[['latitude', 'longitude']].merge(res_ssst_df, on=['latitude', 'longitude'], how='left')
+# res_ssst_ds = full_ssst_df.set_index(['latitude', 'longitude']).to_xarray()
 
-t2m_diff = (t2m_da.sel(time=datetime.datetime(2016,1,1,18)) - t2m_da.sel(time=datetime.datetime(2016,1,1,12)))
-xr.where(sea_mask, t2m_diff, np.nan).plot(ax=axs[2], vmin=-15, vmax=15, cmap='RdBu_r')
+# # TODO: try using ffill instead (bit slower)
+# for var in ["tau", "sensible", "latent", "cd", "cp", "rho"]:
 
-# %%
-# Check typical diff of 2m temp
-t2m_da = xr.load_dataarray('/Users/bobbyantonio/repos/AirSeaFluxCode/sample_era5_data/era5_2m_temperature_20160101.nc')
+#     if var in  ["tau", "sensible", "latent"]:
+#         # Fill NaNs, set land points to 0 flux, and set sea-ice points to 0 flux
+#         res_ssst_ds[var] = xr.where(sea_mask, res_ssst_ds[var].fillna(res_ssst_ds[var].mean().item()), 0)
+#     else:
+#         res_ssst_ds[var] = res_ssst_ds[var].fillna(res_ssst_ds[var].mean().item())
+             
+# print('Num NaN tau in output dataframe: ', res_ssst_df['tau'].isna().sum(), ' / ', len(res_ssst_df['tau']))  
+# print('Num NaN tau in final dataset: ', res_ssst_ds['tau'].isnull().sum().item(), ' / ', res_ssst_ds['tau'].size)
 
 # %%
 # Sanity check results compared to ERA5
@@ -386,7 +429,7 @@ for k, func in funcs.items():
     
     print(f"{k} for ERA5: {func(ds['msshf'])}")
     print(f"{k} for ERA5 6hr: {func(ds['msshf_6hr'])}")
-    print(f"{k} for AirSeaFlux: {func(res_ssst_ds['sensible'])}")
+    print(f"{k} for AirSeaFlux: {func(res_sst_ds['sensible'])}")
 
 # %%
 res_2deg = AirSeaFluxCode(spd=df_2deg['wind_speed'].to_numpy(), 
@@ -412,115 +455,202 @@ res_2deg_ds = res_2deg.set_index(['latitude', 'longitude']).to_xarray()
 print('Num nan tau on sea: ', res_2deg_ds['tau'].isna().sum(), ' / ', len(res_2deg))
 
 # %%
-# check tau is calculated as you expect
-res['tau_calc'] = ((np.power(res['uref'],2))*res['cd']*res['rho'])
-
-# %%
 num_rows = 4
 num_cols = 2
 
 fig, ax = plt.subplots(num_rows, num_cols, figsize=(num_cols*5, num_rows*5))
-res_ssst_ds['sensible'].plot.imshow(cmap='RdBu_r', ax=ax[0,0], vmin=-400, vmax=400)
+res_sst_ds['sensible'].plot.imshow(cmap='RdBu_r', ax=ax[0,0], vmin=-400, vmax=400)
+ax[0,0].set_title('Calculated Sensible')
 sshf_da = ds['msshf'].where(sea_mask)
 sshf_da.plot.imshow(ax=ax[0,1], vmin=-400, vmax=400, cmap='RdBu_r',)
+ax[0,1].set_title('ERA5 Sensible')
 
-res_ssst_ds['tau'].plot.imshow(ax=ax[1,0], vmin=0, vmax=4)
+res_sst_ds['tau'].plot.imshow(ax=ax[1,0], vmin=0, vmax=4)
 tau_da = ds['surface_stress_magnitude'].where(sea_mask)
 tau_da.plot.imshow(ax=ax[1,1], vmin=0, vmax=4)
 
-res_ssst_ds['latent'].plot.imshow(ax=ax[2,0], vmin=-600, vmax=600, cmap='RdBu_r',)
+res_sst_ds['latent'].plot.imshow(ax=ax[2,0], vmin=-600, vmax=600, cmap='RdBu_r',)
 tau_da = ds['mslhf'].where(sea_mask)
 tau_da.plot.imshow(ax=ax[2,1], vmin=-600, vmax=600, cmap='RdBu_r',)
 
 ds['siconc'].plot.imshow(ax=ax[3,0])
 
-print('Num nan tau: ', res_ssst['tau'].isna().sum(), ' / ', len(res_ssst))
-print('Fraction nan tau: ', res_ssst['tau'].isna().sum()/len(res_ssst))
+
+# %% [markdown]
+# ## Sensible heat flux
 
 # %%
-num_rows = 1
+num_rows = 2
 num_cols = 2
-
-fig, axs = plt.subplots(num_rows, num_cols, figsize=(num_cols*5, num_rows*5))
-
-exponential_factor = np.exp( -  (1 + entrainment_coefficient) * delta_t * np.divide(np.multiply(res_ssst_ds['ct'], res_ssst_ds['usr']) , ds['blh'])  )
-exponential_factor_with_bl = np.exp( - 10* (1 + entrainment_coefficient) * delta_t * np.divide(np.multiply(res_ssst_ds['ct'], res_ssst_ds['usr']) , np.clip(height_da, a_min=50, a_max=None))  )
-
-exponential_factor.plot(ax=axs[0])
-exponential_factor_with_bl.plot(ax=axs[1])
-
-# %%
-num_rows = 3
-num_cols = 2
+entrainment_coefficient = 0.2
+delta_t = 6*60*60
 height_da, pressure_da = heuristic_boundary_layer_height(ds)
 height_da = np.clip(height_da, a_min=200, a_max=None)
 
-exponential_factor = np.exp( -  (1 + entrainment_coefficient) * delta_t * np.divide(np.multiply(res_ssst_ds['ct'], res_ssst_ds['usr']) , ds['blh'])  )
-exponential_factor_with_bl = np.exp( -  (1 + entrainment_coefficient) * delta_t * np.divide(np.multiply(res_ssst_ds['ct'], res_ssst_ds['usr']) , height_da  ))
+fig, axs = plt.subplots(num_rows, num_cols, figsize=(num_cols*5, num_rows*5))
+
+
+xr.where(sea_mask, height_da, np.nan).plot(ax=axs[0,0], vmin=0, vmax=2000)
+xr.where(sea_mask, ds['blh'], np.nan).plot(ax=axs[0,1], vmin=0, vmax=2000)
+
+exponential_factor_with_bl = np.exp( -  (1 + entrainment_coefficient) * delta_t * np.divide(np.multiply(res_sst_ds['ct'], ds['surface_wind_magnitude']) , height_da)  )
+exponential_factor = np.exp( -  (1 + entrainment_coefficient) * delta_t * np.divide(np.multiply(res_sst_ds['ct'], ds['surface_wind_magnitude']) , ds['blh'])  )
+
+
+exponential_factor_with_bl.plot.imshow(ax=axs[1,0], vmin=0, vmax=2.5)
+exponential_factor.plot(ax=axs[1,1], vmin=0, vmax=2.5)
+
+axs[0,0].set_title('Calculated boundary height')
+axs[0,1].set_title('ERA5 boundary height')
+axs[1,0].set_title('Exp factor with calc h')
+axs[1,1].set_title('Exp factor with ERA5 h')
+
+# %%
+num_rows = 2
+num_cols = 2
+entrainment_coefficient = 0.2
+delta_t = 6*60*60 # 6 hours
+height_da, pressure_da = heuristic_boundary_layer_height(ds)
+height_da = np.clip(height_da, a_min=200, a_max=None)
+
 
 fig, axs = plt.subplots(num_rows, num_cols, figsize=(num_cols*5, num_rows*5))
+
 # plot boundary layer height distribution
 xr.where(sea_mask, height_da, np.nan).plot.hist(ax=axs[0,0], bins=10, density=True)
 axs[0,0].set_xlim([0,3000])
 xr.where(sea_mask, ds['blh'], np.nan).plot.hist(bins=20, ax=axs[0,1], density=True)
 axs[0,1].set_xlim([0,3000])
 
-exponential_factor.plot(ax=axs[1,0], vmin=0.9, vmax=1)
-exponential_factor_with_bl.plot(ax=axs[1,1], vmin=0.9,  vmax=1)
 
-
-xr.where(sea_mask, ds['blh'], np.nan).plot(ax=axs[2,0], vmin=0, vmax=3000)
-xr.where(sea_mask, height_da, np.nan).plot(ax=axs[2,1], vmin=0, vmax=3000)
+xr.where(sea_mask, ds['blh'], np.nan).plot(ax=axs[1,0], vmin=0, vmax=3000)
+xr.where(sea_mask, height_da, np.nan).plot(ax=axs[1,1], vmin=0, vmax=3000)
 
 # %%
-temp_diff = ds['2m_temperature'] - sea_surface_ds['skin_temperature']
-gamma = 1
+num_rows = 2
+num_cols = 2
+
 entrainment_coefficient = 0.2
-delta_t = 60*60 # 6 hours
-# Use approximation of boundary layer height
+delta_t = 6*60*60
+mixed_layer_depth = 20 # To be replaced with NEMO MLD
+sea_density = 1.03 # To be replaced, use potential density?
+ocean_heat_capacity = 4200
+cp = res_sst_ds['cp']
+skin_temp = sea_surface_ds['sea_surface_temperature'] -  res_sst_ds['dter'] - res_sst_ds['dtwl'] #TODO: Get NEMO to pass skin temperature instead
 
-exponential_factor = np.exp( -  (1 + entrainment_coefficient) * delta_t * np.divide(np.multiply(res_ssst_ds['ct'], res_ssst_ds['usr']) , ds['blh'])  )
-exponential_factor_with_bl = np.exp( -  (1 + entrainment_coefficient) * delta_t * np.divide(np.multiply(res_ssst_ds['ct'], res_ssst_ds['usr']) , height_da)  )
+# Calculate equilibrium temperature
+ocean_eqm_factor = sea_density * ocean_heat_capacity * mixed_layer_depth
+atm_eqm_factor = np_multiply_many([height_da ,res_sst_ds['rho'], res_sst_ds['cp']])
 
-update = np.multiply(-temp_diff, 1-  exponential_factor)
+t_eqm_numerator = np.multiply(ocean_eqm_factor , skin_temp) + np.multiply(atm_eqm_factor , ds['2m_temperature'])
+t_eqm_denominator = ocean_eqm_factor + atm_eqm_factor
 
-update.plot()
+t_eqm = np.divide(t_eqm_numerator, t_eqm_denominator)
 
-# %%
-# Calculate potential temperature changes, and compare to 6hr average
-entrainment_coefficient = 0.2
-delta_t = 60*60 # 6 hours
-numerator_asf = delta_t * (1+ entrainment_coefficient) * -1 * res_ssst_ds['sensible']
-denominator = np.multiply( res_ssst_ds['cp'], np.multiply( np.clip(ds['blh'],a_min=100, a_max=None),1))
-delta_pot_term_asf = xr.where(sea_mask, np.divide(numerator_asf, denominator), np.nan)
+# Calculate exponential coefficients
+# Currently making lots of simplifications of the ocean which should be checked!
+# But since it is to calculate an equilibrium temperature perhaps it is not too important
+exp_coeff_atm = (1 + entrainment_coefficient) * np.divide(np.multiply(res_sst_ds['ct'], ds['surface_wind_magnitude']) , height_da)
+exp_coeff_oce = np_multiply_many([res_sst_ds['cp'], ds['surface_wind_magnitude'], res_sst_ds['ct'], res_sst_ds['rho']]) / (sea_density * ocean_heat_capacity * mixed_layer_depth)
 
-numerator_era5_6hr = delta_t * (1+ entrainment_coefficient) * -1 * ds['msshf_6hr']
-denominator_era56hr = np.multiply(1008, np.multiply( np.clip(ds['blh'],a_min=100, a_max=None), 1.0))
-
-delta_pot_term_era5 = xr.where(sea_mask, np.divide(numerator_era5_6hr, denominator_era56hr), np.nan)
-
-surface_temp_diff = xr.where(sea_mask, ds['2m_temperature'] - ds['skin_temperature'], np.nan)
 
 # %%
-fig, axs = plt.subplots(1,3, figsize=(15,5))
-
-delta_pot_term_asf.plot.pcolormesh(vmin=-4, vmax=4, cmap='RdBu_r', ax=axs[0])
-delta_pot_term_era5.plot.pcolormesh(vmin=-4, vmax=4, cmap='RdBu_r', ax=axs[1])
-# surface_temp_diff.plot.pcolormesh(ax=axs[2])
-
-xr.where(np.abs(delta_pot_term_era5) > np.abs(surface_temp_diff), np.abs(surface_temp_diff),delta_pot_term_era5).plot.pcolormesh(vmin=-4, vmax=4, cmap='RdBu_r')
+# Calculate new temperature, and temperature change
+new_t = (ds['2m_temperature'] - t_eqm) * np.exp( - (exp_coeff_atm + exp_coeff_oce) * delta_t) + t_eqm
+update = new_t - ds['2m_temperature']
 
 # %%
-pote_temp_change_clipped = xr.where(np.abs(delta_pot_term_era5) > np.abs(surface_temp_diff), np.abs(surface_temp_diff),delta_pot_term_era5)
+
+# multiply by time...
+
+fig, axs = plt.subplots(num_rows, num_cols, figsize=(num_cols*5, num_rows*5))
+
+temp_diff = ds['2m_temperature'] - skin_temp
+
+update.plot(ax=axs[0,0], vmin=-10, vmax=10, cmap='RdBu_r')
+
+xr.where(sea_mask, -temp_diff, np.nan).plot(ax=axs[0,1], vmin=-10, vmax=10, cmap='RdBu_r')
+xr.where(sea_mask, surface_ds['t2m'].sel(time=dt+datetime.timedelta(hours=6)) - surface_ds['t2m'].sel(time=dt), np.nan).plot(ax=axs[1,0], vmin=-10, vmax=10, cmap='RdBu_r')
+
+axs[0,0].set_title('Predicted change due to sensible heat flux')
+axs[0,1].set_title('Skin temperature - t2m')
+axs[1,0].set_title('Actual t2m change')
 
 # %%
-# Get actual potential temperature change
+figure, axs = plt.subplots(3,1)
+
+skin_temp.plot(ax=axs[0], vmax=310, vmin=255)
+sea_surface_ds['sea_surface_temperature'].plot(ax=axs[1], vmax=310, vmin=255)
+(skin_temp - sea_surface_ds['sea_surface_temperature']).plot(ax=axs[2], vmin=-2, vmax=2, cmap='RdBu_r')
 
 # %%
-for k, func in funcs.items():
-    
-    print(f"{k} for AirSeaFlux: {func(delta_pot_term_asf)}")
-    print(f"{k} for ERA5: {func(delta_pot_term_era5)}")
+figure, axs = plt.subplots(4,1)
+
+t_eqm.plot(ax=axs[0], vmax=310, vmin=255)
+(t_eqm - ds['2m_temperature']).plot(ax=axs[1],  cmap='RdBu_r', vmax=-2, vmin=2)
+(t_eqm - skin_temp).plot(ax=axs[2], vmin=-2, vmax=2, cmap='RdBu_r')
+xr.where( np.logical_or(np.logical_and(t_eqm > ds['2m_temperature'], t_eqm > skin_temp), np.logical_and(t_eqm < ds['2m_temperature'], t_eqm < skin_temp)), 1,0).plot(ax=axs[3])
+
+# %% [markdown]
+# ## Latent heat flux
+
+# %%
+# First need to calculate q_s the saturation specific humidity of air
+
+# %%
+from src import hum_subs
+
+# Using Buck method for water as it seems to align with what the IFS does
+# However the Alduchov Eskridge method that IFS uses for ice doesn't seem to be available. So use GoffGratch which is said to be standard according to AirSeaFluxCode
+vapor_pressure_water = hum_subs.VaporPressure(skin_temp.values, ds['mean_sea_level_pressure'].values, 'liquid', meth='Buck')
+vapor_pressure_ice = hum_subs.VaporPressure(skin_temp.values, ds['mean_sea_level_pressure'].values, 'ice', meth='GoffGratch')
+
+# %%
+saturation_vapor_press = np.multiply(1 - ds['siconc'], vapor_pressure_water) + np.multiply(ds['siconc'], vapor_pressure_ice) 
+
+# %%
+hum_subs.qsat_air(skin_temp, ds['mean_sea_level_pressure'], )
+
+# %%
+# From IFS documentation:
+# q_sat = ( (R_dry / R_vap) * e_sat ) / (  pressure - (1  -  (R_dry / R_vap) ) * e_sat)
+
+# where
+
+# R_dry gas constant for dry air  = 
+# R_vap gas constant for water vapour
+
+# From AeroBulk:
+# R_dry = 287.05       # Specific gas constant for dry air              [J/K/kg]
+# R_vap = 461.495      # Specific gas constant for water vapor          [J/K/kg]
+
+# %% [markdown]
+# ## Momentum flux
+
+# %%
+num_rows = 2
+num_cols = 2
+
+fig, ax = plt.subplots(num_rows, num_cols, figsize=(num_cols*5, num_rows*5))
+xr.where(sea_mask, ds['surface_stress_magnitude_6hr'], np.nan).plot(ax=ax[0,0], vmin=0, vmax=8)
+xr.where(sea_mask, ds['surface_stress_magnitude'], np.nan).plot(ax=ax[0,1], vmin=0, vmax=8)
+
+delta_t = 6*60*60 # 6 hours
+mmntm_numerator = np.multiply(ds['surface_wind_magnitude'] , res_ssst_ds['cd']) * delta_t
+mmntm_denominator = height_da + np.multiply(ds['surface_wind_magnitude'] , res_ssst_ds['cd']) * delta_t
+
+approx_6hr_momentum_flux = np.divide(mmntm_numerator, mmntm_denominator)
+
+xr.where(sea_mask, approx_6hr_momentum_flux, np.nan).plot(ax=ax[1,0], vmin=0, vmax=8)
+
+change_in_wind_speed_era5 = surface_ds['surface_wind_magnitude'].sel(time=datetime.datetime(2016, 1, 1, 18, 0)) - surface_ds['surface_wind_magnitude'].sel(time=datetime.datetime(2016, 1, 1, 12, 0))
+
+xr.where(sea_mask, change_in_wind_speed_era5, np.nan).plot(ax=ax[1,1], vmin=0, vmax=8)
+
+
+# %%
+
+surface_ds['surface_wind_magnitude'].sel(time=datetime.datetime(2016, 1, 1, 18, 0)) - surface_ds['surface_wind_magnitude'].sel(time=datetime.datetime(2016, 1, 1, 12, 0))
 
 # %%
 # Scatter plot between instantaneous heat flux and 
@@ -543,9 +673,6 @@ tau_da = ds_2deg['mslhf'].where(~ds_2deg['sst'].isnull())
 tau_da.plot.imshow(ax=ax[2,1], vmin=-600, vmax=600, cmap='RdBu_r',)
 
 ds_2deg['siconc'].plot.imshow(ax=ax[3,0])
-
-# %%
-res_ds['tau_calc'].plot.hist()
 
 # %%
 ds['surface_stress_magnitude'].where(~ds['sst'].isnull()).plot.hist()
