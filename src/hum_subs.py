@@ -321,7 +321,7 @@ def qsat_air(T, P, rh, qmeth):
     T : float
         temperature [$^\circ$\,C]
     P : float
-        pressure [mb]
+        pressure [mb] NOTE: It looks like this is actually hPa, based on how it is called in the code (and to have consistent units with the vapor_pressure calculation)
     rh : float
        relative humidity [%]
     qmeth : str

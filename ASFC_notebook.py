@@ -115,8 +115,6 @@ def dataset_to_flux_dataframe(ds: xr.Dataset,
     ds['specific_humidity'] = ds['specific_humidity'] * 1000 # Convert to g/kg
     ds['wind_speed'] = np.sqrt(ds['10m_u_component_of_wind']**2 + ds['10m_v_component_of_wind']**2)
        
-    # Interpolate humidity to surface
-    ds['specific_humidity_surface'] = ds['specific_humidity'].sel(level=1000) + (ds['specific_humidity'].sel(level=1000) - ds['specific_humidity'].sel(level=975)) * (ds['mean_sea_level_pressure'] - 1000) / 25
     
     # Drop any vars with level, and drop level, to allow creation of dataframe without level as an index
     ds = ds.drop_vars('specific_humidity').drop_vars('level')
@@ -292,6 +290,9 @@ for var in ['z', 'q', 't']:
         plevel_ds.append(tmp_ds)
 plevel_ds = xr.merge(plevel_ds)
 
+# Interpolate humidity to surface
+plevel_ds['specific_humidity_surface'] = plevel_ds['q'].sel(pressure_level=1000) + (plevel_ds['q'].sel(pressure_level=1000) - plevel_ds['q'].sel(pressure_level=975)) * (surface_ds['msl'] - 1000) / 25
+
 ds = xr.merge([surface_ds_t0, plevel_ds]).sel(time=dt)
                                            
                                            
@@ -315,6 +316,7 @@ ds = ds.rename({'u10': '10m_u_component_of_wind',
 sea_surface_ds = ds[['skin_temperature', 'sea_surface_temperature']]
 
 
+
 # %%
 # # Createa a 2 degrees version. Just using bilinear for now to see speed
 target_dataset = xr.Dataset(
@@ -330,9 +332,6 @@ df_2deg = ds_2deg.to_dataframe().reset_index()
 
 df_2deg = df_2deg[~np.isnan(df_2deg['sea_surface_temperature'])].reset_index()
 df_2deg.head()
-
-# %%
-df
 
 # %%
 df = dataset_to_flux_dataframe(ds)
@@ -360,7 +359,7 @@ res_sst = AirSeaFluxCode.AirSeaFluxCode(spd=flux_df['wind_speed'].copy().to_nump
                      L="tsrv", 
                      wl=1,
                      gust=[4, 1.2, 600, 0.01],
-                     out_var = ("tau", "sensible", "latent", "cd", "cp", "ct", "rho", 'dter', 'dqer', 'dtwl'),
+                     out_var = ("tau", "sensible", "latent", "cd", "cp", "ct", "cq", "rho", 'dter', 'dqer', 'dtwl', 'rh'),
                      out=1)
 
 res_sst_df = pd.concat([flux_df[['latitude', 'longitude']], res_sst], axis=1)
@@ -378,6 +377,10 @@ for var in ["tau", "sensible", "latent", "cd", "cp", "rho"]:
              
 print('Num NaN tau in output dataframe: ', res_sst_df['tau'].isna().sum(), ' / ', len(res_sst_df['tau']))  
 print('Num NaN tau in final dataset: ', res_sst_ds['tau'].isnull().sum().item(), ' / ', res_sst_ds['tau'].size)
+
+# %%
+height_da, pressure_da = heuristic_boundary_layer_height(ds)
+height_da = np.clip(height_da, a_min=200, a_max=None)
 
 # %%
 
@@ -484,8 +487,6 @@ num_rows = 2
 num_cols = 2
 entrainment_coefficient = 0.2
 delta_t = 6*60*60
-height_da, pressure_da = heuristic_boundary_layer_height(ds)
-height_da = np.clip(height_da, a_min=200, a_max=None)
 
 fig, axs = plt.subplots(num_rows, num_cols, figsize=(num_cols*5, num_rows*5))
 
@@ -510,9 +511,6 @@ num_rows = 2
 num_cols = 2
 entrainment_coefficient = 0.2
 delta_t = 6*60*60 # 6 hours
-height_da, pressure_da = heuristic_boundary_layer_height(ds)
-height_da = np.clip(height_da, a_min=200, a_max=None)
-
 
 fig, axs = plt.subplots(num_rows, num_cols, figsize=(num_cols*5, num_rows*5))
 
@@ -592,37 +590,113 @@ t_eqm.plot(ax=axs[0], vmax=310, vmin=255)
 xr.where( np.logical_or(np.logical_and(t_eqm > ds['2m_temperature'], t_eqm > skin_temp), np.logical_and(t_eqm < ds['2m_temperature'], t_eqm < skin_temp)), 1,0).plot(ax=axs[3])
 
 # %% [markdown]
-# ## Latent heat flux
+# ## Specific humidity
 
 # %%
-# First need to calculate q_s the saturation specific humidity of air
 
 # %%
 from src import hum_subs
 
-# Using Buck method for water as it seems to align with what the IFS does
-# However the Alduchov Eskridge method that IFS uses for ice doesn't seem to be available. So use GoffGratch which is said to be standard according to AirSeaFluxCode
-vapor_pressure_water = hum_subs.VaporPressure(skin_temp.values, ds['mean_sea_level_pressure'].values, 'liquid', meth='Buck')
-vapor_pressure_ice = hum_subs.VaporPressure(skin_temp.values, ds['mean_sea_level_pressure'].values, 'ice', meth='GoffGratch')
+
+
+def saturation_vapour_pressure(T: np.ndarray,
+                               phase: str):
+    """
+    Calculate saturation vapour pressure
+    From IFS documentation
+
+    Args:
+        T (np.ndarray): temperature (K)
+        phase (str): phase of water (water or ice)
+
+    Returns:
+        np.ndarray: saturation vapour pressure (hPa)
+    """
+    # 
+
+    # Temperate T in 
+
+    T0 = 273.16 
+
+    if phase == 'ice':
+        a1 = 6.1121 # In units of hPa
+        a3 = 22.587
+        a4 = -0.7 
+    elif phase == 'water':
+        a1 = 6.1121 # In units of hPa
+        a3 = 17.502
+        a4 = 32.19 
+    else:
+        raise ValueError("Unrecognised phase")
+
+    sat_vap_pres = a1 * np.exp( a3 * np.divide(T - T0 , T - a4))
+
+    # In units of hPa
+    return sat_vap_pres
+
+def q_saturation_specific(skin_temp: np.ndarray,
+                          sea_level_pressure: np.ndarray, 
+                          sea_ice_conc: np.ndarray):
+    
+    """Calculate saturation specific humidity of air
+    Method taken from IFS documentation
+
+    skin_temp: skin temperature (K)
+    sea_level_pressure: pressure (hPa)
+    sea_ice_conc: sea ice concentration (no units)
+    
+    Returns:
+        np.ndarray: saturation specific humidity (kg/kg)
+    """
+
+    # From IFS documentation:
+    # q_sat = ( (R_dry / R_vap) * e_sat ) / (  pressure - (1  -  (R_dry / R_vap) ) * e_sat)
+    
+    R_dry = 287.05       # Specific gas constant for dry air              [J/K/kg]
+    R_vap = 461.495      # Specific gas constant for water vapor          [J/K/kg]
+    molar_mass_ratio = R_dry / R_vap
+
+    saturation_vapour_pressure_water = saturation_vapour_pressure(skin_temp, 'water')
+    saturation_vapour_pressure_ice = saturation_vapour_pressure(skin_temp, 'ice')
+
+    saturation_vapor_press = np.multiply(1 - sea_ice_conc, saturation_vapour_pressure_water) + np.multiply(sea_ice_conc, saturation_vapour_pressure_ice) 
+
+    qsat = np.divide(molar_mass_ratio * saturation_vapor_press, sea_level_pressure - (1 - molar_mass_ratio) * saturation_vapor_press)
+
+    return qsat
+
 
 # %%
-saturation_vapor_press = np.multiply(1 - ds['siconc'], vapor_pressure_water) + np.multiply(ds['siconc'], vapor_pressure_ice) 
+# First need to calculate q_s the saturation specific humidity of air
+qsat = q_saturation_specific(skin_temp.values, ds['mean_sea_level_pressure'] / 100 , ds['siconc'].values)
+
+exp_coeff = np.divide(res_sst_ds['cq'] * ds['surface_wind_magnitude'].values, height_da.values)
+
+exponential_factor = np.clip(np.exp(- exp_coeff * delta_t), a_max=1.0, a_min=0)
+
+q = qsat + exponential_factor * ( ds['specific_humidity_surface'] - qsat )
+update = q - ds['specific_humidity_surface']
 
 # %%
-hum_subs.qsat_air(skin_temp, ds['mean_sea_level_pressure'], )
+
+# multiply by time...
+
+fig, axs = plt.subplots(num_rows, num_cols, figsize=(num_cols*5, num_rows*5))
+
+update.plot(ax=axs[0,0], vmin=-10, vmax=10, cmap='RdBu_r')
+
+xr.where(sea_mask, plevel_ds['specific_humidity_surface'].sel(time=dt+datetime.timedelta(hours=6)) - plevel_ds['specific_humidity_surface'].sel(time=dt), np.nan).plot(ax=axs[0,1], vmin=-10, vmax=10, cmap='RdBu_r')
+
+axs[0,0].set_title('Predicted change due to evaporation')
+axs[0,1].set_title('Actual specific humidity change')
+axs[1,0].set_title('')
 
 # %%
-# From IFS documentation:
-# q_sat = ( (R_dry / R_vap) * e_sat ) / (  pressure - (1  -  (R_dry / R_vap) ) * e_sat)
+# Total evaporation
+tot_evap = exponential_factor * ( ds['specific_humidity_surface'] - qsat ) * res_sst_ds['cq']
 
-# where
-
-# R_dry gas constant for dry air  = 
-# R_vap gas constant for water vapour
-
-# From AeroBulk:
-# R_dry = 287.05       # Specific gas constant for dry air              [J/K/kg]
-# R_vap = 461.495      # Specific gas constant for water vapor          [J/K/kg]
+# %%
+exponential_factor.plot()
 
 # %% [markdown]
 # ## Momentum flux
@@ -676,12 +750,6 @@ ds_2deg['siconc'].plot.imshow(ax=ax[3,0])
 
 # %%
 ds['surface_stress_magnitude'].where(~ds['sst'].isnull()).plot.hist()
-
-# %%
-res['tau'].max()
-
-# %%
-ds['surface_stress_magnitude'].where(~ds['sst'].isnull()).max()
 
 # %% [markdown]
 # ### AirSeaFluxCode examples
