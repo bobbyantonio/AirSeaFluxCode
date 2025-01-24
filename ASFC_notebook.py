@@ -213,6 +213,9 @@ def heuristic_boundary_layer_height(ds: xr.Dataset,
 # TODO: precip needs to be aggregated
 
 # %%
+xr.load_dataset('/Users/bobbyantonio/repos/AirSeaFluxCode/sample_era5_data/era5_normalized_stress_into_ocean_20160101.nc')['tauoc'].isel(time=0).plot()
+
+# %%
 # 1 second per 6 hours in SYPD
 secs_per_6hr_step = 2
 secs_per_day = secs_per_6hr_step * 4
@@ -281,9 +284,10 @@ def convert_era5_file(fp):
 
 # Means of 
 surface_ds['surface_wind_magnitude'] = np.sqrt(surface_ds['u10']**2 + surface_ds['v10']**2)
-surface_ds['surface_stress_magnitude'] = np.sqrt(surface_ds['iews']**2 + surface_ds['inss']**2)
+surface_ds['instantaneous_surface_stress_magnitude'] = np.sqrt(surface_ds['iews']**2 + surface_ds['inss']**2)
+surface_ds['mean_surface_stress_magnitude'] = np.sqrt(surface_ds['avg_iews']**2 + surface_ds['avg_inss']**2)
 
-for var in ['ishf', 'msshf', 'mslhf', 'surface_stress_magnitude']:
+for var in ['ishf', 'msshf', 'mslhf', 'surface_stress_magnitude', 'avg_iews', 'avg_inss']:
     surface_ds[f'{var}_6hr'] = surface_ds[var].sel(time=[dt + pd.Timedelta(n, 'h') for n in range(1, 7)]).groupby(['latitude', 'longitude']).mean(...).expand_dims(dim={'time': 1}).assign_coords({'time': [dt]}).compute()
 
 surface_ds['msnswrf'] = surface_ds['msnswrf'].fillna(0)
@@ -328,8 +332,11 @@ ds = ds.rename({'u10': '10m_u_component_of_wind',
                 'msdwlwrf': 'mean_surface_downward_long_wave_radiation_flux',
                 'avg_iews': 'mean_eastward_turbulent_surface_stress',
                 'avg_inss': 'mean_northward_turbulent_surface_stress',
+                'avg_iews_6hr': 'mean_eastward_turbulent_surface_stress_6hr',
+                'avg_inss_6hr': 'mean_northward_turbulent_surface_stress_6hr',
                 'p140209': 'air_density_over_ocean',
                 'pressure_level': 'level'}).drop_vars('expver').drop_vars('number')
+ds['mean_surface_stress_magnitude_6hr'] = np.sqrt(ds['mean_eastward_turbulent_surface_stress_6hr']**2 + ds['mean_northward_turbulent_surface_stress_6hr']**2)
 
 sea_surface_ds = ds[['skin_temperature', 'sea_surface_temperature']]
 
@@ -664,9 +671,6 @@ axs[1,0].set_title('Actual t2m change')
 axs[1,1].set_title('Naive change due to sensible heat flux')
 
 # %%
-naive_t2m_change.max()
-
-# %%
 num_cols = 2
 num_rows = 3
 fig, axs = plt.subplots(num_rows, num_cols, figsize=(num_cols*5, num_rows*5))
@@ -894,35 +898,79 @@ normalised_northward_wind_t0 = northward_wind_t0 / wind_magnitude_t0
 
 air_density_over_ocean = ds['air_density_over_ocean']
 friction_velocity = ds['zust']
-normalised_stress_into_ocean = ds['tauoc']
 
-stress_into_ocean = np_multiply_many([normalised_stress_into_ocean, friction_velocity, air_density_over_ocean])
+# %%
+surface_ds['avg_iews'].mean()
 
 # %%
 
 # %%
-num_rows = 2
-num_cols = 2
+height_da.mean(
+)
+
+# %%
+ds['surface_wind_magnitude']**2
+
+# %%
+6*60*60 * 0.001 / 1000
+
+# %%
+np_multiply_many([res_sst_ds['rho'], ds['surface_wind_magnitude']**2, res_sst_ds['cd']]).mean()
+
+# %%
+6*60*60*ds['mean_surface_stress_magnitude_6hr'].mean() / (1000)
+
+# %%
+num_rows = 3
+num_cols = 3
 
 fig, ax = plt.subplots(num_rows, num_cols, figsize=(num_cols*5, num_rows*5))
-xr.where(sea_mask, ds['surface_stress_magnitude_6hr'], np.nan).plot(ax=ax[0,0], vmin=0, vmax=2)
-xr.where(sea_mask, ds['surface_stress_magnitude'], np.nan).plot(ax=ax[0,1], vmin=0, vmax=2)
+xr.where(sea_mask, ds['mean_surface_stress_magnitude'], np.nan).plot(ax=ax[0,0], vmin=0, vmax=2)
+xr.where(sea_mask, ds['mean_surface_stress_magnitude_6hr'], np.nan).plot(ax=ax[0,1], vmin=0, vmax=2)
+xr.where(sea_mask, 6*60*60*np.divide(ds['mean_surface_stress_magnitude_6hr'], np.multiply(res_sst_ds['rho'], height_da)), np.nan).plot(ax=ax[0,2])
 
-delta_t = 6*60*60 # 6 hours
-mmntm_numerator = np.multiply(ds['surface_wind_magnitude'] , res_sst_ds['cd']) * delta_t
+xr.where(sea_mask, np_multiply_many([res_sst_ds['rho'], ds['surface_wind_magnitude']**2, res_sst_ds['cd']]), np.nan).plot(ax=ax[1,0], vmin=0, vmax=5)
+
+mmntm_numerator = np.multiply(ds['surface_wind_magnitude']**2 , res_sst_ds['cd']) * delta_t
 mmntm_denominator = height_da + np.multiply(ds['surface_wind_magnitude'] , res_sst_ds['cd']) * delta_t
-
-approx_6hr_momentum_flux = np.divide(mmntm_numerator, mmntm_denominator)
-
-xr.where(sea_mask, approx_6hr_momentum_flux, np.nan).plot(ax=ax[1,0], vmin=0, vmax=2)
+calculated_wind_change = np.divide(mmntm_numerator, mmntm_denominator)
 
 change_in_wind_speed_era5 = surface_ds['surface_wind_magnitude'].sel(time=datetime.datetime(2016, 1, 1, 18, 0)) - surface_ds['surface_wind_magnitude'].sel(time=datetime.datetime(2016, 1, 1, 12, 0))
 
 xr.where(sea_mask, change_in_wind_speed_era5, np.nan).plot(ax=ax[1,1], vmin=0, vmax=5)
+ax[1,1].set_title('ERA5 6hr wind speed change')
 
+xr.where(sea_mask, surface_ds['surface_wind_magnitude'].sel(time=datetime.datetime(2016, 1, 1, 12, 0)), np.nan).plot(ax=ax[1,2])
 
-ax[0,0].set_title('ERA5 6hr average surface stress')
-ax[0,1].set_title('ERA5 surface stress')
+xr.where(sea_mask, calculated_wind_change, np.nan).plot(ax=ax[2,0], vmin=0, vmax=5)
+ax[0,0].set_title('ERA5 average surface stress')
+ax[0,1].set_title('ERA5 6hr average surface stress')
+ax[2,0].set_title('Calculated average surface stress')
+
+# %%
+num_rows = 3
+num_cols = 2
+
+fig, ax = plt.subplots(num_rows, num_cols, figsize=(num_cols*5, num_rows*5))
+xr.where(sea_mask, ds['mean_surface_stress_magnitude'], np.nan).plot(ax=ax[0,0], vmin=0, vmax=2)
+xr.where(sea_mask, ds['mean_surface_stress_magnitude_6hr'], np.nan).plot(ax=ax[0,1], vmin=0, vmax=2)
+ 
+delta_t = 6*60*60 # 6 hours
+mmntm_numerator = np.multiply(ds['surface_wind_magnitude']**2 , res_sst_ds['cd']) * delta_t
+mmntm_denominator = height_da + np.multiply(ds['surface_wind_magnitude'] , res_sst_ds['cd']) * delta_t
+
+calculated_wind_change = np.divide(mmntm_numerator, mmntm_denominator)
+
+xr.where(sea_mask, np_multiply_many([res_sst_ds['rho'], ds['surface_wind_magnitude']**2, res_sst_ds['cd']]), np.nan).plot(ax=ax[1,0], vmin=0, vmax=5)
+
+change_in_wind_speed_era5 = surface_ds['surface_wind_magnitude'].sel(time=datetime.datetime(2016, 1, 1, 18, 0)) - surface_ds['surface_wind_magnitude'].sel(time=datetime.datetime(2016, 1, 1, 12, 0))
+
+xr.where(sea_mask, change_in_wind_speed_era5, np.nan).plot(ax=ax[1,1], vmin=0, vmax=5)
+xr.where(sea_mask, surface_ds['surface_wind_magnitude'].sel(time=datetime.datetime(2016, 1, 1, 12, 0)), np.nan).plot(ax=ax[2,0])
+xr.where(sea_mask, calculated_wind_change, np.nan).plot(ax=ax[2,1], vmax=5)
+
+ax[0,0].set_title('ERA5 average surface stress')
+ax[0,1].set_title('ERA5 6hr average surface stress')
 ax[1,0].set_title('Calculated surface stress')
 ax[1,1].set_title('ERA5 6hr wind speed change')
 
