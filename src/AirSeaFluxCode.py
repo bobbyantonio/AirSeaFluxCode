@@ -40,6 +40,7 @@ class S88:
 
     def __init__(self):
         self.meth = "S88"
+        self.warm_start = False # Parameter to turn on/off warm start
 
     def _wind_iterate(self, ind):
         if self.gust[0] in range(1, 7):
@@ -146,6 +147,7 @@ class S88:
                     self.rho[ind], self.Rs[ind], self.Rnl[ind], self.cp[ind],
                     self.lv[ind], self.usr[ind], self.tsr[ind], self.qsr[ind],
                     np.copy(self.SST[ind]), self.grav[ind])
+
             elif self.skin == "Beljaars":
                 self.Qs[ind], self.dter[ind] = cs_Beljaars(
                     self.rho[ind], self.Rs[ind], self.Rnl[ind], self.cp[ind],
@@ -154,6 +156,7 @@ class S88:
 
             self.dqer[ind] = get_dqer(self.dter[ind], self.SST[ind],
                                       self.qsea[ind], self.lv[ind])  # [g/kg]
+
             self.skt[ind] = np.copy(self.SST[ind])+self.dter[ind]
             self.skq[ind] = np.copy(self.qsea[ind])+self.dqer[ind]  # [g/kg]
             if self.wl == 1:
@@ -240,7 +243,7 @@ class S88:
             
         self.tv10n = self.zot
 
-    def iterate(self, maxiter=10, tol=None, warm_start_parameters=None):
+    def iterate(self, maxiter=10, tol=None):
 
         with Timer(text="Starting iteration: {:.4f} seconds" ,logger=performance_logger.debug):
 
@@ -271,31 +274,25 @@ class S88:
             ind = np.where(self.spd > 0)
             it = 0
 
-            # Setup empty arrays
-            self.tsrv, self.psim, self.psit, self.psiq = [
-                np.zeros(self.arr_shp) * self.msk for _ in range(4)]
+            if not self.warm_start:
+                # Setup empty arrays
+                self.tsrv, self.psim, self.psit, self.psiq = [
+                    np.zeros(self.arr_shp) * self.msk for _ in range(4)]
 
-            # extreme values for first comparison
-            dummy_array = lambda val : np.full(self.T.shape, val) * self.msk
+                # extreme values for first comparison
+                dummy_array = lambda val : np.full(self.T.shape, val) * self.msk
 
-            self.itera, self.tau, self.sensible, self.latent = [
-                dummy_array(x) for x in (-1, 1e+99, 1e+99, 1e+99)]
+                self.itera, self.tau, self.sensible, self.latent = [
+                    dummy_array(x) for x in (-1, 1e+99, 1e+99, 1e+99)]
 
-            # Generate the first guess values
-            self._first_guess()
-            
-            # If warm start parameters are provided, then use those
-            # if warm_start_parameters is not None:
-            #     for col, series in warm_start_parameters.items():
-            #         if hasattr(self, col):
-            #             assert getattr(self, col).shape == series.shape
-            #             setattr(self, col, series.to_numpy())
-            #             t=1
+                # Generate the first guess values
+                self._first_guess()
 
         #  iteration loop
         ii = True
         while ii & (it < maxiter):
             it += 1
+
 
             with Timer(text="setting old vars: {:.4f} seconds" ,logger=performance_logger.debug):
                 # Set the old variables (for comparison against "new")
@@ -311,6 +308,7 @@ class S88:
                     logging.info('break %s at iteration %s cd10n<0', self.meth, it)
                     break
            
+                # monob is null here
                 self.psim[ind] = psim_calc(
                     self.h_in[0, ind]/self.monob[ind], self.meth)
 
@@ -363,6 +361,7 @@ class S88:
                     self.zo[ind], self.zot[ind], self.zoq[ind], self.dt_full[ind],
                     self.dq_full[ind], self.cd[ind], self.ct[ind], self.cq[ind],
                     self.meth)
+                # self.dq_full[ind], self.dt_full[ind]
 
             with Timer(text="Update CSWL 1: {:.4f} seconds" ,logger=performance_logger.debug):
                 # Update CS/WL parameters
@@ -405,6 +404,7 @@ class S88:
                     self.monob[ind], self.meth)
 
                 if self.L == "tsrv":
+
                     self.monob[ind] = get_Ltsrv(
                         self.tsrv[ind], self.grav[ind], self.tv[ind],
                         self.usr[ind])
@@ -424,6 +424,7 @@ class S88:
 
                 self.itera[ind] = np.full(1, it)
                 self.tau = self.rho * np.power(self.usr, 2)
+
                 self.sensible = self.rho * self.cp * self.usr * self.tsr
                 self.latent = self.rho * self.lv * self.usr * self.qsr * 0.001  # [g/kg]
 
@@ -520,6 +521,11 @@ class S88:
         # Set the final wind speed values
         # this seems to be gust (was wind_speed)
         self.ug = np.sqrt(np.power(self.wind, 2)-np.power(self.spd, 2))
+
+        # Now that it has converged, set the warm_start to True, so 
+        # that the next iteration will use the current values as the
+        # starting point
+        self.warm_start = True
 
         # Get class specific flags (will only work if self.u_hi and self.u_lo
         # have been set in the class)
@@ -638,6 +644,7 @@ class S88:
 class S80(S88):
 
     def __init__(self):
+        super().__init__()
         self.meth = "S80"
         self.u_lo = [6, 6]
         self.u_hi = [22, 22]
@@ -645,6 +652,7 @@ class S80(S88):
 
 class YT96(S88):
     def __init__(self):
+        super().__init__()
         self.meth = "YT96"
         # no limits to u range as we use eq. 21 for cdn
         # self.u_lo = [0, 3]
@@ -654,6 +662,7 @@ class YT96(S88):
 class LP82(S88):
 
     def __init__(self):
+        super().__init__()
         self.meth = "LP82"
         self.u_lo = [3, 3]
         self.u_hi = [25, 25]
@@ -668,6 +677,7 @@ class NCAR(S88):
         # self.zo = np.minimum(np.copy(self.zo), 0.0025)
 
     def __init__(self):
+        super().__init__()
         self.meth = "NCAR"
         self.u_lo = [0.5, 0.5]
         self.u_hi = [999, 999]
@@ -676,6 +686,7 @@ class NCAR(S88):
 class UA(S88):
 
     def __init__(self):
+        super().__init__()
         self.meth = "UA"
         self.default_gust = [1, 1.2, 600, 0.01]
         self.u_lo = [-999, -999]
@@ -687,6 +698,7 @@ class C30(S88):
     #     self._fix_coolskin_warmlayer(wl, cskin, skin, Rl, Rs)
 
     def __init__(self):
+        super().__init__()
         self.meth = "C30"
         self.default_gust = [1, 1.2, 600, 0.01]
         self.skin = "C35"
@@ -694,6 +706,7 @@ class C30(S88):
 
 class C35(C30):
     def __init__(self):
+        super().__init__()
         self.meth = "C35"
         self.default_gust = [1, 1.2, 600, 0.01]
         self.skin = "C35"
@@ -710,6 +723,8 @@ class ecmwf(C30):
     #     self.wind = np.maximum(np.copy(self.wind), 0.2)
 
     def __init__(self):
+        
+        super().__init__()
         self.meth = "ecmwf"
         self.default_gust = [1, 1.2, 600, 0.01]
         self.skin = "ecmwf"
@@ -721,16 +736,28 @@ class Beljaars(C30):
     #     self._fix_coolskin_warmlayer(wl, cskin, skin, Rl, Rs)
 
     def __init__(self):
+        super().__init__()
+        
         self.meth = "Beljaars"
         self.default_gust = [1, 1.2, 600, 0.01]
         self.skin = "ecmwf"
         # self.skin = "Beljaars"
 
+method_lookup_dict = {"S80": S80, 
+                      "S88": S88, 
+                      "LP82": LP82, 
+                      "YT96": YT96,
+                      "UA": UA,
+                      "NCAR": NCAR,
+                      "C30": C30,
+                      "C35": C35,
+                      "ecmwf": ecmwf,
+                      "Beljaars": Beljaars}
 
 def AirSeaFluxCode(spd, T, SST, SST_fl, meth, lat=None, hum=None, P=None,
                    hin=18, hout=10, Rl=None, Rs=None, cskin=0, skin=None, wl=0,
                    gust=None, qmeth="Buck2", tol=None, maxiter=30, out=0,
-                   out_var=None, L=None, warm_start_parameters=None):
+                   out_var=None, L=None):
     """
     Calculate turbulent surface fluxes using different parameterizations.
 
@@ -910,7 +937,7 @@ def AirSeaFluxCode(spd, T, SST, SST_fl, meth, lat=None, hum=None, P=None,
         iclass.set_coolskin_warmlayer(wl=wl, cskin=cskin, skin=skin, Rl=Rl, Rs=Rs)
    
     with Timer(text="iterate: {:.4f} seconds", logger=performance_logger.debug):
-        iclass.iterate(tol=tol, maxiter=maxiter, warm_start_parameters=warm_start_parameters)
+        iclass.iterate(tol=tol, maxiter=maxiter)
 
     with Timer(text="output: {:.4f} seconds", logger=performance_logger.debug):
 

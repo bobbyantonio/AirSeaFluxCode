@@ -1,6 +1,6 @@
 import numpy as np
 from src.util_subs import (kappa, visc_air)
-
+from src.utils import safe_power, safe_exp, safe_multiply
 # ---------------------------------------------------------------------
 
 
@@ -367,7 +367,7 @@ def psi_ecmwf(zol):
     """
     # eq (3.22) p. 37 IFS Documentation cy46r1
     a, b, c, d = 1, 2/3, 5, 0.35
-    psit = -b*(zol-c/d)*np.exp(-d*zol)-np.power(1+(2/3)*a*zol, 1.5)-(b*c)/d+1
+    psit = safe_multiply(-b*(zol-c/d), safe_exp(-d*zol))-safe_power(1+(2/3)*a*zol, 1.5)-(b * c)/d+1
     return psit
 # ---------------------------------------------------------------------
 
@@ -417,7 +417,7 @@ def psi_conv(zol, meth):
     """
     coeffs = get_stabco(meth)
     alpha, beta = coeffs[0], coeffs[1]
-    xtmp = np.power(1-alpha*zol, beta)
+    xtmp = safe_power(1-alpha*zol, beta)
     psit = 2*np.log((1+np.power(xtmp, 2))*0.5)
     return psit
 # ---------------------------------------------------------------------
@@ -461,11 +461,12 @@ def psim_ecmwf(zol):
     # eq (3.20, 3.22) p. 37 IFS Documentation cy46r1
     coeffs = get_stabco("ecmwf")
     alpha, beta = coeffs[0], coeffs[1]
-    xtmp = np.power(1-alpha*zol, beta)
+    
+    xtmp = safe_power( 1-alpha*zol, beta)
     a, b, c, d = 1, 2/3, 5, 0.35
     psim = np.where(zol < 0, np.pi/2-2*np.arctan(xtmp) +
-                    np.log((np.power(1+xtmp, 2)*(1+np.power(xtmp, 2)))/8),
-                    -b*(zol-c/d)*np.exp(-d*zol)-a*zol-(b*c)/d)
+                    np.log((np.power(1+xtmp, 2)*(1 + np.power(xtmp, 2)))/8),
+                    safe_multiply( -b*(zol-c/d), safe_exp(-d*zol))-a*zol-(b*c)/d)
     return psim
 # ---------------------------------------------------------------------
 
@@ -590,7 +591,7 @@ def get_gust(beta, zi, ustb, Ta, usr, tsrv, grav):
     # minus sign to allow cube root
     Bf = (-grav/Ta)*usr*tsrv
     ug = np.ones(np.shape(Ta))*ustb
-    ug = np.where(Bf > 0, np.maximum(beta*np.power(Bf*zi, 1/3), ustb), ustb)
+    ug = np.where(Bf > 0, np.maximum(beta*safe_power(Bf*zi, 1/3), ustb), ustb)
     return ug
 # ---------------------------------------------------------------------
 
