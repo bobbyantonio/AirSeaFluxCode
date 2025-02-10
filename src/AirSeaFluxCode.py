@@ -142,52 +142,45 @@ class S88:
     def _update_coolskin_warmlayer(self, ind):
 
         if self.cskin == 1:
-            with Timer(text="CSWL 1: {:.4f} seconds" ,logger=performance_logger.debug):
-                # 0.2s
+
             # self.dter[ind], self.tkt[ind] = cs(np.copy(
             #     self.SST[ind]), np.copy(self.tkt[ind]), self.rho[ind],
             #     self.Rs[ind], self.Rnl[ind], self.cp[ind], self.lv[ind],
             #     self.usr[ind], self.tsr[ind], self.qsr[ind], self.grav[ind],
             #     self.skin)
-                if self.skin == "C35":
-                    self.dter[ind], self.tkt[ind] = cs_C35(np.copy(
-                        self.SST[ind]), self.rho[ind], self.Rs[ind], self.Rnl[ind],
-                        self.cp[ind], self.lv[ind], np.copy(self.tkt[ind]),
-                        self.usr[ind], self.tsr[ind], self.qsr[ind], self.grav[ind])
-                elif self.skin == "ecmwf":
-                    self.dter[ind] = cs_ecmwf(
-                        self.rho[ind], self.Rs[ind], self.Rnl[ind], self.cp[ind],
-                        self.lv[ind], self.usr[ind], self.tsr[ind], self.qsr[ind],
-                        np.copy(self.SST[ind]), self.grav[ind])
+            if self.skin == "C35":
+                self.dter[ind], self.tkt[ind] = cs_C35(np.copy(
+                    self.SST[ind]), self.rho[ind], self.Rs[ind], self.Rnl[ind],
+                    self.cp[ind], self.lv[ind], np.copy(self.tkt[ind]),
+                    self.usr[ind], self.tsr[ind], self.qsr[ind], self.grav[ind])
+            elif self.skin == "ecmwf":
+                self.dter[ind] = cs_ecmwf(
+                    self.rho[ind], self.Rs[ind], self.Rnl[ind], self.cp[ind],
+                    self.lv[ind], self.usr[ind], self.tsr[ind], self.qsr[ind],
+                    np.copy(self.SST[ind]), self.grav[ind])
 
-                elif self.skin == "Beljaars":
-                    self.Qs[ind], self.dter[ind] = cs_Beljaars(
-                        self.rho[ind], self.Rs[ind], self.Rnl[ind], self.cp[ind],
-                        self.lv[ind], self.usr[ind], self.tsr[ind], self.qsr[ind],
-                        self.grav[ind], np.copy(self.Qs[ind]))
-            with Timer(text="CSWL 2: {:.4f} seconds" ,logger=performance_logger.debug):
+            elif self.skin == "Beljaars":
+                self.Qs[ind], self.dter[ind] = cs_Beljaars(
+                    self.rho[ind], self.Rs[ind], self.Rnl[ind], self.cp[ind],
+                    self.lv[ind], self.usr[ind], self.tsr[ind], self.qsr[ind],
+                    self.grav[ind], np.copy(self.Qs[ind]))
 
-                self.dqer[ind] = get_dqer(self.dter[ind], self.SST[ind],
-                                        self.qsea[ind], self.lv[ind])  # [g/kg]
-            with Timer(text="CSWL 3: {:.4f} seconds" ,logger=performance_logger.debug):
+            self.dqer[ind] = get_dqer(self.dter[ind], self.SST[ind],
+                                      self.qsea[ind], self.lv[ind])  # [g/kg]
 
-                self.skt[ind] = np.copy(self.SST[ind])+self.dter[ind]
-                self.skq[ind] = np.copy(self.qsea[ind])+self.dqer[ind]  # [g/kg]
+            self.skt[ind] = np.copy(self.SST[ind])+self.dter[ind]
+            self.skq[ind] = np.copy(self.qsea[ind])+self.dqer[ind]  # [g/kg]
             if self.wl == 1:
-                with Timer(text="CSWL 4: {:.4f} seconds" ,logger=performance_logger.debug):
-                    # 0.3s
-                    self.dtwl[ind] = wl_ecmwf(
-                        self.rho[ind], self.Rs[ind], self.Rnl[ind], self.cp[ind],
-                        self.lv[ind], self.usr[ind], self.tsr[ind], self.qsr[ind],
-                        np.copy(self.SST[ind]), np.copy(self.skt[ind]),
-                        np.copy(self.dter[ind]), self.grav[ind])
-                with Timer(text="CSWL 5: {:.4f} seconds" ,logger=performance_logger.debug):
-                    self.skt[ind] = (np.copy(self.SST[ind])+self.dter[ind] +
-                                    self.dtwl[ind])
-                with Timer(text="CSWL 6: {:.4f} seconds" ,logger=performance_logger.debug):
-                    self.dqer[ind] = get_dqer(self.dter[ind], self.skt[ind],
-                                            self.qsea[ind], self.lv[ind])  # [g/kg]
-                    self.skq[ind] = np.copy(self.qsea[ind])+self.dqer[ind]  # [g/kg]
+                self.dtwl[ind] = wl_ecmwf(
+                    self.rho[ind], self.Rs[ind], self.Rnl[ind], self.cp[ind],
+                    self.lv[ind], self.usr[ind], self.tsr[ind], self.qsr[ind],
+                    np.copy(self.SST[ind]), np.copy(self.skt[ind]),
+                    np.copy(self.dter[ind]), self.grav[ind])
+                self.skt[ind] = (np.copy(self.SST[ind])+self.dter[ind] +
+                                 self.dtwl[ind])
+                self.dqer[ind] = get_dqer(self.dter[ind], self.skt[ind],
+                                          self.qsea[ind], self.lv[ind])  # [g/kg]
+                self.skq[ind] = np.copy(self.qsea[ind])+self.dqer[ind]  # [g/kg]
         else:
             self.dter[ind] = np.zeros(self.SST[ind].shape)
             self.dqer[ind] = np.zeros(self.SST[ind].shape)  # [g/kg]
