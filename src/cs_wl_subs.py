@@ -1,4 +1,5 @@
 import numpy as np
+from numba import jit
 from src.util_subs import (CtoK, kappa)
 from src.utils import safe_exp, safe_power, safe_multiply
 
@@ -265,6 +266,7 @@ def cs_ecmwf(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, sst, grav):
     """
     if np.nanmin(sst) < 200:  # if sst in Celsius convert to Kelvin
         sst = sst+CtoK
+        
     aw = np.maximum(1e-5, 1e-5*(sst-CtoK))
     Rns = 0.945*Rs  # (net solar radiation (albedo correction)
     shf = rho*cp*usr*tsr
@@ -280,7 +282,6 @@ def cs_ecmwf(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, sst, grav):
     dtc = Q*d/0.6  # (rhow*cw*kw)eq. 8.151
     return dtc
 # ---------------------------------------------------------------------
-
 
 def wl_ecmwf(rho, Rs, Rnl, cp, lv, usr, tsr, qsr, sst, skt, dtc, grav):
     """

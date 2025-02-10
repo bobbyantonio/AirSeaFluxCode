@@ -10,10 +10,21 @@ from src.flux_subs import *
 from src.cs_wl_subs import *
 
 performance_logger = logging.getLogger(__name__)
-performance_logger.setLevel(logging.INFO)
+performance_logger.setLevel(logging.DEBUG)
 
 def get_relative_humidity(hum, T, qair, P):
-    """Calculate RH used for flagging purposes & output."""
+    """
+    Calculate the relative humidity (RH) for flagging purposes and output.
+    Parameters:
+    hum (tuple): A tuple where the first element is a string indicating the type of humidity input 
+                 ('rh' for relative humidity, 'no' for no humidity, 'Td' for dew point temperature, 
+                 or 'q' for specific humidity) and the second element is the corresponding value.
+    T (numpy.ndarray or float): Air temperature in Kelvin.
+    qair (numpy.ndarray or float): Specific humidity in g/kg.
+    P (numpy.ndarray or float): Atmospheric pressure in hPa.
+    Returns:
+    numpy.ndarray or float: The calculated relative humidity in percentage.
+    """
 
     if hum[0] in ('rh', 'no'):
 
@@ -131,45 +142,52 @@ class S88:
     def _update_coolskin_warmlayer(self, ind):
 
         if self.cskin == 1:
-
+            with Timer(text="CSWL 1: {:.4f} seconds" ,logger=performance_logger.debug):
+                # 0.2s
             # self.dter[ind], self.tkt[ind] = cs(np.copy(
             #     self.SST[ind]), np.copy(self.tkt[ind]), self.rho[ind],
             #     self.Rs[ind], self.Rnl[ind], self.cp[ind], self.lv[ind],
             #     self.usr[ind], self.tsr[ind], self.qsr[ind], self.grav[ind],
             #     self.skin)
-            if self.skin == "C35":
-                self.dter[ind], self.tkt[ind] = cs_C35(np.copy(
-                    self.SST[ind]), self.rho[ind], self.Rs[ind], self.Rnl[ind],
-                    self.cp[ind], self.lv[ind], np.copy(self.tkt[ind]),
-                    self.usr[ind], self.tsr[ind], self.qsr[ind], self.grav[ind])
-            elif self.skin == "ecmwf":
-                self.dter[ind] = cs_ecmwf(
-                    self.rho[ind], self.Rs[ind], self.Rnl[ind], self.cp[ind],
-                    self.lv[ind], self.usr[ind], self.tsr[ind], self.qsr[ind],
-                    np.copy(self.SST[ind]), self.grav[ind])
+                if self.skin == "C35":
+                    self.dter[ind], self.tkt[ind] = cs_C35(np.copy(
+                        self.SST[ind]), self.rho[ind], self.Rs[ind], self.Rnl[ind],
+                        self.cp[ind], self.lv[ind], np.copy(self.tkt[ind]),
+                        self.usr[ind], self.tsr[ind], self.qsr[ind], self.grav[ind])
+                elif self.skin == "ecmwf":
+                    self.dter[ind] = cs_ecmwf(
+                        self.rho[ind], self.Rs[ind], self.Rnl[ind], self.cp[ind],
+                        self.lv[ind], self.usr[ind], self.tsr[ind], self.qsr[ind],
+                        np.copy(self.SST[ind]), self.grav[ind])
 
-            elif self.skin == "Beljaars":
-                self.Qs[ind], self.dter[ind] = cs_Beljaars(
-                    self.rho[ind], self.Rs[ind], self.Rnl[ind], self.cp[ind],
-                    self.lv[ind], self.usr[ind], self.tsr[ind], self.qsr[ind],
-                    self.grav[ind], np.copy(self.Qs[ind]))
+                elif self.skin == "Beljaars":
+                    self.Qs[ind], self.dter[ind] = cs_Beljaars(
+                        self.rho[ind], self.Rs[ind], self.Rnl[ind], self.cp[ind],
+                        self.lv[ind], self.usr[ind], self.tsr[ind], self.qsr[ind],
+                        self.grav[ind], np.copy(self.Qs[ind]))
+            with Timer(text="CSWL 2: {:.4f} seconds" ,logger=performance_logger.debug):
 
-            self.dqer[ind] = get_dqer(self.dter[ind], self.SST[ind],
-                                      self.qsea[ind], self.lv[ind])  # [g/kg]
+                self.dqer[ind] = get_dqer(self.dter[ind], self.SST[ind],
+                                        self.qsea[ind], self.lv[ind])  # [g/kg]
+            with Timer(text="CSWL 3: {:.4f} seconds" ,logger=performance_logger.debug):
 
-            self.skt[ind] = np.copy(self.SST[ind])+self.dter[ind]
-            self.skq[ind] = np.copy(self.qsea[ind])+self.dqer[ind]  # [g/kg]
-            if self.wl == 1:
-                self.dtwl[ind] = wl_ecmwf(
-                    self.rho[ind], self.Rs[ind], self.Rnl[ind], self.cp[ind],
-                    self.lv[ind], self.usr[ind], self.tsr[ind], self.qsr[ind],
-                    np.copy(self.SST[ind]), np.copy(self.skt[ind]),
-                    np.copy(self.dter[ind]), self.grav[ind])
-                self.skt[ind] = (np.copy(self.SST[ind])+self.dter[ind] +
-                                 self.dtwl[ind])
-                self.dqer[ind] = get_dqer(self.dter[ind], self.skt[ind],
-                                          self.qsea[ind], self.lv[ind])  # [g/kg]
+                self.skt[ind] = np.copy(self.SST[ind])+self.dter[ind]
                 self.skq[ind] = np.copy(self.qsea[ind])+self.dqer[ind]  # [g/kg]
+            if self.wl == 1:
+                with Timer(text="CSWL 4: {:.4f} seconds" ,logger=performance_logger.debug):
+                    # 0.3s
+                    self.dtwl[ind] = wl_ecmwf(
+                        self.rho[ind], self.Rs[ind], self.Rnl[ind], self.cp[ind],
+                        self.lv[ind], self.usr[ind], self.tsr[ind], self.qsr[ind],
+                        np.copy(self.SST[ind]), np.copy(self.skt[ind]),
+                        np.copy(self.dter[ind]), self.grav[ind])
+                with Timer(text="CSWL 5: {:.4f} seconds" ,logger=performance_logger.debug):
+                    self.skt[ind] = (np.copy(self.SST[ind])+self.dter[ind] +
+                                    self.dtwl[ind])
+                with Timer(text="CSWL 6: {:.4f} seconds" ,logger=performance_logger.debug):
+                    self.dqer[ind] = get_dqer(self.dter[ind], self.skt[ind],
+                                            self.qsea[ind], self.lv[ind])  # [g/kg]
+                    self.skq[ind] = np.copy(self.qsea[ind])+self.dqer[ind]  # [g/kg]
         else:
             self.dter[ind] = np.zeros(self.SST[ind].shape)
             self.dqer[ind] = np.zeros(self.SST[ind].shape)  # [g/kg]
@@ -320,48 +338,55 @@ class S88:
                 # Update the wind values
                 self._wind_iterate(ind)
 
-            with Timer(text="Calculate 2: {:.4f} seconds" ,logger=performance_logger.debug):
+            with Timer(text="Calculate 2.1: {:.4f} seconds" ,logger=performance_logger.debug):
                 # temperature
-                self.ct10n[ind], self.zot[ind] = ctqn_calc(
-                    "ct", self.h_in[1, ind]/self.monob[ind], self.cd10n[ind],
+                self.ct10n[ind], self.zot[ind] = ctqn_calc('ct',
+                    self.h_in[1, ind]/self.monob[ind], self.cd10n[ind],
                     self.usr[ind], self.zo[ind], self.theta[ind], self.meth)
-
+            with Timer(text="Calculate 2.2: {:.4f} seconds" ,logger=performance_logger.debug):
                 self.psit[ind] = psit_calc(
                     self.h_in[1, ind]/self.monob[ind], self.meth)
 
+            with Timer(text="Calculate 2.3: {:.4f} seconds" ,logger=performance_logger.debug):
                 self.ct[ind] = ctq_calc(
                     self.cd10n[ind], self.cd[ind], self.ct10n[ind],
                     self.h_in[1, ind], self.ref10, self.psit[ind])
 
+            with Timer(text="Calculate 2.4: {:.4f} seconds" ,logger=performance_logger.debug):
                 # humidity
-                self.cq10n[ind], self.zoq[ind] = ctqn_calc(
-                    "cq", self.h_in[2, ind]/self.monob[ind], self.cd10n[ind],
+                self.cq10n[ind], self.zoq[ind] = ctqn_calc('cq',
+                    self.h_in[2, ind]/self.monob[ind], self.cd10n[ind],
                     self.usr[ind], self.zo[ind], self.theta[ind], self.meth)
 
+            with Timer(text="Calculate 2.5: {:.4f} seconds" ,logger=performance_logger.debug):
                 self.psiq[ind] = psit_calc(
                     self.h_in[2, ind]/self.monob[ind], self.meth)
 
+            with Timer(text="Calculate 2.6: {:.4f} seconds" ,logger=performance_logger.debug):
                 self.cq[ind] = ctq_calc(
                     self.cd10n[ind], self.cd[ind], self.cq10n[ind],
                     self.h_in[2, ind], self.ref10, self.psiq[ind])
 
-                # Some parameterizations set a minimum on parameters
-                try:
-                    self._minimum_params()
-                except AttributeError:
-                    pass
+            # Some parameterizations set a minimum on parameters
+            try:
+                self._minimum_params()
+            except AttributeError:
+                pass
 
+            with Timer(text="Calculate 2.7: {:.4f} seconds" ,logger=performance_logger.debug):
                 self.dt_full[ind] = self.dt_in[ind] - \
                     self.dter[ind]*self.cskin - self.dtwl[ind]*self.wl
 
+            with Timer(text="Calculate 2.8: {:.4f} seconds" ,logger=performance_logger.debug):
                 self.dq_full[ind] = self.dq_in[ind] - self.dqer[ind]*self.cskin
 
+            with Timer(text="Calculate 2.9: {:.4f} seconds" ,logger=performance_logger.debug):
                 self.usr[ind], self.tsr[ind], self.qsr[ind] = get_strs(
                     self.h_in[:, ind], self.monob[ind], self.wind[ind],
                     self.zo[ind], self.zot[ind], self.zoq[ind], self.dt_full[ind],
                     self.dq_full[ind], self.cd[ind], self.ct[ind], self.cq[ind],
                     self.meth)
-                # self.dq_full[ind], self.dt_full[ind]
+            # self.dq_full[ind], self.dt_full[ind]
 
             with Timer(text="Update CSWL 1: {:.4f} seconds" ,logger=performance_logger.debug):
                 # Update CS/WL parameters
@@ -413,7 +438,7 @@ class S88:
                         self.Rb[ind], self.h_in[1, ind], self.monob[ind],
                         self.zo[ind], self.zot[ind], self.meth)
 
-            with Timer(text="ITerate wind 2: {:.4f} seconds" ,logger=performance_logger.debug):
+            with Timer(text="Iterate wind 2: {:.4f} seconds" ,logger=performance_logger.debug):
                 # Update the wind values
                 self._wind_iterate(ind)
 
@@ -443,7 +468,12 @@ class S88:
                 
    
             # End of iteration loop
-
+        
+        # Now that it has converged, set the warm_start to True, so 
+        # that the next iteration will use the current values as the
+        # starting point
+        self.warm_start = True
+        
         self.itera[ind] = -1
         self.itera = np.where(self.itera > maxiter, -1, self.itera)
         logging.info('method %s | # of iterations:%s', self.meth, it)
@@ -522,10 +552,7 @@ class S88:
         # this seems to be gust (was wind_speed)
         self.ug = np.sqrt(np.power(self.wind, 2)-np.power(self.spd, 2))
 
-        # Now that it has converged, set the warm_start to True, so 
-        # that the next iteration will use the current values as the
-        # starting point
-        self.warm_start = True
+
 
         # Get class specific flags (will only work if self.u_hi and self.u_lo
         # have been set in the class)
@@ -572,7 +599,8 @@ class S88:
 
         return resAll
 
-    def add_variables(self, spd: np.ndarray, 
+    def add_variables(self, 
+                      spd: np.ndarray, 
                       T: np.ndarray, 
                       SST: np.ndarray, 
                       SST_fl: str, 
@@ -581,7 +609,41 @@ class S88:
                       hum=None,
                       P=None, 
                       L=None):
-                      
+        """
+        Calculate turbulent surface fluxes using different parameterizations.
+
+        Calculate height adjusted values for spd, T, q
+
+        Parameters
+        ----------
+        T : float
+            air temperature [K] (will convert if < 200)
+        SST : float
+            sea surface temperature [K] (will convert if < 200)
+        SST_fl : str
+            provides information on the type of the input SST; "bulk" or
+            "skin"
+        lat : float
+            latitude [deg], default 45deg
+        hum : float
+            humidity input switch 2x1 [x, values] default is relative humidity
+            x='rh' : relative humidity [%]
+            x='q' : specific humidity [g/kg]
+            x='Td' : dew point temperature [K]
+        P : float
+            air pressure [hPa], default 1013hPa
+        cskin : int
+            0 switch cool skin adjustment off, else 1
+            default is 0
+        skin : str
+            cool skin method option "C35", "ecmwf" or "Beljaars"
+        L : str
+           Monin-Obukhov length definition options
+           "tsrv"  : default
+           "Rb" : following ecmwf (IFS Documentation cy46r1)
+           
+        """
+        
         # Add the mandatory variables
         assert type(spd) == type(T) == type(
             SST) == np.ndarray, "input type of spd, T and SST should be"
@@ -599,9 +661,17 @@ class S88:
         self.arr_shp = spd.shape
         self.nlen = len(spd)
         self.spd = spd
-        self.T = np.where(T < 200, np.copy(T) + CtoK, np.copy(T))
+        
+        self.T = np.copy(T)
+        if np.nanmin(T) < 200:
+            self.T = self.T + CtoK
+        
+        self.SST = np.copy(SST)
+        if np.nanmin(SST) < 200:
+            self.SST = self.SST + CtoK
+            
         self.hum = ['no', np.full(SST.shape, 80)] if hum is None else hum
-        self.SST = np.where(SST < 200, np.copy(SST) + CtoK, np.copy(SST))
+
         self.lat = np.full(self.arr_shp, 45) if lat is None else lat
         self.grav = gc(self.lat)
         self.P = np.full(self.nlen, 1013) if P is None else P

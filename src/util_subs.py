@@ -1,4 +1,5 @@
 import numpy as np
+from numba import jit
 
 CtoK = 273.16  # 273.15
 r""" Conversion factor for $^\circ\,$C to K """
@@ -73,14 +74,14 @@ def gc(lat, lon=None):
     return gc
 # ---------------------------------------------------------------------
 
-
+@jit
 def visc_air(T):
     r""" Computes the kinematic viscosity of dry air as a function of air temp.
     following Andreas (1989), CRREL Report 89-11.
 
     Parameters
     ----------
-    Ta : float
+    T : float
         air temperature [$^\circ$\,C]
 
     Returns
@@ -88,10 +89,10 @@ def visc_air(T):
     visa : float
         kinematic viscosity [m^2/s]
     """
-    T = np.asarray(T)
+    # T = np.asarray(T)
     if (np.nanmin(T) > 200):  # if Ta in Kelvin convert to Celsius
-        T = T-273.16
-    visa = 1.326e-5*(1+6.542e-3*T+8.301e-6*np.power(T, 2) -
+        T = T - CtoK
+    visa = 1.326e-5*(1 +6.542e-3*T+8.301e-6*np.power(T, 2) -
                      4.84e-9*np.power(T, 3))
     return visa
 # ---------------------------------------------------------------------
