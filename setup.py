@@ -15,7 +15,7 @@ setup(
     author_email='sbiri@noc.ac.uk',
     license='CCBY',
     # package_dir={'': 'src'},  # Optional
-    packages=find_packages(include='src'),  # ['AirSeaFluxCode'],
+    packages=find_packages(include='AirSeaFluxCode'),  # ['AirSeaFluxCode'],
     install_requires=['pandas',
                       'numpy',
                       ],
